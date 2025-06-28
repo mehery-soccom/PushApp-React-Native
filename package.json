@@ -1,6 +1,6 @@
 {
   "name": "react-native-mehery-event-sender",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "A React Native SDK for event tracking that works with both Expo Go and bare React Native applications",
   "source": "./src/index.tsx",
   "main": "./lib/module/index.js",
@@ -72,6 +72,7 @@
     "eslint": "^9.22.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.3",
+    "expo-notifications": "^0.31.3",
     "jest": "^29.7.0",
     "prettier": "^3.0.3",
     "react": "19.1.0",
@@ -82,8 +83,10 @@
     "typescript": "^5.2.2"
   },
   "peerDependencies": {
+    "expo-notifications": "^0.20.0",
     "react": "*",
-    "react-native": "*"
+    "react-native": "*",
+    "react-native-push-notification": "^8.1.1"
   },
   "workspaces": [
     "example"
