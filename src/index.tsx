@@ -78,7 +78,7 @@ export const BannerScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/banner') // update this to your production domain later
+    fetch('https://templatemaker-2.onrender.com/api/banner') // update this to your production domain later
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
