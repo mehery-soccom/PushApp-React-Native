@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import uuid from 'react-native-uuid';
 
 const LINKING_ERROR =
   `The package 'react-native-mehery-event-sender' doesn't seem to be linked. Make sure: \n\n` +
@@ -29,6 +31,32 @@ export const MeheryEventSenderView =
     : () => {
         throw new Error(LINKING_ERROR);
       };
+
+// ===============================
+let cachedDeviceId: string | null = null;
+const DEVICE_ID_KEY = 'mehery_device_id';
+
+export async function getDeviceId(): Promise<string> {
+  if (cachedDeviceId) return cachedDeviceId;
+
+  try {
+    const stored = await AsyncStorage.getItem(DEVICE_ID_KEY);
+    if (stored) {
+      console.log('📦 Loaded existing Device ID:', stored);
+      cachedDeviceId = stored;
+      return stored;
+    }
+
+    const newId = `-mehery-${uuid.v4()}`;
+    await AsyncStorage.setItem(DEVICE_ID_KEY, newId);
+    console.log('🎉 New Device ID generated and stored:', newId);
+    cachedDeviceId = newId;
+    return newId;
+  } catch (error) {
+    console.error('❌ Error accessing AsyncStorage for device ID:', error);
+    return 'unknown-device';
+  }
+}
 
 type UserDetails = {
   [key: string]: string;
@@ -76,6 +104,11 @@ export const CustomBanner: React.FC<BannerProps> = ({
 export const BannerScreen: React.FC = () => {
   const [bannerData, setBannerData] = useState<BannerProps | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Set up device ID and FCM only once
+    getDeviceId().then((id) => console.log('✅ Device ID:', id));
+  }, []);
 
   useEffect(() => {
     fetch('https://templatemaker-2.onrender.com/api/banner') // update this to your production domain later
