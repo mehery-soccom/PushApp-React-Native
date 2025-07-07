@@ -155,6 +155,7 @@
     "version": "0.49.2"
   },
   "dependencies": {
-    "react-native-uuid": "^2.0.3"
+    "react-native-uuid": "^2.0.3",
+    "socket.io-client": "^4.8.1"
   }
 }

@@ -171,3 +171,17 @@ export { CustomBanner } from './components/CustomBanner';
 export { getDeviceId } from './utils/device';
 export { logUserDetails, getLoggedUserDetails } from './utils/user';
 export { MeheryEventSenderView } from './native/MeheryEventSenderView';
+import React, { useEffect } from 'react';
+import { socketManager } from './socket/SocketManager';
+
+export const PersistentSocket: React.FC<{ url: string }> = ({ url }) => {
+  useEffect(() => {
+    socketManager.init(url);
+    // console.log('log sock:');
+    return () => {
+      socketManager.destroy();
+    };
+  }, [url]);
+
+  return null;
+};
