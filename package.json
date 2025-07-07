@@ -155,6 +155,8 @@
     "version": "0.49.2"
   },
   "dependencies": {
+    "@react-native-firebase/app": "^22.2.1",
+    "@react-native-firebase/messaging": "^22.2.1",
     "react-native-uuid": "^2.0.3",
     "socket.io-client": "^4.8.1"
   }

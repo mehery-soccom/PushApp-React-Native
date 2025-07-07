@@ -171,14 +171,26 @@ export { CustomBanner } from './components/CustomBanner';
 export { getDeviceId } from './utils/device';
 export { logUserDetails, getLoggedUserDetails } from './utils/user';
 export { MeheryEventSenderView } from './native/MeheryEventSenderView';
+import {
+  requestUserPermission,
+  getFcmToken,
+  setupForegroundNotificationListener,
+} from './firebase/Fb';
+
 import React, { useEffect } from 'react';
 import { socketManager } from './socket/SocketManager';
 
 export const PersistentSocket: React.FC<{ url: string }> = ({ url }) => {
   useEffect(() => {
+    requestUserPermission();
+    getFcmToken();
+
+    const unsubscribe = setupForegroundNotificationListener();
+
     socketManager.init(url);
     // console.log('log sock:');
     return () => {
+      unsubscribe();
       socketManager.destroy();
     };
   }, [url]);
