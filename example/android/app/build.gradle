@@ -108,11 +108,27 @@ android {
     }
 }
 
+configurations.all {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == 'com.android.support') {
+            // Force remove legacy support libraries
+            details.useVersion '28.0.0'
+            details.because 'Avoid conflict between androidx and com.android.support'
+        }
+        if (details.requested.group == 'androidx.core') {
+            details.useVersion '1.13.1'
+        }
+    }
+}
+
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
     implementation 'com.google.firebase:firebase-messaging:23.4.0' // latest
 
+  implementation(project(':react-native-push-notification')) {
+        exclude group: 'com.android.support'
+    }
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {

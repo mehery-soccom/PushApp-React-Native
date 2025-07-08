@@ -15,6 +15,21 @@ buildscript {
   }
 }
 
+allprojects {
+  configurations.all {
+    resolutionStrategy {
+      force 'androidx.core:core:1.13.1'
+      force 'androidx.appcompat:appcompat:1.6.1'
+
+      // Exclude support libraries
+      exclude group: 'com.android.support', module: 'support-compat'
+      exclude group: 'com.android.support', module: 'support-core-utils'
+      exclude group: 'com.android.support', module: 'support-core-ui'
+      exclude group: 'com.android.support', module: 'support-fragment'
+    }
+  }
+}
+
 
 apply plugin: "com.android.library"
 apply plugin: "kotlin-android"
