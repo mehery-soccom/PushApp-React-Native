@@ -174,6 +174,7 @@ export { MeheryEventSenderView } from './native/MeheryEventSenderView';
 import {
   requestUserPermission,
   getFcmToken,
+  configurePushNotifications,
   setupForegroundNotificationListener,
 } from './firebase/Fb';
 
@@ -184,6 +185,7 @@ export const PersistentSocket: React.FC<{ url: string }> = ({ url }) => {
   useEffect(() => {
     requestUserPermission();
     getFcmToken();
+    configurePushNotifications();
 
     const unsubscribe = setupForegroundNotificationListener();
 
