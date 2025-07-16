@@ -10,18 +10,20 @@ console.log('📦 Firebase app exists:', app ? 'Yes' : 'No');
  * Request notification permissions
  */
 async function requestUserPermission(): Promise<void> {
-  const authStatus = await messaging().requestPermission();
-  const enabled =
-    authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-    authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+  if (Platform.OS === 'ios') {
+    const authStatus = await messaging().requestPermission();
+    const enabled =
+      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+      authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
-  if (enabled) {
-    console.log('✅ Notification permission granted:', authStatus);
-  } else {
-    console.warn('❌ Notification permission denied');
+    if (enabled) {
+      console.log('✅ iOS notification permission granted:', authStatus);
+    } else {
+      console.warn('❌ iOS notification permission denied');
+    }
   }
 
-  // Android 13+ (API 33+) POST_NOTIFICATIONS permission
+  // Android 13+
   if (Platform.OS === 'android' && Platform.Version >= 33) {
     const permission = await PermissionsAndroid.request(
       PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
@@ -33,7 +35,6 @@ async function requestUserPermission(): Promise<void> {
     }
   }
 }
-
 /**
  * Get the current device's FCM token
  */

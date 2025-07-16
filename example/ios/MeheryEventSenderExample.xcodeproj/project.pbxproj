@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		28F4F0542E2802600069BEEF /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 28F4F0532E2802600069BEEF /* GoogleService-Info.plist */; };
 		74FDB7287976C468B60B17B4 /* libPods-MeheryEventSenderExample.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D3380B2524EE54CE5555D5FC /* libPods-MeheryEventSenderExample.a */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
@@ -19,6 +20,8 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = MeheryEventSenderExample/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = MeheryEventSenderExample/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = MeheryEventSenderExample/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		2840B3D82E27FAF5007304D1 /* MeheryEventSenderExample.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = MeheryEventSenderExample.entitlements; path = MeheryEventSenderExample/MeheryEventSenderExample.entitlements; sourceTree = "<group>"; };
+		28F4F0532E2802600069BEEF /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		503CC12D1779F68FC488E73F /* Pods-MeheryEventSenderExample.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MeheryEventSenderExample.debug.xcconfig"; path = "Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample.debug.xcconfig"; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = MeheryEventSenderExample/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = MeheryEventSenderExample/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -42,6 +45,8 @@
 		13B07FAE1A68108700A75B9A /* MeheryEventSenderExample */ = {
 			isa = PBXGroup;
 			children = (
+				28F4F0532E2802600069BEEF /* GoogleService-Info.plist */,
+				2840B3D82E27FAF5007304D1 /* MeheryEventSenderExample.entitlements */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
@@ -159,6 +164,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
+				28F4F0542E2802600069BEEF /* GoogleService-Info.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				984DE6B7658A6E3141E197FA /* PrivacyInfo.xcprivacy in Resources */,
 			);
@@ -259,8 +265,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = MeheryEventSenderExample/MeheryEventSenderExample.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MQD9WDZ4A9;
+				DEVELOPMENT_TEAM = 6CRFUK7DVC;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = MeheryEventSenderExample/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -293,8 +300,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = MeheryEventSenderExample/MeheryEventSenderExample.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = MQD9WDZ4A9;
+				DEVELOPMENT_TEAM = 6CRFUK7DVC;
 				INFOPLIST_FILE = MeheryEventSenderExample/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
