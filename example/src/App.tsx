@@ -1,15 +1,17 @@
 import { View, StyleSheet } from 'react-native';
-import { BannerScreen } from 'react-native-mehery-event-sender'; // ✅ Comes from SDK
+import { BannerScreen, initSdk } from 'react-native-mehery-event-sender';
 import * as SDK from 'react-native-mehery-event-sender';
-import { PersistentSocket } from 'react-native-mehery-event-sender'; // 👈 from your SDK
+import { useEffect } from 'react';
 
 console.log('sdk:', SDK); // should log { BannerScreen: [Function], ... }
 
 export default function App() {
+  useEffect(() => {
+    initSdk();
+  }, []);
   return (
     <View style={styles.container}>
       <BannerScreen />
-      <PersistentSocket url="https://socketio-chat-h9jt.herokuapp.com/" />
     </View>
   );
 }

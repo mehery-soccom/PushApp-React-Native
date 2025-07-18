@@ -177,25 +177,33 @@ import {
   configurePushNotifications,
   setupForegroundNotificationListener,
 } from './firebase/Fb';
+import { Platform } from 'react-native';
 
-import React, { useEffect } from 'react';
-import { socketManager } from './socket/SocketManager';
+// import React, { useEffect } from 'react';
+// import { socketManager } from './socket/SocketManager';
+// import { logUserDetails } from './utils/user';
+// console.log('DEBUG requestUserPermission:', requestUserPermission);
 
-export const PersistentSocket: React.FC<{ url: string }> = ({ url }) => {
-  useEffect(() => {
+// console.log('log:', logUserDetails);
+
+export const initSdk = () => {
+  if (Platform.OS === 'android') {
+    console.log('📱 Platform: Android - Initializing push notification setup');
+
+    console.log('requestUserPermission', requestUserPermission);
+    console.log('getFcmToken', getFcmToken);
+    console.log('configurePushNotifications', configurePushNotifications);
+    console.log(
+      'setupForegroundNotificationListener',
+      setupForegroundNotificationListener
+    );
+
     requestUserPermission();
     getFcmToken();
     configurePushNotifications();
-
-    const unsubscribe = setupForegroundNotificationListener();
-
-    socketManager.init(url);
-    // console.log('log sock:');
-    return () => {
-      unsubscribe();
-      socketManager.destroy();
-    };
-  }, [url]);
-
-  return null;
+    setupForegroundNotificationListener(); // no need to unsubscribe here
+    // socketManager.init('ws://example.com'); // if needed
+  } else {
+    console.log('🍏 Platform: iOS - Skipping push notification setup');
+  }
 };
