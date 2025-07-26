@@ -18,6 +18,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     // iOS notification permission and delegate
     UNUserNotificationCenter.current().delegate = self
     UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+      print("🔐 Notification permission granted: \(granted)")
+      if let error = error {
+        print("⚠️ Authorization error: \(error.localizedDescription)")
+      }
+
       if granted {
         DispatchQueue.main.async {
           application.registerForRemoteNotifications()
@@ -86,36 +91,50 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
 
   // MARK: - Firebase FCM token
   func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-    print("🔥 FCM token: \(fcmToken ?? "")")
-    // Optionally send token to your backend here
+    print("🔥 FCM token: \(fcmToken ?? "nil")")
+    // Optionally send token to backend
   }
 
-  // MARK: - Foreground notification display
-  // MARK: - Handle notification actions (when user taps a button)
-func userNotificationCenter(
-  _ center: UNUserNotificationCenter,
-  didReceive response: UNNotificationResponse,
-  withCompletionHandler completionHandler: @escaping () -> Void
-) {
-  let actionID = response.actionIdentifier
-  let categoryID = response.notification.request.content.categoryIdentifier
-
-  print("📩 User tapped action: \(actionID) in category: \(categoryID)")
-
-  // You can route logic here if needed:
-  switch actionID {
-    case "PUSHAPP_YES":
-      print("✅ User tapped YES")
-    case "PUSHAPP_NO":
-      print("❌ User tapped NO")
-    default:
-      break
+  // ✅ MARK: - Foreground display
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    print("📢 Notification received in foreground")
+    completionHandler([.banner, .sound, .badge]) // ✅ Show banner even in foreground
   }
 
-  let options: UNNotificationPresentationOptions = [.banner, .sound, .badge, .list]
-  completionHandler(options)
-}
+  // ✅ MARK: - Background tap action
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    let actionID = response.actionIdentifier
+    let categoryID = response.notification.request.content.categoryIdentifier
 
+    print("📩 User tapped action: \(actionID) in category: \(categoryID)")
+
+    switch actionID {
+      case "PUSHAPP_YES":
+        print("✅ User tapped YES")
+      case "PUSHAPP_NO":
+        print("❌ User tapped NO")
+      default:
+        break
+    }
+
+    completionHandler()
+  }
+
+  // ✅ MARK: - Handle background data-only messages
+  func application(_ application: UIApplication,
+                   didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                   fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+    print("📦 Background push received: \(userInfo)")
+    completionHandler(.newData)
+  }
 }
 
 // MARK: - React Native bridge

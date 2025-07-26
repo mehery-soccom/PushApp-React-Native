@@ -3,39 +3,139 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 55;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0A8DAC11DF0FF405956C97AE /* libPods-MeheryEventSenderExample.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1E7FA2AED5DE02159962ED6E /* libPods-MeheryEventSenderExample.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		28E3357D2E2A266C00072368 /* ImageServiceExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 28E335762E2A266C00072368 /* ImageServiceExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		28E335892E2A269C00072368 /* UserNotifications.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 28E335882E2A269C00072368 /* UserNotifications.framework */; };
+		28E3358B2E2A269C00072368 /* UserNotificationsUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 28E3358A2E2A269C00072368 /* UserNotificationsUI.framework */; };
+		28E335952E2A269C00072368 /* ImagePreviewExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 28E335872E2A269C00072368 /* ImagePreviewExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		28F4F0542E2802600069BEEF /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 28F4F0532E2802600069BEEF /* GoogleService-Info.plist */; };
-		74FDB7287976C468B60B17B4 /* libPods-MeheryEventSenderExample.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D3380B2524EE54CE5555D5FC /* libPods-MeheryEventSenderExample.a */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		984DE6B7658A6E3141E197FA /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		28E3357B2E2A266C00072368 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 28E335752E2A266C00072368;
+			remoteInfo = ImageServiceExtension;
+		};
+		28E335932E2A269C00072368 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 28E335862E2A269C00072368;
+			remoteInfo = ImagePreviewExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		28E3357E2E2A266C00072368 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				28E3357D2E2A266C00072368 /* ImageServiceExtension.appex in Embed Foundation Extensions */,
+				28E335952E2A269C00072368 /* ImagePreviewExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		13B07F961A680F5B00A75B9A /* MeheryEventSenderExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MeheryEventSenderExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = MeheryEventSenderExample/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = MeheryEventSenderExample/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = MeheryEventSenderExample/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		1E7FA2AED5DE02159962ED6E /* libPods-MeheryEventSenderExample.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-MeheryEventSenderExample.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2840B3D82E27FAF5007304D1 /* MeheryEventSenderExample.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = MeheryEventSenderExample.entitlements; path = MeheryEventSenderExample/MeheryEventSenderExample.entitlements; sourceTree = "<group>"; };
+		28E335762E2A266C00072368 /* ImageServiceExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ImageServiceExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		28E335872E2A269C00072368 /* ImagePreviewExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ImagePreviewExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		28E335882E2A269C00072368 /* UserNotifications.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UserNotifications.framework; path = System/Library/Frameworks/UserNotifications.framework; sourceTree = SDKROOT; };
+		28E3358A2E2A269C00072368 /* UserNotificationsUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UserNotificationsUI.framework; path = System/Library/Frameworks/UserNotificationsUI.framework; sourceTree = SDKROOT; };
 		28F4F0532E2802600069BEEF /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
-		503CC12D1779F68FC488E73F /* Pods-MeheryEventSenderExample.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MeheryEventSenderExample.debug.xcconfig"; path = "Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample.debug.xcconfig"; sourceTree = "<group>"; };
+		66A1C467CAD927BA0EB87690 /* Pods-MeheryEventSenderExample.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MeheryEventSenderExample.debug.xcconfig"; path = "Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample.debug.xcconfig"; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = MeheryEventSenderExample/AppDelegate.swift; sourceTree = "<group>"; };
+		7D58035D08877D55DC5928F0 /* Pods-MeheryEventSenderExample.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MeheryEventSenderExample.release.xcconfig"; path = "Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample.release.xcconfig"; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = MeheryEventSenderExample/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		90CB1D4E254E9640F112E78C /* Pods-MeheryEventSenderExample.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MeheryEventSenderExample.release.xcconfig"; path = "Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample.release.xcconfig"; sourceTree = "<group>"; };
-		D3380B2524EE54CE5555D5FC /* libPods-MeheryEventSenderExample.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-MeheryEventSenderExample.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		28E335812E2A266C00072368 /* Exceptions for "ImageServiceExtension" folder in "ImageServiceExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 28E335752E2A266C00072368 /* ImageServiceExtension */;
+		};
+		28E335962E2A269C00072368 /* Exceptions for "ImagePreviewExtension" folder in "ImagePreviewExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 28E335862E2A269C00072368 /* ImagePreviewExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		28E335772E2A266C00072368 /* ImageServiceExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				28E335812E2A266C00072368 /* Exceptions for "ImageServiceExtension" folder in "ImageServiceExtension" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = ImageServiceExtension;
+			sourceTree = "<group>";
+		};
+		28E3358C2E2A269C00072368 /* ImagePreviewExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				28E335962E2A269C00072368 /* Exceptions for "ImagePreviewExtension" folder in "ImagePreviewExtension" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = ImagePreviewExtension;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		13B07F8C1A680F5B00A75B9A /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				74FDB7287976C468B60B17B4 /* libPods-MeheryEventSenderExample.a in Frameworks */,
+				0A8DAC11DF0FF405956C97AE /* libPods-MeheryEventSenderExample.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		28E335732E2A266C00072368 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		28E335842E2A269C00072368 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				28E3358B2E2A269C00072368 /* UserNotificationsUI.framework in Frameworks */,
+				28E335892E2A269C00072368 /* UserNotifications.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -60,7 +160,9 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				D3380B2524EE54CE5555D5FC /* libPods-MeheryEventSenderExample.a */,
+				28E335882E2A269C00072368 /* UserNotifications.framework */,
+				28E3358A2E2A269C00072368 /* UserNotificationsUI.framework */,
+				1E7FA2AED5DE02159962ED6E /* libPods-MeheryEventSenderExample.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -77,6 +179,8 @@
 			children = (
 				13B07FAE1A68108700A75B9A /* MeheryEventSenderExample */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
+				28E335772E2A266C00072368 /* ImageServiceExtension */,
+				28E3358C2E2A269C00072368 /* ImagePreviewExtension */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
@@ -90,6 +194,8 @@
 			isa = PBXGroup;
 			children = (
 				13B07F961A680F5B00A75B9A /* MeheryEventSenderExample.app */,
+				28E335762E2A266C00072368 /* ImageServiceExtension.appex */,
+				28E335872E2A269C00072368 /* ImagePreviewExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -97,8 +203,8 @@
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				503CC12D1779F68FC488E73F /* Pods-MeheryEventSenderExample.debug.xcconfig */,
-				90CB1D4E254E9640F112E78C /* Pods-MeheryEventSenderExample.release.xcconfig */,
+				66A1C467CAD927BA0EB87690 /* Pods-MeheryEventSenderExample.debug.xcconfig */,
+				7D58035D08877D55DC5928F0 /* Pods-MeheryEventSenderExample.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -110,22 +216,65 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "MeheryEventSenderExample" */;
 			buildPhases = (
-				622FEAA725511907B0F29A17 /* [CP] Check Pods Manifest.lock */,
+				3FC3936DD30A71DB52C1F8E4 /* [CP] Check Pods Manifest.lock */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
-				4A362082362511DB4EFBB3BE /* [CP] Embed Pods Frameworks */,
-				4B8D9F49FF0345B7A84200D6 /* [CP] Copy Pods Resources */,
+				28E3357E2E2A266C00072368 /* Embed Foundation Extensions */,
+				BDF4F103DFE9D7348A61B834 /* [CP] Embed Pods Frameworks */,
+				BBA48E8CEE29676E07D7DAB8 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				28E3357C2E2A266C00072368 /* PBXTargetDependency */,
+				28E335942E2A269C00072368 /* PBXTargetDependency */,
 			);
 			name = MeheryEventSenderExample;
 			productName = MeheryEventSenderExample;
 			productReference = 13B07F961A680F5B00A75B9A /* MeheryEventSenderExample.app */;
 			productType = "com.apple.product-type.application";
+		};
+		28E335752E2A266C00072368 /* ImageServiceExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 28E335822E2A266C00072368 /* Build configuration list for PBXNativeTarget "ImageServiceExtension" */;
+			buildPhases = (
+				28E335722E2A266C00072368 /* Sources */,
+				28E335732E2A266C00072368 /* Frameworks */,
+				28E335742E2A266C00072368 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				28E335772E2A266C00072368 /* ImageServiceExtension */,
+			);
+			name = ImageServiceExtension;
+			productName = ImageServiceExtension;
+			productReference = 28E335762E2A266C00072368 /* ImageServiceExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		28E335862E2A269C00072368 /* ImagePreviewExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 28E335972E2A269C00072368 /* Build configuration list for PBXNativeTarget "ImagePreviewExtension" */;
+			buildPhases = (
+				28E335832E2A269C00072368 /* Sources */,
+				28E335842E2A269C00072368 /* Frameworks */,
+				28E335852E2A269C00072368 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				28E3358C2E2A269C00072368 /* ImagePreviewExtension */,
+			);
+			name = ImagePreviewExtension;
+			productName = ImagePreviewExtension;
+			productReference = 28E335872E2A269C00072368 /* ImagePreviewExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -133,15 +282,22 @@
 		83CBB9F71A601CBA00E9B192 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
+				LastSwiftUpdateCheck = 1620;
 				LastUpgradeCheck = 1210;
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
 						LastSwiftMigration = 1120;
 					};
+					28E335752E2A266C00072368 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					28E335862E2A269C00072368 = {
+						CreatedOnToolsVersion = 16.2;
+					};
 				};
 			};
 			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "MeheryEventSenderExample" */;
-			compatibilityVersion = "Xcode 12.0";
+			compatibilityVersion = "Xcode 15.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -154,6 +310,8 @@
 			projectRoot = "";
 			targets = (
 				13B07F861A680F5B00A75B9A /* MeheryEventSenderExample */,
+				28E335752E2A266C00072368 /* ImageServiceExtension */,
+				28E335862E2A269C00072368 /* ImagePreviewExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -167,6 +325,20 @@
 				28F4F0542E2802600069BEEF /* GoogleService-Info.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				984DE6B7658A6E3141E197FA /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		28E335742E2A266C00072368 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		28E335852E2A269C00072368 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -189,41 +361,7 @@
 			shellPath = /bin/sh;
 			shellScript = "set -e\n\nWITH_ENVIRONMENT=\"$REACT_NATIVE_PATH/scripts/xcode/with-environment.sh\"\nREACT_NATIVE_XCODE=\"$REACT_NATIVE_PATH/scripts/react-native-xcode.sh\"\n\n/bin/sh -c \"$WITH_ENVIRONMENT $REACT_NATIVE_XCODE\"\n";
 		};
-		4A362082362511DB4EFBB3BE /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		4B8D9F49FF0345B7A84200D6 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		622FEAA725511907B0F29A17 /* [CP] Check Pods Manifest.lock */ = {
+		3FC3936DD30A71DB52C1F8E4 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -245,6 +383,40 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
+		BBA48E8CEE29676E07D7DAB8 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		BDF4F103DFE9D7348A61B834 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -256,17 +428,44 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		28E335722E2A266C00072368 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		28E335832E2A269C00072368 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		28E3357C2E2A266C00072368 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 28E335752E2A266C00072368 /* ImageServiceExtension */;
+			targetProxy = 28E3357B2E2A266C00072368 /* PBXContainerItemProxy */;
+		};
+		28E335942E2A269C00072368 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 28E335862E2A269C00072368 /* ImagePreviewExtension */;
+			targetProxy = 28E335932E2A269C00072368 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 503CC12D1779F68FC488E73F /* Pods-MeheryEventSenderExample.debug.xcconfig */;
+			baseConfigurationReference = 66A1C467CAD927BA0EB87690 /* Pods-MeheryEventSenderExample.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MeheryEventSenderExample/MeheryEventSenderExample.entitlements;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 6CRFUK7DVC;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = MeheryEventSenderExample/Info.plist;
@@ -296,12 +495,12 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 90CB1D4E254E9640F112E78C /* Pods-MeheryEventSenderExample.release.xcconfig */;
+			baseConfigurationReference = 7D58035D08877D55DC5928F0 /* Pods-MeheryEventSenderExample.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MeheryEventSenderExample/MeheryEventSenderExample.entitlements;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 6CRFUK7DVC;
 				INFOPLIST_FILE = MeheryEventSenderExample/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -324,6 +523,168 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		28E3357F2E2A266C00072368 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 6CRFUK7DVC;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ImageServiceExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ImageServiceExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = meheryeventsender.example.ImageServiceExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		28E335802E2A266C00072368 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 6CRFUK7DVC;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ImageServiceExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ImageServiceExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = meheryeventsender.example.ImageServiceExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		28E335982E2A269C00072368 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 6CRFUK7DVC;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ImagePreviewExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ImagePreviewExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = meheryeventsender.example.ImagePreviewExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		28E335992E2A269C00072368 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 6CRFUK7DVC;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ImagePreviewExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ImagePreviewExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = meheryeventsender.example.ImagePreviewExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -487,6 +848,24 @@
 			buildConfigurations = (
 				13B07F941A680F5B00A75B9A /* Debug */,
 				13B07F951A680F5B00A75B9A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		28E335822E2A266C00072368 /* Build configuration list for PBXNativeTarget "ImageServiceExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				28E3357F2E2A266C00072368 /* Debug */,
+				28E335802E2A266C00072368 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		28E335972E2A269C00072368 /* Build configuration list for PBXNativeTarget "ImagePreviewExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				28E335982E2A269C00072368 /* Debug */,
+				28E335992E2A269C00072368 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
