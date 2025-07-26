@@ -1,7 +1,6 @@
 require 'json'
 require 'open3'
 
-# Dynamically resolve the correct path to react_native_pods.rb
 react_native_pods_path_output, status = Open3.capture2("node -p \"require.resolve('react-native/scripts/react_native_pods.rb')\"")
 react_native_pods_path = react_native_pods_path_output.strip
 
