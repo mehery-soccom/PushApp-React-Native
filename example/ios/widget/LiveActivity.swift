@@ -7,6 +7,11 @@
 
 import Foundation
 import ActivityKit
+import os // 👈 ADD THIS
+
+let logger = Logger(subsystem: "com.yourcompany.MeheryEventSenderExample", category: "LiveActivity")
+
+
 struct LiveActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         var driverName: String
@@ -32,11 +37,23 @@ class LiveActivity: NSObject {
         duration: duration
       )
       do {
-        _ = try Activity<LiveActivityAttributes>.request(
-          attributes: attributes,
-          contentState: contentState,
-          pushType: .token
-        )
+        let activity = try Activity<LiveActivityAttributes>.request(
+            attributes: attributes,
+            contentState: contentState,
+            pushType: .token
+          )
+
+          // ✅ Monitor push token
+          Task {
+            for await pushToken in activity.pushTokenUpdates {
+              let pushTokenString = pushToken.reduce("") {
+                $0 + String(format: "%02x", $1)
+              }
+              print("New push token: \(pushTokenString)")
+            }
+          }
+
+        print("Started Live Activity with ID: \(activity.id)")
       } catch {
         print("Failed to start activity: \(error)")
       }
