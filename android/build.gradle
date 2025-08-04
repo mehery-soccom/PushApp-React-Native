@@ -55,6 +55,16 @@ android {
     sourceSets {
       main {
         manifest.srcFile "src/main/AndroidManifestNew.xml"
+        res.srcDirs = ['src/main/res'] // 👈 Add this line
+        main.java.srcDirs += 'src/main/java'
+
+
+      }
+    }
+  } else {
+    sourceSets {
+      main {
+        res.srcDirs = ['src/main/res']
       }
     }
   }
@@ -80,7 +90,9 @@ android {
     sourceCompatibility JavaVersion.VERSION_1_8
     targetCompatibility JavaVersion.VERSION_1_8
   }
+  
 }
+
 
 repositories {
   mavenCentral()
@@ -90,7 +102,9 @@ repositories {
 def kotlin_version = getExtOrDefault("kotlinVersion")
 
 dependencies {
-  implementation "com.facebook.react:react-android"
+  implementation "com.facebook.react:react-android:0.80.0"
+  implementation 'com.google.firebase:firebase-messaging:24.0.0'
+
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
 }
 
