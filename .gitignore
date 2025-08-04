@@ -84,3 +84,5 @@ android/generated
 
 # React Native Nitro Modules
 nitrogen/
+android/java_pid*.hprof
+android/java_pid*.hprof
