@@ -1,10 +1,16 @@
+export { MeheryEventSenderView } from './native/MeheryEventSenderView';
 // External exports (public API)
 export { BannerScreen } from './components/BannerScreen';
 export { CustomBanner } from './components/CustomBanner';
 export { getDeviceId } from './utils/device';
-export { logUserDetails, getLoggedUserDetails } from './utils/user';
-export { MeheryEventSenderView } from './native/MeheryEventSenderView';
-
+export {
+  logUserDetails,
+  getLoggedUserDetails,
+  OnUserLogin,
+  OnUserLogOut,
+} from './utils/user';
+// import { AppOpen } from './events/default/DefaultEvents';
+export { OnPageClose, OnPageOpen } from './events/custom/CustomEvents';
 import { Platform } from 'react-native';
 import {
   requestUserPermission,
@@ -22,27 +28,28 @@ export const initSdk = () => {
     console.log('📱 Platform: Android - Initializing push notification setup');
 
     requestUserPermission();
-    getFcmToken();
     configurePushNotifications();
     setupForegroundNotificationListener();
-
+    // AppOpen();
     // 👇 Internal call — not exposed to consumers
     triggerLiveActivity({
       message1: 'Welcome!',
       message2: 'Live activity running',
       message3: 'Tap to continue',
-      progressPercent: '0.35',
-      message1FontColorHex: '#FF0000',
-      message2FontColorHex: '#000000',
-      message3FontColorHex: '#CCCCCC',
-      progressColorHex: '#00FF00',
-      backgroundColorHex: '#FFFFFF',
+      progressPercent: '0.85',
+      message1FontColorHex: '#00000', // red
+      message2FontColorHex: '#CCCCCC', // Light grey
+      message3FontColorHex: '#888888', // Darker grey
+      progressColorHex: '#00FF00', // Green progress bar
+      backgroundColorHex: '#FFFFFF', // Black background
       imageUrl: 'https://example.com/sample.png',
-      bg_color_gradient: '#FF5733,#33FFCE',
-      bg_color_gradient_dir: 'top_to_bottom',
+      bg_color_gradient: '', // No gradient
+      bg_color_gradient_dir: '', // Not needed since gradient is empty
       align: 'center',
       activity_id: 'demo_activity_001',
+      theme: 'dark',
     });
+    getFcmToken();
   } else {
     console.log('🍏 Platform: iOS - Skipping push notification setup');
   }

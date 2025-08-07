@@ -2,6 +2,9 @@ import messaging from '@react-native-firebase/messaging';
 import app from '@react-native-firebase/app';
 import { PermissionsAndroid } from 'react-native';
 import PushNotification from 'react-native-push-notification';
+import { Platform } from 'react-native';
+import { getDeviceId } from '../utils/device';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 console.log('💬 Firebase messaging:', messaging);
 console.log('📦 Firebase app exists:', app ? 'Yes' : 'No');
@@ -9,6 +12,33 @@ console.log('📦 Firebase app exists:', app ? 'Yes' : 'No');
 /**
  * Request notification permissions (platform-agnostic)
  */
+
+function registerDeviceWithFCM(token: string, deviceId: string) {
+  const payload = {
+    device_id: deviceId,
+    channel_id: 'demo_1754408042569',
+    platform: Platform.OS,
+    token: token,
+  };
+
+  console.log('📡 Registering device with payload:', payload);
+
+  fetch('https://demo.pushapp.co.in/pushapp/api/register', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+    .then((res) => res.json())
+    .then((resData) => {
+      console.log('✅ Device registered:', resData);
+    })
+    .catch((err) => {
+      console.error('❌ Failed to register device:', err);
+    });
+}
+
 export function requestUserPermission(): void {
   // iOS-style permission
   messaging()
@@ -47,11 +77,22 @@ export function requestUserPermission(): void {
 /**
  * Get the current device's FCM token
  */
-export function getFcmToken(): void {
+export function getFcmToken() {
   messaging()
     .getToken()
     .then((token) => {
-      console.log('FCM Token:', token);
+      console.log('📲 FCM Token:', token);
+      getDeviceId().then((id) => {
+        console.log('✅ Device is being registered with ID:', id);
+
+        // localStorage.setItem('device_id', id); // Save user_id to localStorage
+        try {
+          AsyncStorage.setItem('device_id', id); // ✅ Store it persistently
+        } catch (err) {
+          console.error('❌ Failed to store user_id:', err);
+        }
+        registerDeviceWithFCM(token, id); // <-- Register after getting token
+      });
     })
     .catch((error) => {
       console.error('Error getting FCM token:', error);

@@ -10,15 +10,13 @@ npm install react-native-mehery-event-sender
 
 ## Usage
 
-
 ```js
-import { MeheryEventSenderView } from "react-native-mehery-event-sender";
+import { MeheryEventSenderView } from 'react-native-mehery-event-sender';
 
 // ...
 
-<MeheryEventSenderView color="tomato" />
+<MeheryEventSenderView color="tomato" />;
 ```
-
 
 ## Contributing
 
@@ -31,4 +29,5 @@ MIT
 ---
 
 Made with [create-react-native-library](https://github.com/callstack/react-native-builder-bob)
+
 # react-native-mehery-event-sender
