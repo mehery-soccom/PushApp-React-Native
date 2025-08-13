@@ -21,15 +21,20 @@ import {
 
 // 👇 Internal import only (NOT exported)
 import { triggerLiveActivity } from './native/LiveActivity';
-
+import { connectToServer } from './socket/WebSock';
+import { getDeviceId } from './utils/device';
 // 👇 Init SDK (called by consumer app)
 export const initSdk = () => {
+  // testWebSocketConnection();
+  connectToServer(); // 👈 Connect WebSocket here
+  getDeviceId();
   if (Platform.OS === 'android') {
     console.log('📱 Platform: Android - Initializing push notification setup');
 
     requestUserPermission();
     configurePushNotifications();
     setupForegroundNotificationListener();
+
     // AppOpen();
     // 👇 Internal call — not exposed to consumers
     triggerLiveActivity({

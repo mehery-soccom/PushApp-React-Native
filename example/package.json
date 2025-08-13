@@ -10,18 +10,23 @@
     "build:ios": "react-native build-ios --scheme MeheryEventSenderExample --mode Debug --extra-params \"-sdk iphonesimulator CC=clang CPLUSPLUS=clang++ LD=clang LDPLUSPLUS=clang++ GCC_OPTIMIZATION_LEVEL=0 GCC_PRECOMPILE_PREFIX_HEADER=YES ASSETCATALOG_COMPILER_OPTIMIZATION=time DEBUG_INFORMATION_FORMAT=dwarf COMPILER_INDEX_STORE_ENABLE=NO\""
   },
   "dependencies": {
+    "@firebase/app": "^0.14.1",
+    "@firebase/app-types": "^0.9.3",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-firebase/app": "^22.4.0",
     "@react-native-firebase/messaging": "^22.4.0",
     "@react-native/gradle-plugin": "^0.80.2",
     "@react-native/new-app-screen": "0.80.0",
+    "@types/node": "^24.2.1",
+    "chalk": "4",
     "events": "^3.3.0",
     "react": "19.1.0",
     "react-native": "0.80.0",
-    "react-native-push-notification": "^8.1.1"
+    "react-native-push-notification": "^8.1.1",
+    "typescript": "^5.9.2"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.2",
+    "@babel/core": "^7.28.0",
     "@babel/preset-env": "^7.25.3",
     "@babel/runtime": "^7.25.0",
     "@react-native-community/cli": "19.0.0",

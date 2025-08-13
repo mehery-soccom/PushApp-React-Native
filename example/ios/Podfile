@@ -34,6 +34,8 @@ target 'MeheryEventSenderExample' do
 
   pod 'RNFBApp', :path => '../node_modules/@react-native-firebase/app'
   pod 'RNFBMessaging', :path => '../node_modules/@react-native-firebase/messaging'
+  pod 'RNCAsyncStorage', :path => '../node_modules/@react-native-async-storage/async-storage'
+
 
   post_install do |installer|
     react_native_post_install(
