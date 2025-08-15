@@ -18,7 +18,7 @@ async function sendEvent(event_name: string) {
 
   console.log(`📡 Sending ${event_name} event:`, payload);
 
-  fetch('https://demo.pushapp.co.in/pushapp/api/v1/events', {
+  fetch('https://demo.pushapp.co.in/pushapp/api/events', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

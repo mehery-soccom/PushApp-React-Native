@@ -8483,7 +8483,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"invariant@npm:^2.2.4":
+"invariant@npm:2.2.4, invariant@npm:^2.2.4":
   version: 2.2.4
   resolution: "invariant@npm:2.2.4"
   dependencies:
@@ -12098,6 +12098,7 @@ __metadata:
     react-native: 0.80.0
     react-native-builder-bob: ^0.38.3
     react-native-push-notification: ^8.1.1
+    react-native-webview: ^13.15.0
     typescript: ^5.9.2
   languageName: unknown
   linkType: soft
@@ -12133,6 +12134,7 @@ __metadata:
     react-native: 0.80.0
     react-native-builder-bob: ^0.38.3
     react-native-uuid: ^2.0.3
+    react-native-webview: ^13.15.0
     release-it: ^19.0.4
     socket.io-client: ^4.8.1
     turbo: ^1.10.7
@@ -12159,6 +12161,19 @@ __metadata:
   version: 2.0.3
   resolution: "react-native-uuid@npm:2.0.3"
   checksum: e47774481feaed5d38f75fb4b03f5189c03e7452038f1b0fa56677add8a8bdef64ec7ad5e83f9fa761d8788cac5c8e554ade07e82a2818145337df7c883e2124
+  languageName: node
+  linkType: hard
+
+"react-native-webview@npm:^13.15.0":
+  version: 13.15.0
+  resolution: "react-native-webview@npm:13.15.0"
+  dependencies:
+    escape-string-regexp: ^4.0.0
+    invariant: 2.2.4
+  peerDependencies:
+    react: "*"
+    react-native: "*"
+  checksum: 1c843206108358faef5cd8e25834de729a90319c3fa3f765923536fdd99b86b07a3e850b89ebe6503725a022dd9dddd5de76ef6e102d290cc5935dcf9c60198d
   languageName: node
   linkType: hard
 

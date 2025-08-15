@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { View, StyleSheet, TextInput, Button, Text } from 'react-native';
 import {
-  BannerScreen,
   initSdk,
   OnUserLogin,
   OnUserLogOut,
   OnPageClose,
   OnPageOpen,
 } from 'react-native-mehery-event-sender';
+import { PollOverlayProvider } from 'react-native-mehery-event-sender';
 
-export default function App() {
+function MainApp() {
   const [userId, setUserId] = useState('');
   const [submittedUserId, setSubmittedUserId] = useState('');
 
@@ -21,16 +21,11 @@ export default function App() {
     if (userId.trim()) {
       setSubmittedUserId(userId.trim());
       OnUserLogin(userId);
-      // console.log('User ID submitted:', userId);
-      // Add your logic to handle user login here
     }
   };
-  const handlePageOpen = () => {
-    OnPageOpen();
-  };
-  const handlePageClose = () => {
-    OnPageClose();
-  };
+
+  const handlePageOpen = () => OnPageOpen();
+  const handlePageClose = () => OnPageClose();
 
   const handleLogout = () => {
     if (submittedUserId) {
@@ -63,8 +58,16 @@ export default function App() {
       {submittedUserId ? (
         <Text style={styles.confirmText}>Logged in as: {submittedUserId}</Text>
       ) : null}
-      <BannerScreen />
     </View>
+  );
+}
+
+export default function App() {
+  return (
+    <>
+      <MainApp />
+      <PollOverlayProvider />
+    </>
   );
 }
 

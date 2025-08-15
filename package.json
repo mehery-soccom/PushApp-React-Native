@@ -161,6 +161,7 @@
     "chalk": "4",
     "events": "^3.3.0",
     "react-native-uuid": "^2.0.3",
+    "react-native-webview": "^13.15.0",
     "socket.io-client": "^4.8.1"
   }
 }

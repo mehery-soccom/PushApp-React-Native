@@ -23,6 +23,7 @@
     "react": "19.1.0",
     "react-native": "0.80.0",
     "react-native-push-notification": "^8.1.1",
+    "react-native-webview": "^13.15.0",
     "typescript": "^5.9.2"
   },
   "devDependencies": {

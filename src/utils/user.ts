@@ -48,10 +48,11 @@ export async function OnUserLogin(user_id: string) {
   console.log('Logged in w device id:', device_id);
 
   const payload = {
-    device_id,
+    device_id: device_id,
     user_id: userID,
     channel_id: 'demo_1754408042569',
   };
+  console.log('Paylod of login:', payload);
 
   fetch('https://demo.pushapp.co.in/pushapp/api/register/user', {
     method: 'POST',
@@ -71,7 +72,7 @@ export async function OnUserLogin(user_id: string) {
       OnAppOpen();
     })
     .catch((error) => {
-      console.warn('❌ Error registering device:', error);
+      console.warn('❌ Error registering device:', error.message);
     });
 }
 

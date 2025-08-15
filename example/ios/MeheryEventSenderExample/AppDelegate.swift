@@ -90,8 +90,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   // MARK: - APNs registration
   func application(_ application: UIApplication,
                    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    let apnsToken = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+    print("📲 APNs token: \(apnsToken)")
     Messaging.messaging().apnsToken = deviceToken
-    print("📲 APNs token: \(deviceToken.map { String(format: "%02.2hhx", $0) }.joined())")
+
+    PushTokenManager.sendTokenEvent("apns", token: apnsToken)
   }
 
   func application(_ application: UIApplication,
@@ -101,8 +104,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
 
   // MARK: - Firebase FCM token
   func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-    print("🔥 FCM token: \(fcmToken ?? "nil")")
-    // You can send this token to your backend if needed
+    let token = fcmToken ?? ""
+    print("🔥 FCM token: \(token)")
+
+    PushTokenManager.sendTokenEvent("fcm", token: token)
   }
 
   // MARK: - Live Activity

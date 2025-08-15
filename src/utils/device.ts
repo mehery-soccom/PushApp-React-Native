@@ -7,7 +7,7 @@ export async function getDeviceId(): Promise<string> {
   if (cachedDeviceId) return cachedDeviceId;
 
   try {
-    // 1️⃣ Try to load from persistent storage
+    // 1️⃣ Check if it exists in memory or persistent storage
     const storedId = await AsyncStorage.getItem('device_id');
     if (storedId) {
       console.log('📦 Loaded Device ID from storage:', storedId);
