@@ -1,35 +1,24 @@
-// SDK/components/PollOverlay.tsx
+// PollOverlay.tsx
 import React, { useState, useEffect } from 'react';
 import { Modal, View, TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { WebView } from 'react-native-webview';
 
-// Functions that will be set when provider mounts
-let showOverlayFn: ((html: string) => void) | null = null;
+let showOverlayFn: ((element: React.ReactNode) => void) | null = null;
 let hideOverlayFn: (() => void) | null = null;
-
-// Queue HTML if overlay is called before mount
-let overlayQueue: string[] = [];
+let overlayQueue: React.ReactNode[] = [];
 
 export const PollOverlayProvider: React.FC = () => {
   const [visible, setVisible] = useState(false);
-  const [html, setHtml] = useState('');
+  const [content, setContent] = useState<React.ReactNode | null>(null);
 
-  // Function to show overlay
-  showOverlayFn = (htmlContent: string) => {
-    console.log('📣 PollOverlay triggered with HTML:', htmlContent);
-    setHtml(htmlContent);
+  showOverlayFn = (element: React.ReactNode) => {
+    setContent(element);
     setVisible(true);
   };
 
-  // Function to hide overlay
-  hideOverlayFn = () => {
-    console.log('❌ PollOverlay hidden');
-    setVisible(false);
-  };
+  hideOverlayFn = () => setVisible(false);
 
-  // Flush any queued HTML after mounting
   useEffect(() => {
-    overlayQueue.forEach((h) => showOverlayFn?.(h));
+    overlayQueue.forEach((el) => showOverlayFn?.(el));
     overlayQueue = [];
   }, []);
 
@@ -39,30 +28,31 @@ export const PollOverlayProvider: React.FC = () => {
         <TouchableOpacity style={styles.closeBtn} onPress={hideOverlayFn}>
           <Text style={styles.closeText}>✕</Text>
         </TouchableOpacity>
-        <WebView source={{ html }} style={styles.webview} />
+        {content}
       </View>
     </Modal>
   );
 };
 
-// Public function to show overlay
-export const showPollOverlay = (html: string) => {
+export const showPollOverlay = (element: React.ReactNode) => {
   if (showOverlayFn) {
-    showOverlayFn(html);
+    showOverlayFn(element);
   } else {
-    console.warn('⚠ PollOverlayProvider not mounted yet, queuing HTML');
-    overlayQueue.push(html);
+    console.warn('⚠ PollOverlayProvider not mounted yet, queuing element');
+    overlayQueue.push(element);
   }
 };
 
-// Public function to hide overlay
 export const hidePollOverlay = () => {
   if (hideOverlayFn) hideOverlayFn();
 };
 
-// Styles
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000aa' },
+  container: {
+    flex: 1,
+    backgroundColor: '#000000aa',
+    justifyContent: 'center',
+  },
   closeBtn: {
     position: 'absolute',
     top: 40,
@@ -74,5 +64,4 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   closeText: { fontSize: 18, fontWeight: 'bold' },
-  webview: { flex: 1, marginTop: 80 },
 });
