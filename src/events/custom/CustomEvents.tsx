@@ -9,7 +9,8 @@ import RoadblockPoll from '../../components/RoadblockPoll';
 export async function sendCustomEvent(event_name: string, event_data: object) {
   const user_id = await AsyncStorage.getItem('user_id');
   const device_id = await AsyncStorage.getItem('device_id');
-  const channel_id = 'demo_1754408042569';
+  console.log('device id:', device_id);
+  const channel_id = 'demo_1757000275474';
   const payload = { user_id, channel_id, event_name, event_data };
 
   console.log(`📡 Sending ${event_name} event:`, payload);

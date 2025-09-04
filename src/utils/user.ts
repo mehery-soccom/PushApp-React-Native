@@ -50,7 +50,7 @@ export async function OnUserLogin(user_id: string) {
   const payload = {
     device_id: device_id,
     user_id: userID,
-    channel_id: 'demo_1754408042569',
+    channel_id: 'demo_1757000275474',
   };
   console.log('Paylod of login:', payload);
 
@@ -95,7 +95,7 @@ export async function OnUserLogOut(user_id: string) {
   const payload = {
     device_id,
     user_id: userID,
-    channel_id: 'demo_1754408042569',
+    channel_id: 'demo_1757000275474',
   };
 
   fetch('https://demo.pushapp.co.in/pushapp/api/register/logout', {

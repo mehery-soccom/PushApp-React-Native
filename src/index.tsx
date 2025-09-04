@@ -58,18 +58,18 @@ export const iosChecker = () => {
   });
 
   // 🔄 On reload, request last cached token
-  if (PushTokenManager.getLastToken) {
-    PushTokenManager.getLastToken()
-      .then((tokenObj: { token?: string; type?: string }) => {
-        if (tokenObj?.token) {
-          console.log(
-            `♻️ Reload: Got cached ${tokenObj.type} token: ${tokenObj.token}`
-          );
-          registerDeviceWithAPNS(tokenObj.token);
-        }
-      })
-      .catch((err: any) => console.error('Error getting last token:', err));
-  }
+  // if (PushTokenManager.getLastToken) {
+  //   PushTokenManager.getLastToken()
+  //     .then((tokenObj: { token?: string; type?: string }) => {
+  //       if (tokenObj?.token) {
+  //         console.log(
+  //           `♻️ Reload: Got cached ${tokenObj.type} token: ${tokenObj.token}`
+  //         );
+  //         registerDeviceWithAPNS(tokenObj.token);
+  //       }
+  //     })
+  //     .catch((err: any) => console.error('Error getting last token:', err));
+  // }
 };
 
 let sdkMounted = false;

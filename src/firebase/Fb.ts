@@ -16,7 +16,7 @@ console.log('📦 Firebase app exists:', app ? 'Yes' : 'No');
 export function registerDeviceWithFCM(token: string, deviceId: string) {
   const payload = {
     device_id: deviceId,
-    channel_id: 'demo_1754408042569',
+    channel_id: 'demo_1757000275474',
     platform: Platform.OS,
     token: token,
   };

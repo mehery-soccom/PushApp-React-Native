@@ -4,10 +4,11 @@ import { Platform } from 'react-native';
 export async function registerDeviceWithAPNS(token: string) {
   const device_id = await AsyncStorage.getItem('device_id');
   console.log('device id at apns is:', device_id);
+  console.log('Rtoken id at apns is:', token);
 
   const payload = {
     device_id: device_id,
-    channel_id: 'demo_1754408042569',
+    channel_id: 'demo_1757000275474',
     platform: Platform.OS,
     token: token,
   };

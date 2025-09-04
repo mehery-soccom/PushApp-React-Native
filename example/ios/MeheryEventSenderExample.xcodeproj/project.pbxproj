@@ -3,12 +3,11 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 55;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		1E6CD6A87B9FB9F350A6233C /* libPods-MeheryEventSenderExample.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 4A82EB0A38CC83DAA07D0DDB /* libPods-MeheryEventSenderExample.a */; };
 		285141C52E4DF49C004B9FFF /* PushTokenManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 285141C42E4DF49C004B9FFF /* PushTokenManager.swift */; };
 		285141C72E4E0464004B9FFF /* PushTokenManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 285141C62E4E0460004B9FFF /* PushTokenManager.m */; };
 		28E3357D2E2A266C00072368 /* ImageServiceExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 28E335762E2A266C00072368 /* ImageServiceExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -22,6 +21,7 @@
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		984DE6B7658A6E3141E197FA /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
+		9986830C95972E85AF63D0B1 /* libPods-MeheryEventSenderExample.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 23A4FA845F9113FB215A644D /* libPods-MeheryEventSenderExample.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +69,7 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = MeheryEventSenderExample/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = MeheryEventSenderExample/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = MeheryEventSenderExample/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		23A4FA845F9113FB215A644D /* libPods-MeheryEventSenderExample.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-MeheryEventSenderExample.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2840B3D82E27FAF5007304D1 /* MeheryEventSenderExample.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = MeheryEventSenderExample.entitlements; path = MeheryEventSenderExample/MeheryEventSenderExample.entitlements; sourceTree = "<group>"; };
 		285141C42E4DF49C004B9FFF /* PushTokenManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushTokenManager.swift; sourceTree = "<group>"; };
 		285141C62E4E0460004B9FFF /* PushTokenManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PushTokenManager.m; sourceTree = "<group>"; };
@@ -81,37 +82,36 @@
 		28E572312E38819E0030788C /* widgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = widgetExtension.entitlements; sourceTree = "<group>"; };
 		28E7B8772E39007D00B05A66 /* DeliveryActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DeliveryActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		28F4F0532E2802600069BEEF /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
-		4A82EB0A38CC83DAA07D0DDB /* libPods-MeheryEventSenderExample.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-MeheryEventSenderExample.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		6706C7C1D0DDBF16F7C0C9EF /* Pods-MeheryEventSenderExample.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MeheryEventSenderExample.debug.xcconfig"; path = "Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample.debug.xcconfig"; sourceTree = "<group>"; };
+		5D1ACD845F09DA22CA93807D /* Pods-MeheryEventSenderExample.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MeheryEventSenderExample.debug.xcconfig"; path = "Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample.debug.xcconfig"; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = MeheryEventSenderExample/AppDelegate.swift; sourceTree = "<group>"; };
-		7EC4D4A5316BFF47C5DCC45D /* Pods-MeheryEventSenderExample.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MeheryEventSenderExample.release.xcconfig"; path = "Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample.release.xcconfig"; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = MeheryEventSenderExample/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		FEED78DFF96647A4C90C8967 /* Pods-MeheryEventSenderExample.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MeheryEventSenderExample.release.xcconfig"; path = "Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		28E335812E2A266C00072368 /* Exceptions for "ImageServiceExtension" folder in "ImageServiceExtension" target */ = {
+		28E335812E2A266C00072368 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = 28E335752E2A266C00072368 /* ImageServiceExtension */;
 		};
-		28E335962E2A269C00072368 /* Exceptions for "ImagePreviewExtension" folder in "ImagePreviewExtension" target */ = {
+		28E335962E2A269C00072368 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = 28E335862E2A269C00072368 /* ImagePreviewExtension */;
 		};
-		28E7B88B2E39008200B05A66 /* Exceptions for "DeliveryActivity" folder in "DeliveryActivityExtension" target */ = {
+		28E7B88B2E39008200B05A66 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = 28E7B8762E39007D00B05A66 /* DeliveryActivityExtension */;
 		};
-		28E7B8902E39050000B05A66 /* Exceptions for "DeliveryActivity" folder in "MeheryEventSenderExample" target */ = {
+		28E7B8902E39050000B05A66 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				DeliveryActivityLiveActivity.swift,
@@ -121,43 +121,9 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		28E335772E2A266C00072368 /* ImageServiceExtension */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				28E335812E2A266C00072368 /* Exceptions for "ImageServiceExtension" folder in "ImageServiceExtension" target */,
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = ImageServiceExtension;
-			sourceTree = "<group>";
-		};
-		28E3358C2E2A269C00072368 /* ImagePreviewExtension */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				28E335962E2A269C00072368 /* Exceptions for "ImagePreviewExtension" folder in "ImagePreviewExtension" target */,
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = ImagePreviewExtension;
-			sourceTree = "<group>";
-		};
-		28E7B87A2E39007D00B05A66 /* DeliveryActivity */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				28E7B8902E39050000B05A66 /* Exceptions for "DeliveryActivity" folder in "MeheryEventSenderExample" target */,
-				28E7B88B2E39008200B05A66 /* Exceptions for "DeliveryActivity" folder in "DeliveryActivityExtension" target */,
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = DeliveryActivity;
-			sourceTree = "<group>";
-		};
+		28E335772E2A266C00072368 /* ImageServiceExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (28E335812E2A266C00072368 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ImageServiceExtension; sourceTree = "<group>"; };
+		28E3358C2E2A269C00072368 /* ImagePreviewExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (28E335962E2A269C00072368 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ImagePreviewExtension; sourceTree = "<group>"; };
+		28E7B87A2E39007D00B05A66 /* DeliveryActivity */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (28E7B8902E39050000B05A66 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, 28E7B88B2E39008200B05A66 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = DeliveryActivity; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -165,7 +131,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1E6CD6A87B9FB9F350A6233C /* libPods-MeheryEventSenderExample.a in Frameworks */,
+				9986830C95972E85AF63D0B1 /* libPods-MeheryEventSenderExample.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -221,7 +187,7 @@
 				28E3358A2E2A269C00072368 /* UserNotificationsUI.framework */,
 				2856F69D2E34CA5100491C20 /* WidgetKit.framework */,
 				2856F69F2E34CA5100491C20 /* SwiftUI.framework */,
-				4A82EB0A38CC83DAA07D0DDB /* libPods-MeheryEventSenderExample.a */,
+				23A4FA845F9113FB215A644D /* libPods-MeheryEventSenderExample.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -265,8 +231,8 @@
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				6706C7C1D0DDBF16F7C0C9EF /* Pods-MeheryEventSenderExample.debug.xcconfig */,
-				7EC4D4A5316BFF47C5DCC45D /* Pods-MeheryEventSenderExample.release.xcconfig */,
+				5D1ACD845F09DA22CA93807D /* Pods-MeheryEventSenderExample.debug.xcconfig */,
+				FEED78DFF96647A4C90C8967 /* Pods-MeheryEventSenderExample.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -278,14 +244,14 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "MeheryEventSenderExample" */;
 			buildPhases = (
-				25F45E7C90459E1914E745EA /* [CP] Check Pods Manifest.lock */,
+				DF32375427555B2CDED62434 /* [CP] Check Pods Manifest.lock */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				28E3357E2E2A266C00072368 /* Embed Foundation Extensions */,
-				B23B4444C08E30BDAD81657C /* [CP] Embed Pods Frameworks */,
-				C42A5DFD4556634802C1BC5E /* [CP] Copy Pods Resources */,
+				D7F32CD01F8517E4EA52625B /* [CP] Embed Pods Frameworks */,
+				260B1D98C474D0435D1C1010 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -455,7 +421,49 @@
 			shellPath = /bin/sh;
 			shellScript = "set -e\n\nWITH_ENVIRONMENT=\"$REACT_NATIVE_PATH/scripts/xcode/with-environment.sh\"\nREACT_NATIVE_XCODE=\"$REACT_NATIVE_PATH/scripts/react-native-xcode.sh\"\n\n/bin/sh -c \"$WITH_ENVIRONMENT $REACT_NATIVE_XCODE\"\n";
 		};
-		25F45E7C90459E1914E745EA /* [CP] Check Pods Manifest.lock */ = {
+		260B1D98C474D0435D1C1010 /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		D7F32CD01F8517E4EA52625B /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		DF32375427555B2CDED62434 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -475,40 +483,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		B23B4444C08E30BDAD81657C /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		C42A5DFD4556634802C1BC5E /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -568,7 +542,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 6706C7C1D0DDBF16F7C0C9EF /* Pods-MeheryEventSenderExample.debug.xcconfig */;
+			baseConfigurationReference = 5D1ACD845F09DA22CA93807D /* Pods-MeheryEventSenderExample.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -604,7 +578,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7EC4D4A5316BFF47C5DCC45D /* Pods-MeheryEventSenderExample.release.xcconfig */;
+			baseConfigurationReference = FEED78DFF96647A4C90C8967 /* Pods-MeheryEventSenderExample.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -979,10 +953,7 @@
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
 				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					" ",
-				);
+				OTHER_LDFLAGS = "$(inherited)  ";
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
@@ -1062,10 +1033,7 @@
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
 				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					" ",
-				);
+				OTHER_LDFLAGS = "$(inherited)  ";
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				USE_HERMES = true;
