@@ -74,7 +74,7 @@ export async function sendPollEvent() {
   }
 }
 
-// Show next poll in the queue
+// Show next poll in the queue// Show next poll in the queue
 function showNextPoll() {
   if (pollQueue.length === 0) {
     showingPoll = false;
@@ -83,11 +83,18 @@ function showNextPoll() {
 
   showingPoll = true;
   const nextPoll = pollQueue.shift();
-  if (!nextPoll.htmlContent) return showNextPoll();
+  if (!nextPoll?.htmlContent) {
+    // if no HTML, skip and go to next with delay
+    return setTimeout(showNextPoll, 3000);
+  }
 
   const onClose = () => {
-    hidePollOverlay();
-    showNextPoll(); // automatically show the next poll
+    // hidePollOverlay();
+
+    // ⏳ Add delay before showing next poll
+    setTimeout(() => {
+      showNextPoll();
+    }, 5000); // 3 sec delay (adjust as needed)
   };
 
   const { htmlContent, code, style } = nextPoll;

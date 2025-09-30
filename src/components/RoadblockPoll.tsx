@@ -5,9 +5,9 @@ export default function RoadblockPoll({ html, onClose }: any) {
   return (
     <View style={styles.container}>
       {/* Close Button */}
-      <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+      {/* <TouchableOpacity style={styles.closeButton} onPress={onClose}>
         <Text style={styles.closeText}>×</Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
 
       {/* WebView */}
       <WebView source={{ html }} style={styles.webview} />
@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
   closeButton: {
     position: 'absolute',
     top: 10,
-    right: 10,
+    left: 10,
     zIndex: 10,
     backgroundColor: '#00000080',
     width: 32,

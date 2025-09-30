@@ -40,7 +40,6 @@ function LoginPage({ onLogin }: { onLogin: (id: string) => void }) {
     </View>
   );
 }
-
 function HomePage({
   userId,
   onLogout,
@@ -49,15 +48,21 @@ function HomePage({
   onLogout: () => void;
 }) {
   const handlePageOpen = () => OnPageOpen();
-  // const handlePageClose = () => OnPageClose();
+
+  useEffect(() => {
+    try {
+      handlePageOpen();
+      console.log('page opened');
+    } catch (error) {
+      console.log('Cut failed', error);
+    }
+  }, []); // ✅ runs once when HomePage mounts
 
   return (
     <View style={[styles.container, { justifyContent: 'center' }]}>
       <Text style={{ fontSize: 24, fontWeight: 'bold' }}>
         User ID: {userId}
       </Text>
-      <Button title="click to do event" onPress={handlePageOpen} />
-
       <Button title="Logout" onPress={onLogout} />
     </View>
   );
@@ -66,6 +71,19 @@ function HomePage({
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'login' | 'home'>('login');
   const [userId, setUserId] = useState<string>('');
+
+  useEffect(() => {
+    // Initialize SDK once
+    initSdk();
+    try {
+      OnPageOpen('Login'); // pass a page name if required
+      console.log('✅ App opened event sent');
+    } catch (error) {
+      console.error('❌ Failed to send app open event:', error);
+    }
+    // Run page open event on app launch
+    // const timer = setTimeout(() => {}, 100000);
+  }, []);
 
   useEffect(() => {
     const checkStoredUser = async () => {
