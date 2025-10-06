@@ -9,6 +9,8 @@ import {
   OnPageOpen,
 } from 'react-native-mehery-event-sender';
 import { PollOverlayProvider } from 'react-native-mehery-event-sender';
+import { InlinePollContainer } from 'react-native-mehery-event-sender';
+import { TooltipPollContainer } from 'react-native-mehery-event-sender';
 
 function LoginPage({ onLogin }: { onLogin: (id: string) => void }) {
   const [userId, setUserId] = useState('');
@@ -64,6 +66,10 @@ function HomePage({
         User ID: {userId}
       </Text>
       <Button title="Logout" onPress={onLogout} />
+      <TooltipPollContainer placeholderId="center">
+        <Button title="Test Tooltip" />
+      </TooltipPollContainer>
+      <InlinePollContainer placeholderId="login_banner" />
     </View>
   );
 }

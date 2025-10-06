@@ -13,6 +13,8 @@ export { OnPageClose, OnPageOpen } from './events/custom/CustomEvents';
 export { PollOverlayProvider } from './components/PollOverlay';
 export { showPollOverlay, hidePollOverlay } from './components/PollOverlay';
 
+export { InlinePollContainer } from './components/RenderInlinePoll';
+
 import { AppRegistry } from 'react-native';
 
 // 🛠 Imports
@@ -32,6 +34,8 @@ import { registerDeviceWithAPNS } from './firebase/IosAPNS';
 // import { showPollOverlay, hidePollOverlay } from './components/PollOverlay';
 // 🛡 Safe NativeEventEmitter setup
 import { PollOverlayProvider } from './components/PollOverlay';
+
+export { TooltipPollContainer } from './components/TooltipPollContainer';
 
 const { PushTokenManager } = NativeModules;
 // const pushEmitter = PushTokenManager

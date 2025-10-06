@@ -1,9 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { showPollOverlay, hidePollOverlay } from '../../components/PollOverlay';
+import { showPollOverlay } from '../../components/PollOverlay';
 import BannerPoll from '../../components/BannerPoll';
 import PipPoll from '../../components/PipPoll';
 import BottomSheetPoll from '../../components/BottomSheetPoll';
 import RoadblockPoll from '../../components/RoadblockPoll';
+import { renderInlinePoll } from '../../components/RenderInlinePoll';
+import { renderTooltipPoll } from '../../components/TooltipPollManager';
 
 // 📌 Sends a custom event, then triggers the poll fetch
 export async function sendCustomEvent(event_name: string, event_data: object) {
@@ -44,7 +46,7 @@ export async function sendPollEvent() {
   const user_id = await AsyncStorage.getItem('user_id');
   const device_id = await AsyncStorage.getItem('device_id');
   if (!user_id || !device_id) return;
-  // if (showingPoll) return; // don't fetch new poll if one is showing
+
   console.log('showing poll:', showingPoll);
   const payload = { contact_id: `${user_id}_${device_id}` };
 
@@ -59,12 +61,63 @@ export async function sendPollEvent() {
     );
 
     const data = await res.json();
+    console.log('data from poll api:', data);
+
     if (data.results?.length > 0) {
-      // Fill the queue with all templates
-      pollQueue = data.results.map((poll: any) => {
+      data.results.forEach((poll: any) => {
         const htmlContent = poll?.template?.style?.html;
         const code = poll?.template?.style?.code ?? '';
-        return { htmlContent, code, style: poll?.template?.style };
+        const style = poll?.template?.style ?? {};
+        const event = poll?.event ?? {};
+
+        // 🔹 Handle inline poll case
+        if (code.includes('inline') && event?.event_data?.compare) {
+          const placeholderId = event.event_data.compare;
+
+          // Dispatch/render inline poll → you’ll use WebView or a component
+          renderInlinePoll(placeholderId, htmlContent, style);
+        } else if (event?.event_data?.compare && code.includes('tooltip')) {
+          console.log('style:', style);
+
+          const tooltipData = {
+            compare: event.event_data.compare,
+            html: style?.html,
+            width: style?.width || 70,
+            align: style?.align || 'center',
+            bgColor: style?.bg_color || '',
+            line1: style?.line_1 || '',
+            line2: style?.line_2 || '',
+            line1Icon: style?.line1_icon || '',
+            line1IconPosition: style?.line1_icon_position || 'prepend',
+            line1Color: style?.line1_font_color || '#000000',
+            line2Color: style?.line2_font_color || '#000000',
+            line1FontSize: style?.line1_font_size || 12,
+            line2FontSize: style?.line2_font_size || 10,
+            line1TextStyles: style?.line1_text_styles || [],
+            line2TextStyles: style?.line2_text_styles || [],
+            line1FontTextStyles: style?.line1_font_text_styles || [],
+            line2FontTextStyles: style?.line2_font_text_styles || [],
+          };
+
+          console.log('✅ Final tooltipData:', tooltipData);
+
+          // ✅ Now dispatch to the TooltipPoll container
+          setTimeout(() => {
+            renderTooltipPoll(event.event_data.compare, {
+              ...tooltipData,
+              tooltipKey: event.eventId || Date.now(), // unique key
+            });
+          }, 5000); // 10,000 ms = 10 seconds
+
+          console.log('🎯 Tooltip candidate:', {
+            code,
+            compare: event?.event_data?.compare,
+            tooltipData,
+          });
+        } else {
+          // Add normal overlays to the queue
+          pollQueue.push({ htmlContent, code, style });
+        }
       });
 
       showNextPoll();

@@ -1,7 +1,7 @@
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-export default function RoadblockPoll({ html, onClose }: any) {
+export default function RoadblockPoll({ html }: any) {
   return (
     <View style={styles.container}>
       {/* Close Button */}
