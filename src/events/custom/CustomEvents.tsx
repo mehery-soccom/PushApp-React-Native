@@ -61,7 +61,7 @@ export async function sendPollEvent() {
     );
 
     const data = await res.json();
-    console.log('data from poll api:', data);
+    console.log('poll data:', data);
 
     if (data.results?.length > 0) {
       data.results.forEach((poll: any) => {
@@ -69,7 +69,9 @@ export async function sendPollEvent() {
         const code = poll?.template?.style?.code ?? '';
         const style = poll?.template?.style ?? {};
         const event = poll?.event ?? {};
-
+        console.log('poll.contactId from poll api:', poll.contactId);
+        console.log('poll.messageId from poll api:', poll.messageId);
+        sendAck(poll.contactId, poll.messageId);
         // 🔹 Handle inline poll case
         if (code.includes('inline') && event?.event_data?.compare) {
           const placeholderId = event.event_data.compare;
@@ -126,6 +128,33 @@ export async function sendPollEvent() {
     console.error('❌ API error:', err);
   }
 }
+export async function sendAck(contactId: string, messageId: string) {
+  if (!contactId || !messageId) {
+    console.warn('⚠️ Missing contactId or messageId for ACK');
+    return;
+  }
+
+  const payload = {
+    messageId,
+    contact_id: contactId,
+  };
+
+  try {
+    const res = await fetch(
+      'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/ack',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    const data = await res.json();
+    console.log('✅ Acknowledgement response:', data);
+  } catch (error) {
+    console.error('❌ ACK API error:', error);
+  }
+}
 
 // Show next poll in the queue// Show next poll in the queue
 function showNextPoll() {
@@ -141,39 +170,28 @@ function showNextPoll() {
     return setTimeout(showNextPoll, 3000);
   }
 
-  const onClose = () => {
-    // hidePollOverlay();
+  // const onClose = () => {
+  //   // hidePollOverlay();
 
-    // ⏳ Add delay before showing next poll
-    setTimeout(() => {
-      showNextPoll();
-    }, 5000); // 3 sec delay (adjust as needed)
-  };
+  //   // ⏳ Add delay before showing next poll
+  //   setTimeout(() => {
+  //     showNextPoll();
+  //   }, 5000); // 3 sec delay (adjust as needed)
+  // };
 
   const { htmlContent, code, style } = nextPoll;
 
   if (code.includes('roadblock')) {
-    showPollOverlay(
-      <RoadblockPoll html={htmlContent} visible={true} onClose={onClose} />
-    );
+    showPollOverlay(<RoadblockPoll html={htmlContent} visible={true} />);
   } else if (code.includes('banner')) {
-    showPollOverlay(
-      <BannerPoll html={htmlContent} visible={true} onClose={onClose} />
-    );
+    showPollOverlay(<BannerPoll html={htmlContent} visible={true} />);
   } else if (code.includes('picture-in-picture')) {
     const alignment = getAlignment(style);
     showPollOverlay(
-      <PipPoll
-        html={htmlContent}
-        visible={true}
-        onClose={onClose}
-        alignment={alignment}
-      />
+      <PipPoll html={htmlContent} visible={true} alignment={alignment} />
     );
   } else if (code.includes('bottomsheet')) {
-    showPollOverlay(
-      <BottomSheetPoll html={htmlContent} visible={true} onClose={onClose} />
-    );
+    showPollOverlay(<BottomSheetPoll html={htmlContent} visible={true} />);
   }
 }
 
