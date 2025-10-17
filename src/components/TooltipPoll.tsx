@@ -43,12 +43,12 @@ export default function TooltipPoll({
       }}
     >
       {/* Close button */}
-      <TouchableOpacity
+      {/* <TouchableOpacity
         onPress={() => setVisible(false)}
         style={{ position: 'absolute', top: 4, right: 4, zIndex: 1000 }}
       >
         <Text style={{ fontSize: 14, fontWeight: 'bold' }}>×</Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
 
       <Text
         style={{

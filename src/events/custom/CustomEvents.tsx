@@ -116,9 +116,33 @@ export async function sendPollEvent() {
             compare: event?.event_data?.compare,
             tooltipData,
           });
-        } else {
-          // Add normal overlays to the queue
+        } else if (code.includes('roadblock')) {
+          // Only roadblocks go into the queue
           pollQueue.push({ htmlContent, code, style });
+        } else {
+          // All others show immediately
+          const overlayProps = {
+            html: htmlContent,
+            visible: true,
+            pollType: code,
+          };
+          if (code.includes('banner')) {
+            console.log('🎯 Showing Banner Poll');
+            showPollOverlay(<BannerPoll {...overlayProps} />);
+          } else if (code.includes('picture-in-picture')) {
+            const alignment = getAlignment(style);
+            console.log('🎯 Showing Pip Poll');
+            showPollOverlay(
+              <PipPoll
+                {...overlayProps}
+                alignment={alignment}
+                fullscreen={false}
+              />
+            );
+          } else if (code.includes('bottomsheet')) {
+            console.log('🎯 Showing BottomSheet Poll');
+            showPollOverlay(<BottomSheetPoll {...overlayProps} />);
+          }
         }
       });
 
@@ -165,33 +189,13 @@ function showNextPoll() {
 
   showingPoll = true;
   const nextPoll = pollQueue.shift();
-  if (!nextPoll?.htmlContent) {
-    // if no HTML, skip and go to next with delay
-    return setTimeout(showNextPoll, 3000);
-  }
-
-  // const onClose = () => {
-  //   // hidePollOverlay();
-
-  //   // ⏳ Add delay before showing next poll
-  //   setTimeout(() => {
-  //     showNextPoll();
-  //   }, 5000); // 3 sec delay (adjust as needed)
-  // };
+  if (!nextPoll?.htmlContent) return setTimeout(showNextPoll, 3000);
 
   const { htmlContent, code, style } = nextPoll;
-
   if (code.includes('roadblock')) {
-    showPollOverlay(<RoadblockPoll html={htmlContent} visible={true} />);
-  } else if (code.includes('banner')) {
-    showPollOverlay(<BannerPoll html={htmlContent} visible={true} />);
-  } else if (code.includes('picture-in-picture')) {
-    const alignment = getAlignment(style);
     showPollOverlay(
-      <PipPoll html={htmlContent} visible={true} alignment={alignment} />
+      <RoadblockPoll html={htmlContent} visible={true} pollType="roadblock" />
     );
-  } else if (code.includes('bottomsheet')) {
-    showPollOverlay(<BottomSheetPoll html={htmlContent} visible={true} />);
   }
 }
 
@@ -210,7 +214,9 @@ function getAlignment(style: any) {
   return `${verticalPart}-${horizontalPart}`;
 }
 export function OnPageOpen() {
-  sendCustomEvent('page_open', { page: 'login' });
+  setTimeout(() => {
+    sendCustomEvent('page_open', { page: 'login' });
+  }, 2000); // 2000ms = 2 seconds
 }
 
 export function OnPageClose() {

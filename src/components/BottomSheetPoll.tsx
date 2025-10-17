@@ -1,6 +1,5 @@
-import { useRef, useEffect } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
-  Modal,
   View,
   PanResponder,
   Animated,
@@ -13,9 +12,20 @@ import { WebView } from 'react-native-webview';
 
 const { height } = Dimensions.get('window');
 
-export default function BottomSheetPoll({ html, visible, onClose }: any) {
-  const translateY = useRef(new Animated.Value(height * 0.6)).current; // start off-screen
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+interface BottomSheetPollProps {
+  html: string;
+  visible: boolean;
+  onClose: () => void;
+}
+
+export default function BottomSheetPoll({
+  html,
+  visible,
+  onClose,
+}: BottomSheetPollProps) {
+  const translateY = useRef(new Animated.Value(height)).current; // start off-screen
+
+  // Animate on visible change
   useEffect(() => {
     if (visible) {
       Animated.timing(translateY, {
@@ -23,9 +33,16 @@ export default function BottomSheetPoll({ html, visible, onClose }: any) {
         duration: 300,
         useNativeDriver: true,
       }).start();
+    } else {
+      Animated.timing(translateY, {
+        toValue: height,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
     }
-  }, [visible, translateY]);
+  }, [visible]);
 
+  // PanResponder for swipe down
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) =>
@@ -53,42 +70,36 @@ export default function BottomSheetPoll({ html, visible, onClose }: any) {
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="none">
-      <View style={styles.transparentContainer}>
-        {/* Area above bottom sheet */}
-        <TouchableOpacity
-          style={styles.backgroundTouchable}
-          activeOpacity={1}
-          onPress={onClose}
-        />
+    <View style={styles.container}>
+      {/* Transparent background */}
+      <TouchableOpacity
+        style={styles.backgroundTouchable}
+        activeOpacity={1}
+        onPress={onClose}
+      />
 
-        {/* Bottom sheet */}
-        <Animated.View
-          style={[styles.bottomSheet, { transform: [{ translateY }] }]}
-          {...panResponder.panHandlers}
-        >
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeText}>×</Text>
-          </TouchableOpacity>
-
-          <WebView source={{ html }} style={styles.ww} scrollEnabled />
-        </Animated.View>
-      </View>
-    </Modal>
+      {/* Animated bottom sheet */}
+      <Animated.View
+        style={[styles.bottomSheet, { transform: [{ translateY }] }]}
+        {...panResponder.panHandlers}
+      >
+        {/* <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+          <Text style={styles.closeText}>×</Text>
+        </TouchableOpacity> */}
+        <WebView source={{ html }} style={styles.ww} scrollEnabled />
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  ww: {
-    flex: 1,
-  },
-  transparentContainer: {
-    flex: 1,
-    backgroundColor: 'transparent',
+  container: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
+    zIndex: 1040,
   },
   backgroundTouchable: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
   },
   bottomSheet: {
     height: height * 0.6,
@@ -97,6 +108,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
+  },
+  ww: {
+    flex: 1,
   },
   closeButton: {
     position: 'absolute',

@@ -67,7 +67,8 @@ function HomePage({
       </Text>
       <Button title="Logout" onPress={onLogout} />
       <TooltipPollContainer placeholderId="center">
-        <Button title="Test Tooltip" />
+        <View></View>
+        {/* <Button title="Test Tooltip" /> */}
       </TooltipPollContainer>
       <InlinePollContainer placeholderId="login_banner" />
     </View>
@@ -81,12 +82,7 @@ export default function App() {
   useEffect(() => {
     // Initialize SDK once
     initSdk();
-    try {
-      OnPageOpen('Login'); // pass a page name if required
-      console.log('✅ App opened event sent');
-    } catch (error) {
-      console.error('❌ Failed to send app open event:', error);
-    }
+    //
     // Run page open event on app launch
     // const timer = setTimeout(() => {}, 100000);
   }, []);

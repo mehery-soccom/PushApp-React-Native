@@ -10,12 +10,12 @@ export default function BannerPoll({ html }: any) {
   return (
     <View style={styles.container}>
       {/* Close button on top */}
-      <TouchableOpacity
+      {/* <TouchableOpacity
         style={styles.closeButton}
         onPress={() => setVisible(false)}
       >
         <Text style={styles.closeText}>×</Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
 
       {/* WebView */}
       <WebView
@@ -27,6 +27,7 @@ export default function BannerPoll({ html }: any) {
         showsVerticalScrollIndicator={false}
         showsHorizontalScrollIndicator={false}
         pointerEvents="box-none" // This allows the button to be clickable
+        scrollEnabled={false} // ✅ disable scrolling
       />
     </View>
   );
@@ -35,9 +36,8 @@ export default function BannerPoll({ html }: any) {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 50,
-    left: 0,
-    width: '100%',
+    top: 60,
+    width: '120%',
     height: 75,
     zIndex: 9999,
     backgroundColor: 'white',
