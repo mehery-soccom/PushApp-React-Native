@@ -145,8 +145,8 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     position: 'absolute',
-    top: 70,
-    right: 20,
+    top: 50,
+    right: 30,
     zIndex: 20000,
     backgroundColor: '#fff',
     borderRadius: 25,

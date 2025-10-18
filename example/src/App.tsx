@@ -49,14 +49,13 @@ function HomePage({
   userId: string;
   // onLogout: () => void;
 }) {
-  const handlePageOpen = () => OnPageOpen();
+  // const handlePageOpen = () => OnPageOpen();
 
   useEffect(() => {
     try {
-      handlePageOpen();
-      console.log('page opened');
+      OnPageOpen();
     } catch (error) {
-      console.log('Cut failed', error);
+      console.log('error in opening page:', error);
     }
   }, []); // ✅ runs once when HomePage mounts
 

@@ -5,7 +5,6 @@ import {
   Animated,
   Dimensions,
   StyleSheet,
-  TouchableOpacity,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
@@ -33,14 +32,15 @@ export default function BottomSheetPoll({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
+  // Only allow vertical gestures
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 10,
-      onPanResponderMove: (_, g) => {
-        if (g.dy > 0) translateY.setValue(g.dy);
+      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 10,
+      onPanResponderMove: (_, gesture) => {
+        if (gesture.dy > 0) translateY.setValue(gesture.dy);
       },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 100) {
+      onPanResponderRelease: (_, gesture) => {
+        if (gesture.dy > 100) {
           Animated.timing(translateY, {
             toValue: height,
             duration: 200,
@@ -53,50 +53,81 @@ export default function BottomSheetPoll({
           }).start();
         }
       },
+      onPanResponderTerminationRequest: () => false,
     })
   ).current;
 
   if (!visible) return null;
 
+  // Inject fixes to ensure image/video fills correctly on first render
   const injectedHtml = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-        <style>
-          body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-          }
-          iframe, img, video {
-            width: 100%;
-            height: auto;
-          }
-        </style>
-      </head>
-      <body>
-        ${html}
-      </body>
-    </html>
-  `;
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="initial-scale=1.0" />
+    <style>
+      html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      /* Fix for iOS auto-zoom and layout scaling */
+      img, video {
+        width: 100% !important;
+        height: auto !important;
+        display: block;
+        object-fit: cover;
+      }
+
+      .media-preview {
+        width: 100% !important;
+        height: 100% !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+    </style>
+    <script>
+      // Ensure image expands immediately on load
+      window.addEventListener('load', () => {
+        const img = document.querySelector('.media-preview img');
+        if (img) {
+          img.style.width = '100%';
+          img.style.height = 'auto';
+          img.style.objectFit = 'cover';
+        }
+      });
+    </script>
+  </head>
+  <body>
+    ${html}
+  </body>
+</html>
+`;
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.backgroundTouchable}
-        activeOpacity={1}
-        onPress={onClose}
-      />
       <Animated.View
         style={[styles.bottomSheet, { transform: [{ translateY }] }]}
         {...panResponder.panHandlers}
       >
         <WebView
+          originWhitelist={['*']}
           source={{ html: injectedHtml }}
           style={styles.webview}
+          javaScriptEnabled
+          domStorageEnabled
           scrollEnabled
+          onMessage={(event) => {
+            const label = event.nativeEvent.data;
+            console.log('Button clicked:', label);
+            onClose();
+          }}
         />
       </Animated.View>
     </View>
@@ -109,18 +140,16 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     zIndex: 1040,
   },
-  backgroundTouchable: {
-    ...StyleSheet.absoluteFillObject,
-  },
   bottomSheet: {
-    height: height * 0.5, // cover almost full screen
+    height: height * 0.5,
     width: '100%',
-    backgroundColor: 'white',
+    backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
   },
   webview: {
+    width: '100%',
     flex: 1,
   },
 });
