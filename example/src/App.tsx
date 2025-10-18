@@ -44,10 +44,10 @@ function LoginPage({ onLogin }: { onLogin: (id: string) => void }) {
 }
 function HomePage({
   userId,
-  onLogout,
+  // onLogout,
 }: {
   userId: string;
-  onLogout: () => void;
+  // onLogout: () => void;
 }) {
   const handlePageOpen = () => OnPageOpen();
 
@@ -65,9 +65,9 @@ function HomePage({
       <Text style={{ fontSize: 24, fontWeight: 'bold' }}>
         User ID: {userId}
       </Text>
-      <Button title="Logout" onPress={onLogout} />
+      {/* <Button title="Logout" onPress={onLogout} /> */}
       <TooltipPollContainer placeholderId="center">
-        <View></View>
+        <View />
         {/* <Button title="Test Tooltip" /> */}
       </TooltipPollContainer>
       <InlinePollContainer placeholderId="login_banner" />

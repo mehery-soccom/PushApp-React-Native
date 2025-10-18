@@ -6,7 +6,6 @@ import {
   Dimensions,
   StyleSheet,
   TouchableOpacity,
-  Text,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
@@ -23,35 +22,25 @@ export default function BottomSheetPoll({
   visible,
   onClose,
 }: BottomSheetPollProps) {
-  const translateY = useRef(new Animated.Value(height)).current; // start off-screen
+  const translateY = useRef(new Animated.Value(height)).current;
 
-  // Animate on visible change
   useEffect(() => {
-    if (visible) {
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(translateY, {
-        toValue: height,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    }
+    Animated.timing(translateY, {
+      toValue: visible ? 0 : height,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  // PanResponder for swipe down
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) =>
-        Math.abs(gestureState.dy) > 10,
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) translateY.setValue(gestureState.dy);
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 10,
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) translateY.setValue(g.dy);
       },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 100) {
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 100) {
           Animated.timing(translateY, {
             toValue: height,
             duration: 200,
@@ -69,24 +58,46 @@ export default function BottomSheetPoll({
 
   if (!visible) return null;
 
+  const injectedHtml = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+        <style>
+          body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+          }
+          iframe, img, video {
+            width: 100%;
+            height: auto;
+          }
+        </style>
+      </head>
+      <body>
+        ${html}
+      </body>
+    </html>
+  `;
+
   return (
     <View style={styles.container}>
-      {/* Transparent background */}
       <TouchableOpacity
         style={styles.backgroundTouchable}
         activeOpacity={1}
         onPress={onClose}
       />
-
-      {/* Animated bottom sheet */}
       <Animated.View
         style={[styles.bottomSheet, { transform: [{ translateY }] }]}
         {...panResponder.panHandlers}
       >
-        {/* <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-          <Text style={styles.closeText}>×</Text>
-        </TouchableOpacity> */}
-        <WebView source={{ html }} style={styles.ww} scrollEnabled />
+        <WebView
+          source={{ html: injectedHtml }}
+          style={styles.webview}
+          scrollEnabled
+        />
       </Animated.View>
     </View>
   );
@@ -102,31 +113,14 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   bottomSheet: {
-    height: height * 0.6,
+    height: height * 0.5, // cover almost full screen
     width: '100%',
     backgroundColor: 'white',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
   },
-  ww: {
+  webview: {
     flex: 1,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    zIndex: 10,
-    backgroundColor: '#00000080',
-    borderRadius: 15,
-    width: 30,
-    height: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
   },
 });

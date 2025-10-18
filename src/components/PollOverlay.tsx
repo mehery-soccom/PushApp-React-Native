@@ -24,15 +24,11 @@ export const PollOverlayProvider: React.FC = () => {
     if (pollType === 'roadblock') {
       setModalContent(element);
       setModalVisible(true);
-    } else if (pollType === 'banner') {
+    } else if (pollType.includes('banner')) {
       setBannerContents((prev) => [...prev, element]);
-    } else if (
-      ['picture-in-picture-video', 'picture-in-picture-image'].includes(
-        pollType
-      )
-    ) {
+    } else if (pollType.includes('picture-in-picture')) {
       setPipContents([element]); // overwrite previous PIP
-    } else if (['bottomsheet-video', 'bottomsheet-image'].includes(pollType)) {
+    } else if (pollType.includes('bottomsheet')) {
       const cloned = React.cloneElement(element as React.ReactElement, {
         visible: true,
         onClose: () => {

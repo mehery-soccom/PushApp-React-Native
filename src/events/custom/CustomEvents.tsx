@@ -191,7 +191,7 @@ function showNextPoll() {
   const nextPoll = pollQueue.shift();
   if (!nextPoll?.htmlContent) return setTimeout(showNextPoll, 3000);
 
-  const { htmlContent, code, style } = nextPoll;
+  const { htmlContent, code } = nextPoll;
   if (code.includes('roadblock')) {
     showPollOverlay(
       <RoadblockPoll html={htmlContent} visible={true} pollType="roadblock" />
@@ -200,8 +200,8 @@ function showNextPoll() {
 }
 
 function getAlignment(style: any) {
-  const vertical = (style['vertical_align'] ?? 'flex-end').toString();
-  const horizontal = (style['horizontal_align'] ?? 'flex-end').toString();
+  const vertical = (style.vertical_align ?? 'flex-end').toString();
+  const horizontal = (style.horizontal_align ?? 'flex-end').toString();
 
   let verticalPart = 'bottom';
   if (vertical === 'flex-start') verticalPart = 'top';
