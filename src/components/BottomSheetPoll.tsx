@@ -29,8 +29,7 @@ export default function BottomSheetPoll({
       duration: 300,
       useNativeDriver: true,
     }).start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  }, [visible, translateY]); // include translateY in deps
 
   // Only allow vertical gestures
   const panResponder = useRef(
@@ -53,11 +52,10 @@ export default function BottomSheetPoll({
           }).start();
         }
       },
-      onPanResponderTerminationRequest: () => false,
     })
   ).current;
 
-  if (!visible) return null;
+  // if (!visible) return null;
 
   // Inject fixes to ensure image/video fills correctly on first render
   const injectedHtml = `
