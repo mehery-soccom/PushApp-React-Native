@@ -12,7 +12,7 @@ export async function sendCustomEvent(event_name: string, event_data: object) {
   const user_id = await AsyncStorage.getItem('user_id');
   const device_id = await AsyncStorage.getItem('device_id');
   console.log('device id:', device_id);
-  const channel_id = 'demo_1757000275474';
+  const channel_id = 'demo_1754408042569';
   const payload = { user_id, channel_id, event_name, event_data };
 
   console.log(`📡 Sending ${event_name} event:`, payload);
@@ -104,12 +104,19 @@ export async function sendPollEvent() {
           console.log('✅ Final tooltipData:', tooltipData);
 
           // ✅ Now dispatch to the TooltipPoll container
-          setTimeout(() => {
-            renderTooltipPoll(event.event_data.compare, {
-              ...tooltipData,
-              tooltipKey: event.eventId || Date.now(), // unique key
-            });
-          }, 5000); // 10,000 ms = 10 seconds
+          // setTimeout(() => {
+          //   renderTooltipPoll(event.event_data.compare, {
+          //     ...tooltipData,
+          //     tooltipKey: event.eventId || Date.now(), // unique key
+          //   });
+          // }, 2000); // 10,000 ms = 10 seconds
+
+          // console.log('setting widget send');
+
+          renderTooltipPoll(event.event_data.compare, {
+            ...tooltipData,
+            tooltipKey: event.eventId || Date.now(), // unique key
+          });
 
           console.log('🎯 Tooltip candidate:', {
             code,
@@ -141,7 +148,12 @@ export async function sendPollEvent() {
             );
           } else if (code.includes('bottomsheet')) {
             console.log('🎯 Showing BottomSheet Poll');
-            showPollOverlay(<BottomSheetPoll {...overlayProps} />);
+            showPollOverlay(
+              <BottomSheetPoll
+                {...overlayProps}
+                onClose={() => console.log('BottomSheet closed')}
+              />
+            );
           }
         }
       });
@@ -179,9 +191,7 @@ export async function sendAck(contactId: string, messageId: string) {
     console.error('❌ ACK API error:', error);
   }
 }
-
-// Show next poll in the queue// Show next poll in the queue
-function showNextPoll() {
+function showNextPoll(): void {
   if (pollQueue.length === 0) {
     showingPoll = false;
     return;
@@ -189,7 +199,10 @@ function showNextPoll() {
 
   showingPoll = true;
   const nextPoll = pollQueue.shift();
-  if (!nextPoll?.htmlContent) return setTimeout(showNextPoll, 3000);
+  if (!nextPoll?.htmlContent) {
+    setTimeout(showNextPoll, 3000);
+    return;
+  }
 
   const { htmlContent, code } = nextPoll;
   if (code.includes('roadblock')) {
@@ -215,7 +228,12 @@ function getAlignment(style: any) {
 }
 export function OnPageOpen() {
   setTimeout(() => {
-    sendCustomEvent('page_open', { page: 'login' });
+    try {
+      sendCustomEvent('page_open', { page: 'login' });
+      sendCustomEvent('widget_open', { compare: 'center' });
+    } catch (error) {
+      console.log('sending login event', error);
+    }
   }, 2000); // 2000ms = 2 seconds
 }
 

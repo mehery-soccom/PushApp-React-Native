@@ -5,7 +5,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   initSdk,
   OnUserLogin,
-  OnUserLogOut,
   OnPageOpen,
 } from 'react-native-mehery-event-sender';
 import { PollOverlayProvider } from 'react-native-mehery-event-sender';
@@ -14,10 +13,6 @@ import { TooltipPollContainer } from 'react-native-mehery-event-sender';
 
 function LoginPage({ onLogin }: { onLogin: (id: string) => void }) {
   const [userId, setUserId] = useState('');
-
-  useEffect(() => {
-    initSdk();
-  }, []);
 
   const handleSubmit = async () => {
     const trimmedId = userId.trim();
@@ -60,16 +55,17 @@ function HomePage({
   }, []); // ✅ runs once when HomePage mounts
 
   return (
-    <View style={[styles.container, { justifyContent: 'center' }]}>
-      <Text style={{ fontSize: 24, fontWeight: 'bold' }}>
-        User ID: {userId}
-      </Text>
-      {/* <Button title="Logout" onPress={onLogout} /> */}
-      <TooltipPollContainer placeholderId="center">
-        <View />
-        {/* <Button title="Test Tooltip" /> */}
-      </TooltipPollContainer>
+    <View style={styles.container}>
       <InlinePollContainer placeholderId="login_banner" />
+
+      <Text style={styles.txt}>User ID: {userId}</Text>
+      {/* <Button title="Logout" onPress={onLogout} /> */}
+      <View style={styles.ve}>
+        <TooltipPollContainer placeholderId="center">
+          <View style={styles.vex} />
+          {/* <Button title="+" /> */}
+        </TooltipPollContainer>
+      </View>
     </View>
   );
 }
@@ -102,14 +98,14 @@ export default function App() {
     setCurrentPage('home');
   };
 
-  const handleLogout = async () => {
-    if (userId) {
-      OnUserLogOut(userId);
-      await AsyncStorage.removeItem('user_id');
-      setUserId('');
-      setCurrentPage('login');
-    }
-  };
+  // const handleLogout = async () => {
+  //   if (userId) {
+  //     OnUserLogOut(userId);
+  //     await AsyncStorage.removeItem('user_id');
+  //     setUserId('');
+  //     setCurrentPage('login');
+  //   }
+  // };
 
   return (
     <>
@@ -117,18 +113,26 @@ export default function App() {
       {currentPage === 'login' ? (
         <LoginPage onLogin={handleLogin} />
       ) : (
-        <HomePage userId={userId} onLogout={handleLogout} />
+        <HomePage userId={userId} />
       )}
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  ve: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  vex: {
+    width: 50,
+    height: 50,
+    backgroundColor: 'blue',
+    borderRadius: 50,
+  },
   container: {
     flex: 1,
     padding: 20,
     backgroundColor: 'white',
     marginTop: 300,
+    justifyContent: 'center',
   },
   label: { fontSize: 18, marginBottom: 8 },
   input: {
@@ -137,5 +141,9 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 5,
     marginBottom: 12,
+  },
+  txt: {
+    fontSize: 24,
+    fontWeight: 'bold',
   },
 });

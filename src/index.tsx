@@ -47,9 +47,16 @@ const { PushTokenManager } = NativeModules;
 // // 🚀 SDK Init
 console.log('PushTokenManager:', NativeModules.PushTokenManager);
 
+let iosListenerAdded = false;
+
 export const iosChecker = () => {
   if (!PushTokenManager) {
     console.warn('⚠️ Native module PushTokenManager is NOT available.');
+    return;
+  }
+
+  if (iosListenerAdded) {
+    console.log('ℹ️ iOS listener already added, skipping duplicate.');
     return;
   }
 
@@ -61,27 +68,67 @@ export const iosChecker = () => {
     registerDeviceWithAPNS(token);
   });
 
-  // 🔄 On reload, request last cached token
-  // if (PushTokenManager.getLastToken) {
-  //   PushTokenManager.getLastToken()
-  //     .then((tokenObj: { token?: string; type?: string }) => {
-  //       if (tokenObj?.token) {
-  //         console.log(
-  //           `♻️ Reload: Got cached ${tokenObj.type} token: ${tokenObj.token}`
-  //         );
-  //         registerDeviceWithAPNS(tokenObj.token);
-  //       }
-  //     })
-  //     .catch((err: any) => console.error('Error getting last token:', err));
-  // }
+  iosListenerAdded = true;
 };
 
 let sdkMounted = false;
 
+// export const initSdk = () => {
+//   fetchDeviceId();
+//   iosChecker();
+//   connectToServer();
+//   if (!sdkMounted) {
+//     AppRegistry.registerComponent(
+//       'MeherySdkOverlay',
+//       () => PollOverlayProvider
+//     );
+//     sdkMounted = true;
+//   }
+//   console.log('SDK Initialized');
+//   if (Platform.OS === 'android') {
+//     console.log('📱 Android: Initializing push notification setup');
+
+//     requestUserPermission();
+//     configurePushNotifications();
+//     setupForegroundNotificationListener();
+
+//     triggerLiveActivity({
+//       message1: 'Welcome!',
+//       message2: 'Live activity running',
+//       message3: 'Tap to continue',
+//       progressPercent: '0.85',
+//       message1FontColorHex: '#00000',
+//       message2FontColorHex: '#CCCCCC',
+//       message3FontColorHex: '#888888',
+//       progressColorHex: '#00FF00',
+//       backgroundColorHex: '#FFFFFF',
+//       imageUrl: 'https://example.com/sample.png',
+//       bg_color_gradient: '',
+//       bg_color_gradient_dir: '',
+//       align: 'center',
+//       activity_id: 'demo_activity_001',
+//       theme: 'dark',
+//     });
+
+//     getFcmToken();
+//   } else {
+//     console.log('🍏 iOS: Listening for FCM token from native emitter');
+//   }
+// };
+
 export const initSdk = () => {
+  // fetch or create device ID
   fetchDeviceId();
-  iosChecker();
+
+  // iOS: add APNS listener only once
+  if (Platform.OS === 'ios') {
+    iosChecker();
+  }
+
+  // Connect socket server
   connectToServer();
+
+  // Mount overlay component only once
   if (!sdkMounted) {
     AppRegistry.registerComponent(
       'MeherySdkOverlay',
@@ -89,7 +136,9 @@ export const initSdk = () => {
     );
     sdkMounted = true;
   }
+
   console.log('SDK Initialized');
+
   if (Platform.OS === 'android') {
     console.log('📱 Android: Initializing push notification setup');
 
@@ -102,7 +151,7 @@ export const initSdk = () => {
       message2: 'Live activity running',
       message3: 'Tap to continue',
       progressPercent: '0.85',
-      message1FontColorHex: '#00000',
+      message1FontColorHex: '#000000',
       message2FontColorHex: '#CCCCCC',
       message3FontColorHex: '#888888',
       progressColorHex: '#00FF00',
@@ -115,8 +164,6 @@ export const initSdk = () => {
       theme: 'dark',
     });
 
-    getFcmToken();
-  } else {
-    console.log('🍏 iOS: Listening for FCM token from native emitter');
+    getFcmToken(); // only called once
   }
 };

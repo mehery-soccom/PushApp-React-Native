@@ -1,11 +1,11 @@
-import { useState } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+// import { useState } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 export default function BannerPoll({ html }: any) {
-  const [visible, setVisible] = useState(true);
+  // const [visible, setVisible] = useState(true);
 
-  if (!visible) return null;
+  // if (!visible) return null;
 
   return (
     <View style={styles.container}>

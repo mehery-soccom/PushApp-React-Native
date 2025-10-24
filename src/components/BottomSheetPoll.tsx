@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import {
   View,
   PanResponder,
@@ -29,9 +29,8 @@ export default function BottomSheetPoll({
       duration: 300,
       useNativeDriver: true,
     }).start();
-  }, [visible, translateY]); // include translateY in deps
+  }, [visible, translateY]);
 
-  // Only allow vertical gestures
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 10,
@@ -44,7 +43,10 @@ export default function BottomSheetPoll({
             toValue: height,
             duration: 200,
             useNativeDriver: true,
-          }).start(() => onClose());
+          }).start(() => {
+            sendTrackEvent('dismissed');
+            onClose();
+          });
         } else {
           Animated.spring(translateY, {
             toValue: 0,
@@ -55,58 +57,70 @@ export default function BottomSheetPoll({
     })
   ).current;
 
-  // if (!visible) return null;
+  // 🔹 Track events like RoadblockPoll
+  const sendTrackEvent = async (
+    eventType: 'cta' | 'dismissed',
+    ctaId?: string
+  ) => {
+    const payload = {
+      event: eventType,
+      data: ctaId ? { ctaId } : {},
+    };
 
-  // Inject fixes to ensure image/video fills correctly on first render
-  const injectedHtml = `
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="initial-scale=1.0" />
-    <style>
-      html, body {
-        width: 100%;
-        height: 100%;
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        -webkit-text-size-adjust: 100%;
-      }
+    console.log('📤 Sending track event:', payload);
 
-      /* Fix for iOS auto-zoom and layout scaling */
-      img, video {
-        width: 100% !important;
-        height: auto !important;
-        display: block;
-        object-fit: cover;
-      }
-
-      .media-preview {
-        width: 100% !important;
-        height: 100% !important;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-    </style>
-    <script>
-      // Ensure image expands immediately on load
-      window.addEventListener('load', () => {
-        const img = document.querySelector('.media-preview img');
-        if (img) {
-          img.style.width = '100%';
-          img.style.height = 'auto';
-          img.style.objectFit = 'cover';
+    try {
+      const res = await fetch(
+        'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         }
+      );
+
+      const data = await res.json();
+      console.log('✅ Track API response:', data);
+    } catch (error) {
+      console.error('❌ Track API error:', error);
+    }
+  };
+
+  const injectedJS = `
+    (function() {
+      document.querySelectorAll('#media-container button').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const value = this.value || this.innerText || '';
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'buttonClick', value }));
+        });
       });
-    </script>
-  </head>
-  <body>
-    ${html}
-  </body>
-</html>
-`;
+
+      document.querySelectorAll('[data-close], .close-button, .poll-close').forEach(el => {
+        el.addEventListener('click', function() {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'closePoll' }));
+        });
+      });
+    })();
+  `;
+
+  const injectedHtml = `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <style>
+          html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: transparent; }
+          #media-container { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #fff; }
+          #media-container img, #media-container video { width: 90%; max-height: 70%; object-fit: contain; margin: 0; padding: 0; display: block; }
+          #media-container button { padding: 12px 24px; font-size: 16px; margin-top: 10px; cursor: pointer; border-radius: 8px; }
+        </style>
+      </head>
+      <body>
+        <div id="media-container">${html}</div>
+      </body>
+    </html>
+  `;
 
   return (
     <View style={styles.container}>
@@ -121,10 +135,24 @@ export default function BottomSheetPoll({
           javaScriptEnabled
           domStorageEnabled
           scrollEnabled
+          injectedJavaScript={injectedJS}
           onMessage={(event) => {
-            const label = event.nativeEvent.data;
-            console.log('Button clicked:', label);
-            onClose();
+            try {
+              const message = JSON.parse(event.nativeEvent.data);
+              if (message.type === 'buttonClick') {
+                console.log('🖱️ BottomSheet button clicked:', message.value);
+                sendTrackEvent('cta', message.value);
+              } else if (message.type === 'closePoll') {
+                console.log('🚪 BottomSheet close requested');
+                sendTrackEvent('dismissed');
+              }
+            } catch (err) {
+              console.warn(
+                '⚠️ Invalid message from WebView',
+                event.nativeEvent.data
+              );
+            }
+            onClose(); // always close after any button click or close
           }}
         />
       </Animated.View>

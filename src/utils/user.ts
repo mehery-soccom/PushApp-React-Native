@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OnAppOpen } from '../events/default/DefaultEvents';
+// import { OnPageOpen } from '../events/custom/CustomEvents';
 type UserDetails = {
   [key: string]: string;
 };
@@ -37,6 +38,7 @@ export async function OnUserLogin(user_id: string) {
   // const device_id = localStorage.getItem('device_id');
   const device_id = await AsyncStorage.getItem('device_id');
   const userID = await AsyncStorage.getItem('user_id');
+  // const APNStoken = await AsyncStorage.getItem('APNStoken');
 
   console.log('device id:, ', device_id);
 
@@ -49,23 +51,23 @@ export async function OnUserLogin(user_id: string) {
 
   const payload = {
     device_id: device_id,
-    user_id: userID,
-    channel_id: 'demo_1757000275474',
+    user_id: userID || user_id,
+    channel_id: 'demo_1754408042569',
   };
   console.log('Paylod of login:', payload);
 
   fetch('https://demo.pushapp.co.in/pushapp/api/register/user', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-    .then((response) => {
+    .then(async (response) => {
+      const text = await response.text();
+      console.log('Response text:', text);
       if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+        throw new Error(`HTTP error! Status: ${response.status} - ${text}`);
       }
-      return response.json();
+      return JSON.parse(text);
     })
     .then((data) => {
       console.log('Log in successfully:', data);
@@ -95,7 +97,7 @@ export async function OnUserLogOut(user_id: string) {
   const payload = {
     device_id,
     user_id: userID,
-    channel_id: 'demo_1757000275474',
+    channel_id: 'demo_1754408042569',
   };
 
   fetch('https://demo.pushapp.co.in/pushapp/api/register/logout', {

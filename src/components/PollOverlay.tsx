@@ -1,9 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import {
+  Modal,
+  View,
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  Dimensions,
+} from 'react-native';
 
 let showOverlayFn: ((element: React.ReactNode) => void) | null = null;
 let hideOverlayFn: (() => void) | null = null;
 let overlayQueue: React.ReactNode[] = [];
+
+const { width, height } = Dimensions.get('window');
 
 export const PollOverlayProvider: React.FC = () => {
   const [modalContent, setModalContent] = useState<React.ReactNode | null>(
@@ -20,22 +29,37 @@ export const PollOverlayProvider: React.FC = () => {
   showOverlayFn = (element: React.ReactNode) => {
     const pollType = (element as any)?.props?.pollType;
     console.log('Displaying poll type:', pollType);
-
     if (pollType === 'roadblock') {
-      setModalContent(element);
+      const cloned = React.cloneElement(element as React.ReactElement<any>, {
+        onClose: hideOverlayFn, // close modal
+      });
+
+      setModalContent(cloned);
       setModalVisible(true);
     } else if (pollType.includes('banner')) {
-      setBannerContents((prev) => [...prev, element]);
-    } else if (pollType.includes('picture-in-picture')) {
-      setPipContents([element]); // overwrite previous PIP
-    } else if (pollType.includes('bottomsheet')) {
-      const cloned = React.cloneElement(element as React.ReactElement, {
-        visible: true,
+      const cloned = React.cloneElement(element as React.ReactElement<any>, {
         onClose: () => {
-          setBottomSheetContents([]); // remove all bottom sheets
+          setBannerContents((prev) => prev.filter((el) => el !== element));
         },
       });
 
+      setBannerContents((prev) => [...prev, cloned]);
+    } else if (pollType.includes('picture-in-picture')) {
+      const alignment = (element as any).props?.alignment || 'center-center';
+      const cloned = React.cloneElement(element as React.ReactElement<any>, {
+        alignment,
+        onClose: () => setPipContents([]),
+      });
+
+      setPipContents([cloned]);
+      // overwrite previous PIP
+    } else if (pollType.includes('bottomsheet')) {
+      const cloned = React.cloneElement(element as React.ReactElement<any>, {
+        visible: true,
+        onClose: () => {
+          setBottomSheetContents([]);
+        },
+      });
       setBottomSheetContents([cloned]); // overwrite previous
     } else {
       console.warn('Unknown poll type', pollType);
@@ -77,20 +101,20 @@ export const PollOverlayProvider: React.FC = () => {
       ))}
 
       {/* PIP components (draggable, fullscreen-aware, zIndex 20) */}
+      {/* PIP components (draggable, fullscreen-aware, zIndex 20) */}
       {pipContents.map((content, index) => {
         const isFullScreen = (content as any)?.props?.fullscreen;
-        return (
+        return isFullScreen ? (
           <View
             key={index}
             style={[
-              isFullScreen
-                ? StyleSheet.absoluteFillObject
-                : styles.pipContainer,
-              { zIndex: 20 + index },
+              { zIndex: 9999 + index, width: width, height: height }, // ensure topmost
             ]}
           >
             {content}
           </View>
+        ) : (
+          <React.Fragment key={index}>{content}</React.Fragment>
         );
       })}
 

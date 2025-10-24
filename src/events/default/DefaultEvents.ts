@@ -2,8 +2,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 async function sendEvent(event_name: string) {
   const user_id = await AsyncStorage.getItem('user_id');
-  const channel_id = 'demo_1757000275474';
+  const deviceId = await AsyncStorage.getItem('device_id');
+
+  const channel_id = 'demo_1754408042569';
   console.log('user id is:', user_id);
+  console.log('device id is:', deviceId);
+
   //   if (!user_id) {
   //     console.warn(`❌ user_id is missing. Skipping ${event_name} event.`);
   //     return;
@@ -14,6 +18,7 @@ async function sendEvent(event_name: string) {
     channel_id,
     event_name,
     event_data: {},
+    device_id: deviceId,
   };
 
   console.log(`📡 Sending ${event_name} event:`, payload);

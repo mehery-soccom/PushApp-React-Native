@@ -1,8 +1,9 @@
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { hidePollOverlay } from './PollOverlay'; // ✅ import to close modal
 
-export default function RoadblockPoll({ html }: any) {
+export default function RoadblockPoll({ html, onClose }: any) {
   const webViewRef = useRef<WebView>(null);
 
   // 🔹 Function to send tracking event
@@ -38,9 +39,20 @@ export default function RoadblockPoll({ html }: any) {
   const onMessage = (event: any) => {
     try {
       const message = JSON.parse(event.nativeEvent.data);
+
       if (message.type === 'buttonClick') {
         console.log('🖱️ Button clicked with value:', message.value);
         sendTrackEvent('cta', message.value);
+
+        // ✅ Close the WebView immediately after click
+        if (onClose) onClose();
+        else hidePollOverlay();
+      } else if (message.type === 'closePoll') {
+        console.log('🚪 Close poll message received');
+        sendTrackEvent('dismissed');
+
+        if (onClose) onClose();
+        else hidePollOverlay();
       }
     } catch (err) {
       console.warn('⚠️ Invalid message from WebView', event.nativeEvent.data);
