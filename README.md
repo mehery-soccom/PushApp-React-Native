@@ -1,6 +1,6 @@
 # react-native-mehery-event-sender
 
-A React Native SDK for event tracking that works with both Expo Go and bare React Native applications
+A lightweight React Native SDK to support push notifications, custom in-app messages (popup, banner, PiP), event tracking, and session handling for your apps.
 
 ## Installation
 
@@ -8,14 +8,30 @@ A React Native SDK for event tracking that works with both Expo Go and bare Reac
 npm install react-native-mehery-event-sender
 ```
 
-## Usage
+## 🚀 Initialization
+
+Initialize the SDK in your App.tsx
 
 ```js
-import { MeheryEventSenderView } from 'react-native-mehery-event-sender';
+import { initSdk } from 'react-native-mehery-event-sender';
 
 // ...
 
-<MeheryEventSenderView color="tomato" />;
+initSdk(
+  (context = this),
+  (identifier = 'demo_1754408042569'),
+  (sandbox = true)
+);
+```
+
+To login the user:
+
+```js
+import { onUserLogin } from 'react-native-mehery-event-sender';
+
+// ...
+
+OnUserLogin('user_id');
 ```
 
 ## Contributing
