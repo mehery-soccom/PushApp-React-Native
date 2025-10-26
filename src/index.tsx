@@ -123,7 +123,7 @@ export const initSdk = async (
 ) => {
   try {
     console.log('🧩 Initializing Mehery SDK...');
-    console.log('📦 Context:', !!context ? 'Received' : 'Not provided');
+    console.log(context ? 'Received' : 'Not provided');
     console.log(`🏷️ Identifier: ${identifier}`);
     console.log(`🧪 Sandbox Mode: ${sandbox}`);
 
