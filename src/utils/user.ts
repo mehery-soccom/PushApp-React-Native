@@ -38,10 +38,13 @@ export async function OnUserLogin(user_id: string) {
     return;
   }
 
+  const channel_id = await AsyncStorage.getItem('mehery_channel_id');
+  console.log('channel id at custom:', channel_id);
+
   const payload = {
     device_id: device_id,
     user_id: userID || user_id,
-    channel_id: 'demo_1754408042569',
+    channel_id: channel_id,
   };
   console.log('📦 Payload of login:', payload);
 
@@ -84,6 +87,10 @@ export async function OnUserLogOut(user_id: string) {
   const userID = await AsyncStorage.getItem('user_id');
 
   const device_id = await AsyncStorage.getItem('device_id');
+
+  const channel_id = await AsyncStorage.getItem('mehery_channel_id');
+  console.log('channel id at custom:', channel_id);
+
   if (!device_id) {
     console.warn('❌ Device ID not available.');
     return;
@@ -94,7 +101,7 @@ export async function OnUserLogOut(user_id: string) {
   const payload = {
     device_id,
     user_id: userID,
-    channel_id: 'demo_1754408042569',
+    channel_id: channel_id,
   };
 
   fetch('https://demo.pushapp.co.in/pushapp/api/register/logout', {

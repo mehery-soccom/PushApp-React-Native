@@ -4,19 +4,43 @@ import { View, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { sendCustomEvent } from '../events/custom/CustomEvents';
 
-const inlinePollRegistry: Record<string, any> = {};
+const inlinePollRegistry: Record<
+  string,
+  { htmlContent: string; style?: any; updatedAt: number }
+> = {};
 
 export async function renderInlinePoll(
   placeholderId: string,
-  htmlContent: string,
-  style: any
+  htmlContent: string | null,
+  style?: any
 ) {
-  inlinePollRegistry[placeholderId] = { htmlContent, style };
+  // 🧹 Clear if null
+  if (!htmlContent) {
+    delete inlinePollRegistry[placeholderId];
+    try {
+      await AsyncStorage.removeItem(`inline_poll_${placeholderId}`);
+      console.log(`🧹 Cleared inline poll for ${placeholderId}`);
+    } catch (err) {
+      console.warn('[SDK] Failed to clear inline poll', err);
+    }
+    return;
+  }
 
+  const pollData = {
+    htmlContent,
+    style,
+    updatedAt: Date.now(), // ⏱ mark as latest
+  };
+
+  // 🧠 Save in memory and disk
+  inlinePollRegistry[placeholderId] = pollData;
   try {
     await AsyncStorage.setItem(
       `inline_poll_${placeholderId}`,
-      JSON.stringify({ htmlContent, style })
+      JSON.stringify(pollData)
+    );
+    console.log(
+      `💾 Saved inline poll for ${placeholderId} @ ${pollData.updatedAt}`
     );
   } catch (err) {
     console.warn('[SDK] Failed to save inline poll locally', err);
@@ -33,64 +57,162 @@ export function InlinePollContainer({
   );
 
   useEffect(() => {
-    const loadBackup = async () => {
-      // If not registered in memory, try AsyncStorage
-      if (!inlinePollRegistry[placeholderId]) {
-        try {
-          const backup = await AsyncStorage.getItem(
-            `inline_poll_${placeholderId}`
-          );
-          if (backup) {
-            const parsed = JSON.parse(backup);
-            setPoll(parsed);
-          } else {
-            // ❌ Not found anywhere: remove stale storage just in case
-            await AsyncStorage.removeItem(`inline_poll_${placeholderId}`);
-          }
-        } catch (err) {
-          console.warn('[SDK] Failed to load inline poll backup', err);
+    const loadPoll = async () => {
+      const memPoll = inlinePollRegistry[placeholderId];
+      try {
+        const backupStr = await AsyncStorage.getItem(
+          `inline_poll_${placeholderId}`
+        );
+        const backup = backupStr ? JSON.parse(backupStr) : null;
+
+        // 🧩 Compare timestamps and pick the newest
+        const chosenPoll =
+          !memPoll && backup
+            ? backup
+            : !backup && memPoll
+              ? memPoll
+              : memPoll && backup
+                ? memPoll.updatedAt >= backup.updatedAt
+                  ? memPoll
+                  : backup
+                : null;
+
+        if (chosenPoll?.htmlContent) {
+          setPoll(chosenPoll);
+        } else {
+          await AsyncStorage.removeItem(`inline_poll_${placeholderId}`);
+          setPoll(null);
         }
-      } else {
-        setPoll(inlinePollRegistry[placeholderId]);
+      } catch (err) {
+        console.warn('[SDK] Failed to load inline poll backup', err);
+        setPoll(null);
       }
     };
-    loadBackup();
+
+    loadPoll();
   }, [placeholderId]);
 
-  // Send event when poll is rendered
+  // 🔁 Watch memory updates every 300ms and take the most recent
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const memPoll = inlinePollRegistry[placeholderId];
+      if (!memPoll && poll) {
+        setPoll(null);
+        return;
+      }
+
+      try {
+        const backupStr = await AsyncStorage.getItem(
+          `inline_poll_${placeholderId}`
+        );
+        const backup = backupStr ? JSON.parse(backupStr) : null;
+        const chosenPoll =
+          !memPoll && backup
+            ? backup
+            : !backup && memPoll
+              ? memPoll
+              : memPoll && backup
+                ? memPoll.updatedAt >= backup.updatedAt
+                  ? memPoll
+                  : backup
+                : null;
+
+        if (
+          chosenPoll &&
+          JSON.stringify(chosenPoll.htmlContent) !==
+            JSON.stringify(poll?.htmlContent)
+        ) {
+          console.log(`🔄 Poll updated to latest for ${placeholderId}`);
+          setPoll(chosenPoll);
+        }
+      } catch (err) {
+        console.warn('Failed to check latest inline poll', err);
+      }
+    }, 300);
+
+    return () => clearInterval(interval);
+  }, [placeholderId, poll]);
+
+  // 🛰 Track CTA and open events
+  const sendTrackEvent = async (
+    eventType: 'cta' | 'dismissed',
+    ctaId?: string
+  ) => {
+    const payload = { event: eventType, data: ctaId ? { ctaId } : {} };
+    console.log('📤 Sending track event:', payload);
+    try {
+      const res = await fetch(
+        'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
+      const data = await res.json();
+      console.log('✅ Track API response:', data);
+    } catch (error) {
+      console.error('❌ Track API error:', error);
+    }
+  };
+
   useEffect(() => {
     if (poll?.htmlContent) {
       console.log('inline poll rendered:', placeholderId);
-      try {
-        sendCustomEvent('widget_open', { compare: placeholderId });
-      } catch (error) {
-        console.log('err:', error);
-      }
+      sendCustomEvent('widget_open', { compare: placeholderId });
     } else {
-      // ❌ Poll does not exist, remove from AsyncStorage
       AsyncStorage.removeItem(`inline_poll_${placeholderId}`).catch(() => {});
     }
   }, [placeholderId, poll]);
 
   if (!poll?.htmlContent) return null;
 
+  const injectedJS = `
+    (function() {
+      document.addEventListener('click', function(e) {
+        const target = e.target.closest('button');
+        if (target) {
+          const ctaId = target.id || target.getAttribute('data-cta-id') || 'unknown';
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'sendcta', ctaId }));
+        }
+      });
+    })();
+    true;
+  `;
+
   const injectedHTML = `
     <style>
       ::-webkit-scrollbar { display: none; }
-      body { -ms-overflow-style: none; scrollbar-width: none; overflow: hidden; margin: 0; padding: 0; }
+      body { overflow: hidden; margin: 0; padding: 0; }
       html { overflow: hidden; }
     </style>
     ${poll.htmlContent}
   `;
 
+  const handleWebViewMessage = (event: any) => {
+    try {
+      const message = JSON.parse(event.nativeEvent.data);
+      if (message.type === 'sendcta') {
+        console.log('🟢 CTA button clicked:', message.ctaId);
+        sendTrackEvent('cta', message.ctaId);
+        sendCustomEvent('sendcta', {
+          ctaId: message.ctaId,
+          compare: placeholderId,
+        });
+      }
+    } catch (err) {
+      console.warn('⚠️ Invalid message from WebView:', err);
+    }
+  };
+
   return (
-    <View style={styles.container}>
+    <View style={styles.container} key={poll?.updatedAt}>
       <WebView
         originWhitelist={['*']}
         source={{ html: injectedHTML }}
+        injectedJavaScript={injectedJS}
+        onMessage={handleWebViewMessage}
         style={styles.webview}
-        showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
         scrollEnabled={false}
       />
     </View>
@@ -99,28 +221,9 @@ export function InlinePollContainer({
 
 const styles = StyleSheet.create({
   container: {
-    height: 150,
+    height: 200,
   },
   webview: {
     flex: 1,
-    // backgroundColor: 'white',
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    zIndex: 10,
-    backgroundColor: '#00000080',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeText: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: 'bold',
-    lineHeight: 22,
   },
 });

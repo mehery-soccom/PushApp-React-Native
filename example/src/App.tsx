@@ -70,16 +70,19 @@ function HomePage({
   );
 }
 
+// import React, { useState, useEffect } from 'react';
+// import AsyncStorage from '@react-native-async-storage/async-storage';
+// import { PollOverlayProvider } from './PollOverlayProvider';
+// import LoginPage from './LoginPage';
+// import HomePage from './HomePage';
+
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'login' | 'home'>('login');
   const [userId, setUserId] = useState<string>('');
 
   useEffect(() => {
     // Initialize SDK once
-    initSdk();
-    //
-    // Run page open event on app launch
-    // const timer = setTimeout(() => {}, 100000);
+    initSdk(null, 'demo_1754408042569', true);
   }, []);
 
   useEffect(() => {
@@ -93,14 +96,15 @@ export default function App() {
     checkStoredUser();
   }, []);
 
-  const handleLogin = (id: string) => {
+  const handleLogin = async (id: string) => {
     setUserId(id);
+    await AsyncStorage.setItem('user_id', id);
     setCurrentPage('home');
   };
 
   // const handleLogout = async () => {
   //   if (userId) {
-  //     OnUserLogOut(userId);
+  //     // OnUserLogOut(userId); // call SDK logout if needed
   //     await AsyncStorage.removeItem('user_id');
   //     setUserId('');
   //     setCurrentPage('login');

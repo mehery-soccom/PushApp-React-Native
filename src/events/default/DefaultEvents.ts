@@ -4,7 +4,8 @@ async function sendEvent(event_name: string) {
   const user_id = await AsyncStorage.getItem('user_id');
   const deviceId = await AsyncStorage.getItem('device_id');
 
-  const channel_id = 'demo_1754408042569';
+  const channel_id = await AsyncStorage.getItem('mehery_channel_id');
+  console.log('channel id at custom:', channel_id);
   console.log('user id is:', user_id);
   console.log('device id is:', deviceId);
 

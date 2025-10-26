@@ -112,7 +112,7 @@ export default function BottomSheetPoll({
         <style>
           html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: transparent; }
           #media-container { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #fff; }
-          #media-container img, #media-container video { width: 90%; max-height: 70%; object-fit: contain; margin: 0; padding: 0; display: block; }
+          #media-container img, #media-container video { width: 100%; max-height: 100%; object-fit: cover; margin: 0; padding: 0; display: block; }
           #media-container button { padding: 12px 24px; font-size: 16px; margin-top: 10px; cursor: pointer; border-radius: 8px; }
         </style>
       </head>
@@ -177,5 +177,6 @@ const styles = StyleSheet.create({
   webview: {
     width: '100%',
     flex: 1,
+    // height: height * 0.5,
   },
 });

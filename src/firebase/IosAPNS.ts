@@ -77,11 +77,13 @@ export async function registerDeviceWithAPNS(token: string) {
       return storedSessionId;
     }
     await AsyncStorage.setItem('UserRegistered', 'true');
+    const channel_id = await AsyncStorage.getItem('mehery_channel_id');
+    console.log('channel id at custom:', channel_id);
 
     // Prepare payload
     const payload = {
       device_id,
-      channel_id: 'demo_1754408042569',
+      channel_id: channel_id,
       platform: Platform.OS,
       token,
     };

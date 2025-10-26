@@ -13,10 +13,12 @@ console.log('📦 Firebase app exists:', app ? 'Yes' : 'No');
  * Request notification permissions (platform-agnostic)
  */
 
-export function registerDeviceWithFCM(token: string, deviceId: string) {
+export async function registerDeviceWithFCM(token: string, deviceId: string) {
+  const channel_id = await AsyncStorage.getItem('mehery_channel_id');
+  console.log('channel id at custom:', channel_id);
   const payload = {
     device_id: deviceId,
-    channel_id: 'demo_1754408042569',
+    channel_id: channel_id,
     platform: Platform.OS,
     token: token,
   };

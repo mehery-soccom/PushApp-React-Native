@@ -19,6 +19,7 @@ export const PollOverlayProvider: React.FC = () => {
     null
   );
   const [modalVisible, setModalVisible] = useState(false);
+  const [isFloater, setIsFloater] = useState(false);
 
   const [bannerContents, setBannerContents] = useState<React.ReactNode[]>([]);
   const [pipContents, setPipContents] = useState<React.ReactNode[]>([]);
@@ -29,18 +30,19 @@ export const PollOverlayProvider: React.FC = () => {
   showOverlayFn = (element: React.ReactNode) => {
     const pollType = (element as any)?.props?.pollType;
     console.log('Displaying poll type:', pollType);
+
     if (pollType === 'roadblock') {
       const cloned = React.cloneElement(element as React.ReactElement<any>, {
-        onClose: hideOverlayFn, // close modal
+        onClose: hideOverlayFn,
       });
 
       setModalContent(cloned);
+      setIsFloater(false);
       setModalVisible(true);
     } else if (pollType.includes('banner')) {
       const cloned = React.cloneElement(element as React.ReactElement<any>, {
-        onClose: () => {
-          setBannerContents((prev) => prev.filter((el) => el !== element));
-        },
+        onClose: () =>
+          setBannerContents((prev) => prev.filter((el) => el !== element)),
       });
 
       setBannerContents((prev) => [...prev, cloned]);
@@ -52,19 +54,17 @@ export const PollOverlayProvider: React.FC = () => {
       });
 
       setPipContents([cloned]);
-      // overwrite previous PIP
     } else if (pollType.includes('floater')) {
-      // ✅ Full-screen WebView floater
-      setModalContent(element); // just render as modal content
-      setModalVisible(true); // show full-screen modal
+      // ✅ Floater UI — fullscreen without cross button
+      setModalContent(element);
+      setIsFloater(true);
+      setModalVisible(true);
     } else if (pollType.includes('bottomsheet')) {
       const cloned = React.cloneElement(element as React.ReactElement<any>, {
         visible: true,
-        onClose: () => {
-          setBottomSheetContents([]);
-        },
+        onClose: () => setBottomSheetContents([]),
       });
-      setBottomSheetContents([cloned]); // overwrite previous
+      setBottomSheetContents([cloned]);
     } else {
       console.warn('Unknown poll type', pollType);
     }
@@ -73,6 +73,7 @@ export const PollOverlayProvider: React.FC = () => {
   hideOverlayFn = () => {
     setModalVisible(false);
     setModalContent(null);
+    setIsFloater(false);
   };
 
   useEffect(() => {
@@ -82,19 +83,22 @@ export const PollOverlayProvider: React.FC = () => {
 
   return (
     <>
-      {/* Roadblock modal */}
+      {/* ✅ Shared modal for roadblock and floater */}
       {modalContent && (
         <Modal visible={modalVisible} transparent animationType="fade">
           <View style={styles.modalContainer}>
-            <TouchableOpacity style={styles.closeBtn} onPress={hideOverlayFn}>
-              <Text style={styles.closeText}>✕</Text>
-            </TouchableOpacity>
+            {/* ❌ Only show close button if NOT floater */}
+            {!isFloater && (
+              <TouchableOpacity style={styles.closeBtn} onPress={hideOverlayFn}>
+                <Text style={styles.closeText}>✕</Text>
+              </TouchableOpacity>
+            )}
             {modalContent}
           </View>
         </Modal>
       )}
 
-      {/* Banner components (top, zIndex 10) */}
+      {/* Banner */}
       {bannerContents.map((content, index) => (
         <View
           key={index}
@@ -104,16 +108,13 @@ export const PollOverlayProvider: React.FC = () => {
         </View>
       ))}
 
-      {/* PIP components (draggable, fullscreen-aware, zIndex 20) */}
-      {/* PIP components (draggable, fullscreen-aware, zIndex 20) */}
+      {/* PIP */}
       {pipContents.map((content, index) => {
         const isFullScreen = (content as any)?.props?.fullscreen;
         return isFullScreen ? (
           <View
             key={index}
-            style={[
-              { zIndex: 9999 + index, width: width, height: height }, // ensure topmost
-            ]}
+            style={[{ zIndex: 9999 + index, width: width, height: height }]}
           >
             {content}
           </View>
@@ -122,7 +123,7 @@ export const PollOverlayProvider: React.FC = () => {
         );
       })}
 
-      {/* BottomSheet components (bottom, zIndex 15) */}
+      {/* BottomSheet */}
       {bottomSheetContents.map((content, index) => (
         <View
           key={index}

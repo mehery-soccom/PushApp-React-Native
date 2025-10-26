@@ -19,7 +19,7 @@ import { AppRegistry } from 'react-native';
 
 // 🛠 Imports
 import { Platform, NativeModules, NativeEventEmitter } from 'react-native';
-// import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   requestUserPermission,
   getFcmToken,
@@ -116,54 +116,73 @@ let sdkMounted = false;
 //   }
 // };
 
-export const initSdk = () => {
-  // fetch or create device ID
-  fetchDeviceId();
+export const initSdk = async (
+  context: any,
+  identifier: string,
+  sandbox: boolean = true
+) => {
+  try {
+    console.log('🧩 Initializing Mehery SDK...');
+    console.log('📦 Context:', !!context ? 'Received' : 'Not provided');
+    console.log(`🏷️ Identifier: ${identifier}`);
+    console.log(`🧪 Sandbox Mode: ${sandbox}`);
 
-  // iOS: add APNS listener only once
-  if (Platform.OS === 'ios') {
-    iosChecker();
-  }
+    // ✅ Extract tenant and channelId from "tenant#channelId"
+    await AsyncStorage.setItem('mehery_channel_id', identifier);
+    console.log(`💾 Saved Channel ID: ${identifier}`);
 
-  // Connect socket server
-  connectToServer();
+    // ✅ Fetch or create device ID
+    fetchDeviceId();
 
-  // Mount overlay component only once
-  if (!sdkMounted) {
-    AppRegistry.registerComponent(
-      'MeherySdkOverlay',
-      () => PollOverlayProvider
-    );
-    sdkMounted = true;
-  }
+    // ✅ iOS specific setup
+    if (Platform.OS === 'ios') {
+      iosChecker();
+    }
 
-  console.log('SDK Initialized');
+    // ✅ Connect to the socket server
+    connectToServer();
 
-  if (Platform.OS === 'android') {
-    console.log('📱 Android: Initializing push notification setup');
+    // ✅ Mount overlay component only once
+    if (!sdkMounted) {
+      AppRegistry.registerComponent(
+        'MeherySdkOverlay',
+        () => PollOverlayProvider
+      );
+      sdkMounted = true;
+      console.log('🧱 SDK Overlay mounted');
+    }
 
-    requestUserPermission();
-    configurePushNotifications();
-    setupForegroundNotificationListener();
+    // ✅ Platform-specific setup
+    if (Platform.OS === 'android') {
+      console.log('📱 Android: Initializing push notification setup');
 
-    triggerLiveActivity({
-      message1: 'Welcome!',
-      message2: 'Live activity running',
-      message3: 'Tap to continue',
-      progressPercent: '0.85',
-      message1FontColorHex: '#000000',
-      message2FontColorHex: '#CCCCCC',
-      message3FontColorHex: '#888888',
-      progressColorHex: '#00FF00',
-      backgroundColorHex: '#FFFFFF',
-      imageUrl: 'https://example.com/sample.png',
-      bg_color_gradient: '',
-      bg_color_gradient_dir: '',
-      align: 'center',
-      activity_id: 'demo_activity_001',
-      theme: 'dark',
-    });
+      await requestUserPermission();
+      configurePushNotifications();
+      setupForegroundNotificationListener();
 
-    getFcmToken(); // only called once
+      triggerLiveActivity({
+        message1: 'Welcome!',
+        message2: 'Live activity running',
+        message3: 'Tap to continue',
+        progressPercent: '0.85',
+        message1FontColorHex: '#000000',
+        message2FontColorHex: '#CCCCCC',
+        message3FontColorHex: '#888888',
+        progressColorHex: '#00FF00',
+        backgroundColorHex: '#FFFFFF',
+        imageUrl: 'https://example.com/sample.png',
+        bg_color_gradient: '',
+        bg_color_gradient_dir: '',
+        align: 'center',
+        activity_id: 'demo_activity_001',
+        theme: sandbox ? 'light' : 'dark',
+      });
+
+      await getFcmToken();
+    }
+
+    console.log('✅ SDK Initialized Successfully');
+  } catch (error) {
+    console.error('❌ Error initializing SDK:', error);
   }
 };
