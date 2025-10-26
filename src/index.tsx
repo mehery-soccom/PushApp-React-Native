@@ -9,7 +9,11 @@ export {
   OnUserLogin,
   OnUserLogOut,
 } from './utils/user';
-export { OnPageClose, OnPageOpen } from './events/custom/CustomEvents';
+export {
+  OnPageClose,
+  OnPageOpen,
+  sendCustomEvent,
+} from './events/custom/CustomEvents';
 export { PollOverlayProvider } from './components/PollOverlay';
 export { showPollOverlay, hidePollOverlay } from './components/PollOverlay';
 

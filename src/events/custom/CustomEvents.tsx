@@ -252,3 +252,9 @@ export function OnPageOpen() {
 export function OnPageClose() {
   sendCustomEvent('page_closed', { page: 'login' });
 }
+
+/**
+ * 📌 Sends a custom event from anywhere in the front-end
+ * @param eventName - The name of the event
+ * @param eventData - Any object data you want to send with the event
+ */

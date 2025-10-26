@@ -34,16 +34,56 @@ import { onUserLogin } from 'react-native-mehery-event-sender';
 OnUserLogin('user_id');
 ```
 
-## Contributing
+## 🎯 Event Tracking
 
-See the [contributing guide](CONTRIBUTING.md) to learn how to contribute to the repository and the development workflow.
+To track user actions or custom events:
 
-## License
+```js
+import { sendCustomEvent } from 'react-native-mehery-event-sender';
+
+// ...
+// Send a simple event
+sendCustomEvent('login_clicked', { userId: '12345' });
+
+// Send an event with multiple properties
+sendCustomEvent('purchase_made', {
+  itemId: '987',
+  amount: 299,
+  currency: 'USD',
+});
+```
+
+## 🔔 Notification Handling
+
+The SDK auto-registers FCM token and handles push notifications. Ensure you have Firebase configured.
+
+## In-App Notifications
+
+The SDK handles: -- Popup full-screen . -- Banner with inline dismiss. -- PiP small floating view with expand logic to popup.
+No integration required from your side. The SDK renders them when triggered.
+
+## 📄 ProGuard
+
+-keep class com.mehery.pushapp.\*_ { _; }
+
+## 🏷️ Versions
+
+Latest Version on npm.
+
+## 💬 Support
+
+Raise issues or feature requests in GitHub Issues
+
+<!-- ## Contributing
+
+See the [contributing guide](CONTRIBUTING.md) to learn how to contribute to the repository and the development workflow. -->
+
+<!-- ## License
 
 MIT
 
 ---
 
-Made with [create-react-native-library](https://github.com/callstack/react-native-builder-bob)
+Made with [create-react-native-library](https://github.com/callstack/react-native-builder-bob) -->
 
 # react-native-mehery-event-sender
