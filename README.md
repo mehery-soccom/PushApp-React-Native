@@ -68,7 +68,7 @@ No integration required from your side. The SDK renders them when triggered.
 
 ## 🏷️ Versions
 
-Latest Version on npm.
+Latest Version: 0.0.5 Hosted on npm.
 
 ## 💬 Support
 
