@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     backgroundColor: 'white',
-    marginTop: 300,
+    marginTop: 150,
     justifyContent: 'center',
   },
   label: { fontSize: 18, marginBottom: 8 },

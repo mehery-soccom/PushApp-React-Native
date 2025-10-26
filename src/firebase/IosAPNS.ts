@@ -7,11 +7,18 @@ const API_CALL_COOLDOWN_MS = 15000; // 15 seconds
 
 /**
  * Registers the device with APNS / push server.
- * Skips API call entirely if sessionId, contact_id, and token are unchanged.
+ * Ensures registration only happens when needed and not repeatedly.
  */
 export async function registerDeviceWithAPNS(token: string) {
   if (!token) {
     console.warn('⚠️ No token provided, skipping registration.');
+    return;
+  }
+
+  // 🧠 Check login state first
+  const isLoggedIn = await AsyncStorage.getItem('UserRegistered');
+  if (isLoggedIn === 'true') {
+    console.log('🚫 User is logged in — skipping device registration.');
     return;
   }
 
@@ -26,24 +33,28 @@ export async function registerDeviceWithAPNS(token: string) {
 
   try {
     const now = Date.now();
-    if (lastApiCallTime !== 0 && now - lastApiCallTime < API_CALL_COOLDOWN_MS) {
+    if (lastApiCallTime && now - lastApiCallTime < API_CALL_COOLDOWN_MS) {
       const waitTime = Math.ceil(
         (API_CALL_COOLDOWN_MS - (now - lastApiCallTime)) / 1000
       );
-      console.log(
-        `⏳ API cool-down active. Wait ${waitTime}s before retrying.`
-      );
+      console.log(`⏳ Cooldown active. Wait ${waitTime}s before retrying.`);
       return;
     }
 
-    // Get stored device/session/contact info
-    const [storedDeviceId, storedSessionId, storedContactId, lastServerToken] =
-      await AsyncStorage.multiGet([
-        'device_id',
-        'sessionId',
-        'contact_id',
-        'lastRegisteredToken',
-      ]).then((entries) => entries.map(([_, value]) => value));
+    const [
+      storedDeviceId,
+      storedSessionId,
+      storedContactId,
+      lastServerToken,
+      lastRegisteredState,
+    ] = await AsyncStorage.multiGet([
+      'device_id',
+      'sessionId',
+      'contact_id',
+      'lastRegisteredToken',
+      'lastRegisteredState',
+    ]).then((entries) => entries.map(([_, v]) => v));
+    console.log('last servertoken:', lastServerToken);
 
     // Generate device_id if missing
     let device_id = storedDeviceId;
@@ -52,19 +63,20 @@ export async function registerDeviceWithAPNS(token: string) {
       await AsyncStorage.setItem('device_id', device_id);
     }
 
-    // --- Early exit: skip API call if nothing changed ---
-    if (
-      storedSessionId &&
-      storedSessionId.length > 0 &&
-      storedContactId &&
-      storedContactId.startsWith('guest_') &&
-      token === lastServerToken
-    ) {
-      console.log(
-        'ℹ️ Nothing changed (sessionId, contact_id, token). Skipping API call.'
-      );
+    // Compose a stable key representing last known registration
+    const currentState = JSON.stringify({
+      token,
+      storedSessionId,
+      storedContactId,
+    });
+
+    // If registration state hasn’t changed, skip entirely
+    if (lastRegisteredState === currentState) {
+      console.log('✅ Registration already valid. Skipping re-register.');
+      deviceRegistrationInProgress = false;
       return storedSessionId;
     }
+    await AsyncStorage.setItem('UserRegistered', 'true');
 
     // Prepare payload
     const payload = {
@@ -76,7 +88,6 @@ export async function registerDeviceWithAPNS(token: string) {
 
     console.log('📡 Registering/updating device...', payload);
 
-    // --- API Call ---
     const response = await fetch(
       'https://demo.pushapp.co.in/pushapp/api/register',
       {
@@ -93,15 +104,24 @@ export async function registerDeviceWithAPNS(token: string) {
 
     lastApiCallTime = Date.now();
 
-    // Save updated info
     const newSessionId = resData.session_id || '';
     const newContactId = resData.device?.contact_id || '';
 
+    // Save updated state
     await AsyncStorage.multiSet([
       ['APNStoken', token],
       ['lastRegisteredToken', token],
       ['sessionId', newSessionId],
       ['contact_id', newContactId],
+      [
+        'lastRegisteredState',
+        JSON.stringify({
+          token,
+          storedSessionId: newSessionId,
+          storedContactId: newContactId,
+        }),
+      ],
+      ['isRegistered', 'true'],
     ]);
 
     return newSessionId;

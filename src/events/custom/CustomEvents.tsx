@@ -6,8 +6,9 @@ import BottomSheetPoll from '../../components/BottomSheetPoll';
 import RoadblockPoll from '../../components/RoadblockPoll';
 import { renderInlinePoll } from '../../components/RenderInlinePoll';
 import { renderTooltipPoll } from '../../components/TooltipPollManager';
+import Floater from '../../components/FloaterPoll';
 
-// 📌 Sends a custom event, then triggers the poll fetch
+// 📌 Sends a custom event, then triggers the poll fetchi
 export async function sendCustomEvent(event_name: string, event_data: object) {
   const user_id = await AsyncStorage.getItem('user_id');
   const device_id = await AsyncStorage.getItem('device_id');
@@ -126,6 +127,13 @@ export async function sendPollEvent() {
         } else if (code.includes('roadblock')) {
           // Only roadblocks go into the queue
           pollQueue.push({ htmlContent, code, style });
+        } else if (code.includes('floater')) {
+          const overlayProps = {
+            html: htmlContent,
+            visible: true,
+            pollType: code,
+          };
+          showPollOverlay(<Floater {...overlayProps} />);
         } else {
           // All others show immediately
           const overlayProps = {
@@ -231,6 +239,7 @@ export function OnPageOpen() {
     try {
       sendCustomEvent('page_open', { page: 'login' });
       sendCustomEvent('widget_open', { compare: 'center' });
+      sendCustomEvent('widget_open', { compare: 'login_banner' });
     } catch (error) {
       console.log('sending login event', error);
     }

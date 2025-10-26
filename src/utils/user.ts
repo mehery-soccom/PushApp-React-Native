@@ -21,61 +21,58 @@ export function logUserDetails(details: UserDetails) {
 }
 
 export async function OnUserLogin(user_id: string) {
-  console.log('userid from fornt end:', user_id);
+  console.log('userid from front end:', user_id);
 
-  // if (!user_id) {
-  //   console.warn('❌ user_id is missing. Skipping device registration.');
-  //   return;
-  // }
-  await AsyncStorage.setItem('user_id', user_id); // ✅ Store it persistently
-
-  console.log('user id:', user_id);
   try {
-    await AsyncStorage.setItem('user_id', user_id); // ✅ Store it persistently
+    await AsyncStorage.setItem('user_id', user_id);
+    console.log('✅ user_id stored:', user_id);
   } catch (err) {
     console.error('❌ Failed to store user_id:', err);
   }
-  // const device_id = localStorage.getItem('device_id');
+
   const device_id = await AsyncStorage.getItem('device_id');
   const userID = await AsyncStorage.getItem('user_id');
-  // const APNStoken = await AsyncStorage.getItem('APNStoken');
-
-  console.log('device id:, ', device_id);
 
   if (!device_id) {
     console.warn('❌ Device ID not available.');
     return;
   }
 
-  console.log('Logged in w device id:', device_id);
-
   const payload = {
     device_id: device_id,
     user_id: userID || user_id,
     channel_id: 'demo_1754408042569',
   };
-  console.log('Paylod of login:', payload);
+  console.log('📦 Payload of login:', payload);
 
-  fetch('https://demo.pushapp.co.in/pushapp/api/register/user', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-    .then(async (response) => {
-      const text = await response.text();
-      console.log('Response text:', text);
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status} - ${text}`);
+  try {
+    const response = await fetch(
+      'https://demo.pushapp.co.in/pushapp/api/register/user',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       }
-      return JSON.parse(text);
-    })
-    .then((data) => {
-      console.log('Log in successfully:', data);
-      OnAppOpen();
-    })
-    .catch((error) => {
-      console.warn('❌ Error registering device:', error.message);
-    });
+    );
+
+    const text = await response.text();
+    console.log('Response text:', text);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status} - ${text}`);
+    }
+
+    const data = JSON.parse(text);
+    console.log('✅ Log in successfully:', data);
+
+    // 🔑 Set UserLoggedIn = true
+    await AsyncStorage.setItem('UserLoggedIn', 'true');
+    console.log('🟢 UserLoggedIn set to true');
+
+    OnAppOpen();
+  } catch (error: any) {
+    console.warn('❌ Error registering device:', error.message);
+  }
 }
 
 export async function OnUserLogOut(user_id: string) {

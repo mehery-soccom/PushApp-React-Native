@@ -53,6 +53,10 @@ export const PollOverlayProvider: React.FC = () => {
 
       setPipContents([cloned]);
       // overwrite previous PIP
+    } else if (pollType.includes('floater')) {
+      // ✅ Full-screen WebView floater
+      setModalContent(element); // just render as modal content
+      setModalVisible(true); // show full-screen modal
     } else if (pollType.includes('bottomsheet')) {
       const cloned = React.cloneElement(element as React.ReactElement<any>, {
         visible: true,

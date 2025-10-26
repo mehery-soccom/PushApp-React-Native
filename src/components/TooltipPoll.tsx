@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { useState, useEffect, useMemo } from 'react';
+import { View, Text } from 'react-native';
+import type { ViewStyle, TextStyle, DimensionValue } from 'react-native';
 
 function decodeHtmlEntity(entity: string) {
   if (!entity) return '';
@@ -10,22 +11,48 @@ interface TooltipPollProps {
   line1?: string;
   line2?: string;
   line1Icon?: string;
+  line1IconPosition?: 'prepend' | 'append';
   line1Color?: string;
   line2Color?: string;
   line1FontSize?: number;
   line2FontSize?: number;
+  line1TextStyles?: TextStyle[];
+  line2TextStyles?: TextStyle[];
+  line1FontTextStyles?: TextStyle[];
+  line2FontTextStyles?: TextStyle[];
   tooltipKey?: string;
+  width?: DimensionValue;
+  bgColor?: string;
+  top?: number;
+  left?: number;
+  align?: 'left' | 'center' | 'right';
+  zIndex?: number;
+  borderRadius?: number;
+  elevation?: number;
 }
 
 export default function TooltipPoll({
   line1 = '',
   line2 = '',
   line1Icon,
+  line1IconPosition = 'prepend',
   line1Color,
   line2Color,
   line1FontSize,
   line2FontSize,
+  line1TextStyles = [],
+  line2TextStyles = [],
+  line1FontTextStyles = [],
+  line2FontTextStyles = [],
   tooltipKey,
+  width = 150,
+  bgColor = 'black',
+  top = 50,
+  left = -140,
+  align = 'center',
+  zIndex = 450,
+  borderRadius = 8,
+  elevation = 3,
 }: TooltipPollProps) {
   const [visible, setVisible] = useState(true);
 
@@ -33,45 +60,68 @@ export default function TooltipPoll({
     if (tooltipKey) setVisible(true);
   }, [tooltipKey]);
 
+  // ✅ Always call hooks unconditionally
+  const containerStyle = useMemo<ViewStyle>(
+    () => ({
+      backgroundColor: bgColor,
+      padding: 8,
+      borderRadius,
+      position: 'absolute',
+      top,
+      left,
+      minWidth: width,
+      zIndex,
+      shadowColor: '#000',
+      shadowOpacity: 0.2,
+      shadowOffset: { width: 0, height: 2 },
+      shadowRadius: 4,
+      elevation,
+      alignItems:
+        align === 'left'
+          ? 'flex-start'
+          : align === 'right'
+            ? 'flex-end'
+            : 'center',
+    }),
+    [bgColor, top, left, width, zIndex, borderRadius, elevation, align]
+  );
+
+  const line1Style = useMemo<TextStyle>(
+    () => ({
+      color: line1Color || 'white',
+      fontSize: line1FontSize || 14,
+      fontWeight: 'bold',
+      ...Object.assign({}, ...line1TextStyles),
+      ...Object.assign({}, ...line1FontTextStyles),
+    }),
+    [line1Color, line1FontSize, line1TextStyles, line1FontTextStyles]
+  );
+
+  const line2Style = useMemo<TextStyle>(
+    () => ({
+      color: line2Color || 'gray',
+      fontSize: line2FontSize || 12,
+      marginTop: 4,
+      ...Object.assign({}, ...line2TextStyles),
+      ...Object.assign({}, ...line2FontTextStyles),
+    }),
+    [line2Color, line2FontSize, line2TextStyles, line2FontTextStyles]
+  );
+
   if (!visible) return null;
 
-  const line1Style = {
-    color: line1Color || 'black',
-    fontSize: line1FontSize || 14,
-    fontWeight: 'bold' as const,
-  };
-
-  const line2Style = {
-    color: line2Color || 'gray',
-    fontSize: line2FontSize || 12,
-    marginTop: 4,
-  };
-
   return (
-    <View style={styles.container}>
+    <View style={containerStyle}>
       <Text style={line1Style}>
-        {line1Icon ? `${decodeHtmlEntity(line1Icon)} ` : ''}
+        {line1Icon && line1IconPosition === 'prepend'
+          ? `${decodeHtmlEntity(line1Icon)} `
+          : ''}
         {line1}
+        {line1Icon && line1IconPosition === 'append'
+          ? ` ${decodeHtmlEntity(line1Icon)}`
+          : ''}
       </Text>
-      <Text style={line2Style}>{line2}</Text>
+      {line2 ? <Text style={line2Style}>{line2}</Text> : null}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: 'white',
-    padding: 8,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 3,
-    position: 'absolute',
-    top: 50,
-    zIndex: 450,
-    minWidth: 150,
-    left: -140,
-  },
-});

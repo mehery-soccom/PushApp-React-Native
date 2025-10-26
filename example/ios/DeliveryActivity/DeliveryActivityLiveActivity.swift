@@ -44,6 +44,20 @@ struct DeliveryActivityAttributes: ActivityAttributes {
 
 // MARK: - Live Activity Widget
 
+private func loadImage(from fileName: String?) -> Image? {
+    guard
+        let fileName = fileName,
+        let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.mehery.admin.meheryAdmin")
+    else { return nil }
+
+    let imageURL = containerURL.appendingPathComponent(fileName)
+    if let uiImage = UIImage(contentsOfFile: imageURL.path) {
+        return Image(uiImage: uiImage).resizable()
+    }
+    return nil
+}
+
+
 @available(iOS 16.2, *)
 struct DeliveryActivityLiveActivity: Widget {
     var body: some WidgetConfiguration {
@@ -102,17 +116,12 @@ struct DeliveryActivityLiveActivity: Widget {
                 Spacer()
 
                 // Image
-                if let imageFileName = context.state.imageFileName,
-                   let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.mehery.admin.meheryAdmin") {
-                    let imageURL = containerURL.appendingPathComponent(imageFileName)
-                    if let uiImage = UIImage(contentsOfFile: imageURL.path) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 100)
-                    } else {
-                        Text("Image not found")
-                    }
+                if let image = loadImage(from: context.state.imageFileName) {
+                    image
+                        .scaledToFit()
+                        .frame(height: 100)
+                } else {
+                    Text("Image not found")
                 }
             }
             .padding()
