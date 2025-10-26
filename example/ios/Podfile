@@ -38,11 +38,28 @@ target 'MeheryEventSenderExample' do
 
   pod 'react-native-webview', :path => '../node_modules/react-native-webview'
 
+  # post_install do |installer|
+  #   react_native_post_install(
+  #     installer,
+  #     config[:reactNativePath],
+  #     :mac_catalyst_enabled => false,
+  #   )
+  # end
+
   post_install do |installer|
     react_native_post_install(
       installer,
       config[:reactNativePath],
       :mac_catalyst_enabled => false,
     )
+  
+    # ✅ Force objectVersion to 55 for RN compatibility
+    pbxproj_path = File.join(installer.pods_project.path, 'project.pbxproj')
+    content = File.read(pbxproj_path)
+    content.gsub!(/objectVersion = \d+;/, 'objectVersion = 55;')
+    File.write(pbxproj_path, content)
   end
+  
+  
+  
 end
