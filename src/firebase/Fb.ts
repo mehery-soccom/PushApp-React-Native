@@ -1,44 +1,112 @@
 import messaging from '@react-native-firebase/messaging';
 import app from '@react-native-firebase/app';
-import { PermissionsAndroid } from 'react-native';
+import { PermissionsAndroid, Platform } from 'react-native';
 import PushNotification from 'react-native-push-notification';
-import { Platform } from 'react-native';
 import { getDeviceId } from '../utils/device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+let deviceRegistrationInProgress = false;
+let lastApiCallTime: number | null = null;
+const API_CALL_COOLDOWN_MS = 5000; // 5s cooldown
 
 console.log('💬 Firebase messaging:', messaging);
 console.log('📦 Firebase app exists:', app ? 'Yes' : 'No');
 
-/**
- * Request notification permissions (platform-agnostic)
- */
-
 export async function registerDeviceWithFCM(token: string, deviceId: string) {
-  const channel_id = await AsyncStorage.getItem('mehery_channel_id');
-  console.log('channel id at custom:', channel_id);
-  const payload = {
-    device_id: deviceId,
-    channel_id: channel_id,
-    platform: Platform.OS,
-    token: token,
-  };
+  if (!token) {
+    console.warn('⚠️ No FCM token provided. Skipping registration.');
+    return;
+  }
 
-  console.log('📡 Registering device with payload:', payload);
+  // 🧠 Skip if registration already in progress
+  if (deviceRegistrationInProgress) {
+    console.log(
+      'ℹ️ Registration already in progress — skipping duplicate call.'
+    );
+    return;
+  }
 
-  fetch('https://demo.pushapp.co.in/pushapp/api/register', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  })
-    .then((res) => res.json())
-    .then((resData) => {
-      console.log('✅ Device registered:', resData);
-    })
-    .catch((err) => {
-      console.error('❌ Failed to register device:', err);
+  // 🧊 Cooldown logic to avoid spamming
+  const now = Date.now();
+  if (lastApiCallTime && now - lastApiCallTime < API_CALL_COOLDOWN_MS) {
+    const waitTime = Math.ceil(
+      (API_CALL_COOLDOWN_MS - (now - lastApiCallTime)) / 1000
+    );
+    console.log(`⏳ Cooldown active. Wait ${waitTime}s before retrying.`);
+    return;
+  }
+
+  deviceRegistrationInProgress = true;
+
+  try {
+    const [storedDeviceId, lastRegisteredToken, lastRegisteredState] =
+      await AsyncStorage.multiGet([
+        'device_id',
+        'lastRegisteredToken',
+        'lastRegisteredState',
+      ]).then((entries) => entries.map(([_, v]) => v));
+
+    console.log('last:', lastRegisteredToken);
+    // Generate a fallback device_id if not found
+    let finalDeviceId = deviceId || storedDeviceId;
+    if (!finalDeviceId) {
+      finalDeviceId = `${Platform.OS}_${Date.now()}`;
+      await AsyncStorage.setItem('device_id', finalDeviceId);
+    }
+
+    // Create state key to check for changes
+    const currentState = JSON.stringify({
+      token,
+      deviceId: finalDeviceId,
+      platform: Platform.OS,
     });
+
+    // 🔁 Skip if last registration is identical
+    if (lastRegisteredState === currentState) {
+      console.log('✅ Registration already valid. Skipping re-register.');
+      deviceRegistrationInProgress = false;
+      return;
+    }
+
+    const channel_id = await AsyncStorage.getItem('mehery_channel_id');
+
+    const payload = {
+      device_id: finalDeviceId,
+      channel_id: channel_id,
+      platform: Platform.OS,
+      token: token,
+    };
+
+    console.log('📡 Registering device with payload:', payload);
+
+    const response = await fetch(
+      'https://demo.pushapp.co.in/pushapp/api/register',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const resData = await response.json();
+    console.log('✅ Device registered/updated:', resData);
+
+    lastApiCallTime = Date.now();
+
+    // 🧩 Save new registration state
+    await AsyncStorage.multiSet([
+      ['lastRegisteredToken', token],
+      ['lastRegisteredState', currentState],
+      ['isRegistered', 'true'],
+    ]);
+  } catch (err) {
+    console.error('❌ Failed to register/update device:', err);
+    await AsyncStorage.setItem('isRegistered', 'false');
+  } finally {
+    deviceRegistrationInProgress = false;
+  }
 }
 
 export function requestUserPermission(): void {
@@ -82,19 +150,12 @@ export function requestUserPermission(): void {
 export function getFcmToken() {
   messaging()
     .getToken()
-    .then((token) => {
+    .then(async (token) => {
       console.log('📲 FCM Token:', token);
-      getDeviceId().then((id) => {
-        console.log('✅ Device is being registered with ID:', id);
-
-        // localStorage.setItem('device_id', id); // Save user_id to localStorage
-        try {
-          AsyncStorage.setItem('device_id', id); // ✅ Store it persistently
-        } catch (err) {
-          console.error('❌ Failed to store user_id:', err);
-        }
-        registerDeviceWithFCM(token, id); // <-- Register after getting token
-      });
+      const id = await getDeviceId();
+      console.log('✅ Device is being registered with ID:', id);
+      await AsyncStorage.setItem('device_id', id);
+      await registerDeviceWithFCM(token, id);
     })
     .catch((error) => {
       console.error('Error getting FCM token:', error);
