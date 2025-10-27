@@ -34,6 +34,16 @@ import { onUserLogin } from 'react-native-mehery-event-sender';
 OnUserLogin('user_id');
 ```
 
+To Initialize Page Open Event
+
+```js
+import { OnPageOpen } from 'react-native-mehery-event-sender';
+
+// ...
+
+OnPageOpen();
+```
+
 ## 🎯 Event Tracking
 
 To track user actions or custom events:
