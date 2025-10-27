@@ -237,7 +237,7 @@ function getAlignment(style: any) {
 
   return `${verticalPart}-${horizontalPart}`;
 }
-export function OnPageOpen(page_name) {
+export function OnPageOpen(page_name: string) {
   setTimeout(() => {
     try {
       sendCustomEvent('page_open', { page: page_name });
