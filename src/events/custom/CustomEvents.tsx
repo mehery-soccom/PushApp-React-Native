@@ -240,6 +240,9 @@ function getAlignment(style: any) {
 export function OnPageOpen(page_name: string) {
   setTimeout(() => {
     try {
+      // sendCustomEvent('app_open');
+      // sendCustomEvent('app_open', { page: page_name });
+
       sendCustomEvent('page_open', { page: page_name });
       sendCustomEvent('widget_open', { compare: 'center' });
       sendCustomEvent('widget_open', { compare: 'login_banner' });
@@ -251,6 +254,14 @@ export function OnPageOpen(page_name: string) {
 
 export function OnPageClose() {
   sendCustomEvent('page_closed', { page: 'login' });
+}
+
+export function OnAppOpen() {
+  sendCustomEvent('app_open', {});
+}
+
+export function OnAppClose() {
+  sendCustomEvent('app_close', {});
 }
 
 /**

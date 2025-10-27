@@ -29,7 +29,7 @@ export function TooltipPollContainer({
           // Show only if it belongs to this placeholder and is not expired
           if (
             parsed.placeholderId === placeholderId &&
-            Date.now() - parsed.timestamp < 500 * 60 * 1 // 1 minute
+            Date.now() - parsed.timestamp < 2000 * 60 * 1 // 1 minute
           ) {
             console.log(
               `[SDK] Restoring persisted tooltip for ${placeholderId}`

@@ -13,6 +13,7 @@ export {
   OnPageClose,
   OnPageOpen,
   sendCustomEvent,
+  OnAppOpen,
 } from './events/custom/CustomEvents';
 export { PollOverlayProvider } from './components/PollOverlay';
 export { showPollOverlay, hidePollOverlay } from './components/PollOverlay';

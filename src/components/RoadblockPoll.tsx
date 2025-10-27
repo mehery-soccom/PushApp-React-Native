@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 12,
     overflow: 'hidden',
-    margin: 20,
+    // margin: 20,
   },
   webview: {
     flex: 1,

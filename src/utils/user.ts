@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { OnAppOpen } from '../events/default/DefaultEvents';
+import { OnAppOpen } from '../events/custom/CustomEvents';
 // import { OnPageOpen } from '../events/custom/CustomEvents';
 type UserDetails = {
   [key: string]: string;

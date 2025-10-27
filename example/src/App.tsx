@@ -6,6 +6,7 @@ import {
   initSdk,
   OnUserLogin,
   OnPageOpen,
+  OnAppOpen,
 } from 'react-native-mehery-event-sender';
 import { PollOverlayProvider } from 'react-native-mehery-event-sender';
 import { InlinePollContainer } from 'react-native-mehery-event-sender';
@@ -48,6 +49,7 @@ function HomePage({
 
   useEffect(() => {
     try {
+      OnAppOpen();
       OnPageOpen('login');
     } catch (error) {
       console.log('error in opening page:', error);
