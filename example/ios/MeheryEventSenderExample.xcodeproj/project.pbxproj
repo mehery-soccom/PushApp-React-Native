@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 55;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -90,28 +90,28 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		28E335812E2A266C00072368 /* Exceptions for "ImageServiceExtension" folder in "ImageServiceExtension" target */ = {
+		28E335812E2A266C00072368 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = 28E335752E2A266C00072368 /* ImageServiceExtension */;
 		};
-		28E335962E2A269C00072368 /* Exceptions for "ImagePreviewExtension" folder in "ImagePreviewExtension" target */ = {
+		28E335962E2A269C00072368 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = 28E335862E2A269C00072368 /* ImagePreviewExtension */;
 		};
-		28E7B88B2E39008200B05A66 /* Exceptions for "DeliveryActivity" folder in "DeliveryActivityExtension" target */ = {
+		28E7B88B2E39008200B05A66 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = 28E7B8762E39007D00B05A66 /* DeliveryActivityExtension */;
 		};
-		28E7B8902E39050000B05A66 /* Exceptions for "DeliveryActivity" folder in "MeheryEventSenderExample" target */ = {
+		28E7B8902E39050000B05A66 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				DeliveryActivityLiveActivity.swift,
@@ -121,43 +121,9 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		28E335772E2A266C00072368 /* ImageServiceExtension */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				28E335812E2A266C00072368 /* Exceptions for "ImageServiceExtension" folder in "ImageServiceExtension" target */,
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = ImageServiceExtension;
-			sourceTree = "<group>";
-		};
-		28E3358C2E2A269C00072368 /* ImagePreviewExtension */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				28E335962E2A269C00072368 /* Exceptions for "ImagePreviewExtension" folder in "ImagePreviewExtension" target */,
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = ImagePreviewExtension;
-			sourceTree = "<group>";
-		};
-		28E7B87A2E39007D00B05A66 /* DeliveryActivity */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				28E7B8902E39050000B05A66 /* Exceptions for "DeliveryActivity" folder in "MeheryEventSenderExample" target */,
-				28E7B88B2E39008200B05A66 /* Exceptions for "DeliveryActivity" folder in "DeliveryActivityExtension" target */,
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = DeliveryActivity;
-			sourceTree = "<group>";
-		};
+		28E335772E2A266C00072368 /* ImageServiceExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (28E335812E2A266C00072368 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ImageServiceExtension; sourceTree = "<group>"; };
+		28E3358C2E2A269C00072368 /* ImagePreviewExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (28E335962E2A269C00072368 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ImagePreviewExtension; sourceTree = "<group>"; };
+		28E7B87A2E39007D00B05A66 /* DeliveryActivity */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (28E7B8902E39050000B05A66 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, 28E7B88B2E39008200B05A66 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = DeliveryActivity; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -463,9 +429,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -480,9 +450,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MeheryEventSenderExample/Pods-MeheryEventSenderExample-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -979,10 +953,7 @@
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
 				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					" ",
-				);
+				OTHER_LDFLAGS = "$(inherited)  ";
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
@@ -1062,10 +1033,7 @@
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
 				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					" ",
-				);
+				OTHER_LDFLAGS = "$(inherited)  ";
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				USE_HERMES = true;
