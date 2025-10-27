@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,11 +7,13 @@ import {
   PanResponder,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import Video from 'react-native-video';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 interface FloaterProps {
-  html: string;
+  html?: string;
+  videoUrl?: string;
   initialTop?: number;
   initialLeft?: number;
   width?: number;
@@ -20,6 +22,7 @@ interface FloaterProps {
 
 export default function Floater({
   html,
+  videoUrl,
   initialTop = 50,
   initialLeft = 20,
   width = screenWidth * 0.9,
@@ -34,18 +37,15 @@ export default function Floater({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderMove: (_, gestureState) => {
-        // Move relative to last offset
         pan.setValue({
           x: offset.x + gestureState.dx,
           y: offset.y + gestureState.dy,
         });
       },
       onPanResponderRelease: (_, gestureState) => {
-        // Save new offset
         offset.x += gestureState.dx;
         offset.y += gestureState.dy;
 
-        // Optional: limit boundaries
         if (offset.x < 0) offset.x = 0;
         if (offset.y < 0) offset.y = 0;
         if (offset.x + width > screenWidth) offset.x = screenWidth - width;
@@ -69,17 +69,31 @@ export default function Floater({
         ]}
         {...panResponder.panHandlers}
       >
-        <WebView
-          source={{ html }}
-          style={styles.webview}
-          originWhitelist={['*']}
-          javaScriptEnabled
-          domStorageEnabled
-          scrollEnabled={false}
-          showsVerticalScrollIndicator={false}
-          showsHorizontalScrollIndicator={false}
-          pointerEvents="auto"
-        />
+        {videoUrl ? (
+          <Video
+            source={{ uri: videoUrl }}
+            style={styles.video}
+            resizeMode="contain"
+            controls
+            paused={false}
+            repeat={false}
+            ignoreSilentSwitch="ignore"
+          />
+        ) : (
+          <WebView
+            source={{ html: html || '' }}
+            style={styles.webview}
+            originWhitelist={['*']}
+            javaScriptEnabled
+            domStorageEnabled
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            allowsFullscreenVideo
+            scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+            showsHorizontalScrollIndicator={false}
+          />
+        )}
       </Animated.View>
     </View>
   );
@@ -92,25 +106,23 @@ const styles = StyleSheet.create({
     left: 0,
     width: screenWidth,
     height: screenHeight,
-    backgroundColor: 'white', // overlay background
     zIndex: 9998,
+    // backgroundColor: 'transparent',
+    backgroundColor: 'white',
   },
   container: {
     position: 'absolute',
-    backgroundColor: 'white',
-    zIndex: 9999,
-    borderRadius: 8,
+    // backgroundColor: 'white',
+    // borderRadius: 8,
     overflow: 'hidden',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
   },
   webview: {
     flex: 1,
     width: '100%',
     height: '100%',
-    // borderRadius: 20,
+  },
+  video: {
+    width: '100%',
+    height: '100%',
   },
 });

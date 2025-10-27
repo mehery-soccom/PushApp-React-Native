@@ -12351,6 +12351,7 @@ __metadata:
     react-native-builder-bob: ^0.38.3
     react-native-codegen: ^0.70.7
     react-native-push-notification: ^8.1.1
+    react-native-video: ^6.17.0
     react-native-webview: ^13.15.0
     typescript: ^5.9.2
   languageName: unknown
@@ -12388,6 +12389,7 @@ __metadata:
     react-native: 0.80.0
     react-native-builder-bob: ^0.38.3
     react-native-uuid: ^2.0.3
+    react-native-video: ^6.17.0
     react-native-webview: ^13.15.0
     release-it: ^19.0.4
     socket.io-client: ^4.8.1
@@ -12415,6 +12417,16 @@ __metadata:
   version: 2.0.3
   resolution: "react-native-uuid@npm:2.0.3"
   checksum: e47774481feaed5d38f75fb4b03f5189c03e7452038f1b0fa56677add8a8bdef64ec7ad5e83f9fa761d8788cac5c8e554ade07e82a2818145337df7c883e2124
+  languageName: node
+  linkType: hard
+
+"react-native-video@npm:^6.17.0":
+  version: 6.17.0
+  resolution: "react-native-video@npm:6.17.0"
+  peerDependencies:
+    react: "*"
+    react-native: "*"
+  checksum: 36cb907b9d96aabe5878214a3be3d1b70fdc504e5e8f9276d892a8e76dc8cfc98c48223ea99b5e1f70e5da547a0047b9a82d9406bd3996897ff421a52ea98656
   languageName: node
   linkType: hard
 

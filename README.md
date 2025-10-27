@@ -41,7 +41,7 @@ import { OnPageOpen } from 'react-native-mehery-event-sender';
 
 // ...
 
-OnPageOpen();
+OnPageOpen('page_name');
 ```
 
 ## 🎯 Event Tracking

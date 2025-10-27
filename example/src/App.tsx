@@ -48,7 +48,7 @@ function HomePage({
 
   useEffect(() => {
     try {
-      OnPageOpen();
+      OnPageOpen('login');
     } catch (error) {
       console.log('error in opening page:', error);
     }

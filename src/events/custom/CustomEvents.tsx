@@ -237,14 +237,14 @@ function getAlignment(style: any) {
 
   return `${verticalPart}-${horizontalPart}`;
 }
-export function OnPageOpen() {
+export function OnPageOpen(page_name) {
   setTimeout(() => {
     try {
-      sendCustomEvent('page_open', { page: 'login' });
+      sendCustomEvent('page_open', { page: page_name });
       sendCustomEvent('widget_open', { compare: 'center' });
       sendCustomEvent('widget_open', { compare: 'login_banner' });
     } catch (error) {
-      console.log('sending login event', error);
+      console.log(`Error sending events for page: ${page_name}`, error);
     }
   }, 2000); // 2000ms = 2 seconds
 }
