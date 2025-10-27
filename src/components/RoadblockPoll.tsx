@@ -1,23 +1,17 @@
 import { useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { hidePollOverlay } from './PollOverlay'; // ✅ import to close modal
+import { hidePollOverlay } from './PollOverlay';
 
 export default function RoadblockPoll({ html, onClose }: any) {
   const webViewRef = useRef<WebView>(null);
 
-  // 🔹 Function to send tracking event
   const sendTrackEvent = async (
     eventType: 'cta' | 'dismissed',
     ctaId?: string
   ) => {
-    const payload = {
-      event: eventType,
-      data: ctaId ? { ctaId } : {},
-    };
-
+    const payload = { event: eventType, data: ctaId ? { ctaId } : {} };
     console.log('📤 Sending track event:', payload);
-
     try {
       const res = await fetch(
         'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
@@ -27,7 +21,6 @@ export default function RoadblockPoll({ html, onClose }: any) {
           body: JSON.stringify(payload),
         }
       );
-
       const data = await res.json();
       console.log('✅ Track API response:', data);
     } catch (error) {
@@ -35,22 +28,17 @@ export default function RoadblockPoll({ html, onClose }: any) {
     }
   };
 
-  // 🔹 Handle messages sent from inside the WebView
   const onMessage = (event: any) => {
     try {
       const message = JSON.parse(event.nativeEvent.data);
-
       if (message.type === 'buttonClick') {
         console.log('🖱️ Button clicked with value:', message.value);
         sendTrackEvent('cta', message.value);
-
-        // ✅ Close the WebView immediately after click
         if (onClose) onClose();
         else hidePollOverlay();
       } else if (message.type === 'closePoll') {
         console.log('🚪 Close poll message received');
         sendTrackEvent('dismissed');
-
         if (onClose) onClose();
         else hidePollOverlay();
       }
@@ -59,32 +47,32 @@ export default function RoadblockPoll({ html, onClose }: any) {
     }
   };
 
-  // 🔹 Inject JS to capture button clicks inside HTML
   const injectedJS = `
-  (function() {
-    // Listen for button clicks
-    document.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('click', function() {
-        const value = this.value || this.innerText || '';
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'buttonClick', value }));
+    (function() {
+      // Enable clicks
+      document.body.style.touchAction = 'manipulation';
+      document.body.style.webkitUserSelect = 'none';
+      document.body.style.userSelect = 'none';
+      
+      // Attach button click listeners
+      document.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const value = this.value || this.innerText || '';
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'buttonClick', value }));
+        });
       });
-    });
 
-    // Listen for "close" actions inside HTML
-    document.querySelectorAll('[data-close], .close-button, .poll-close').forEach(el => {
-      el.addEventListener('click', function() {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'closePoll' }));
+      // Close poll buttons
+      document.querySelectorAll('[data-close], .close-button, .poll-close').forEach(el => {
+        el.addEventListener('click', function() {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'closePoll' }));
+        });
       });
-    });
-  })();
-`;
 
-  // // 🔹 Handle close
-  // const handleClose = () => {
-  //   console.log('🚪 Roadblock closed');
-  //   sendTrackEvent('dismissed');
-  //   if (onClose) onClose();
-  // };
+      // Prevent scroll blocking
+      window.addEventListener('touchmove', function(e) { e.stopPropagation(); }, { passive: true });
+    })();
+  `;
 
   return (
     <View style={styles.container}>
@@ -95,6 +83,22 @@ export default function RoadblockPoll({ html, onClose }: any) {
         onMessage={onMessage}
         injectedJavaScript={injectedJS}
         originWhitelist={['*']}
+        javaScriptEnabled
+        domStorageEnabled
+        allowFileAccess
+        allowUniversalAccessFromFileURLs
+        allowsInlineMediaPlayback
+        allowsFullscreenVideo
+        mediaPlaybackRequiresUserAction={false}
+        allowsAirPlayForMediaPlayback
+        allowsBackForwardNavigationGestures
+        automaticallyAdjustContentInsets
+        androidLayerType="hardware"
+        mixedContentMode="always"
+        userAgent="Mozilla/5.0 (ReactNativeWebView)"
+        scrollEnabled={true}
+        nestedScrollEnabled={true}
+        startInLoadingState={false}
       />
     </View>
   );
@@ -103,31 +107,12 @@ export default function RoadblockPoll({ html, onClose }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: '#fff',
     borderRadius: 12,
     overflow: 'hidden',
-    // margin: 20,
   },
   webview: {
     flex: 1,
-    backgroundColor: 'white',
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    zIndex: 10,
-    backgroundColor: '#00000080',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeText: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: 'bold',
-    lineHeight: 22,
+    backgroundColor: '#fff',
   },
 });

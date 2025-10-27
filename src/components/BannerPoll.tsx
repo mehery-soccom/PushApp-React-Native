@@ -6,7 +6,7 @@ export default function BannerPoll({ html }: any) {
   // const [visible, setVisible] = useState(true);
 
   // if (!visible) return null;
-
+  // console.log('html:', html);
   return (
     <View style={styles.container}>
       {/* Close button on top */}
@@ -26,8 +26,19 @@ export default function BannerPoll({ html }: any) {
         domStorageEnabled
         showsVerticalScrollIndicator={false}
         showsHorizontalScrollIndicator={false}
-        pointerEvents="box-none" // This allows the button to be clickable
-        scrollEnabled={false} // ✅ disable scrolling
+        scrollEnabled={false} // keep scrolling disabled
+        onMessage={(event) => {
+          const data = event.nativeEvent.data;
+          console.log('Message from WebView:', data);
+          // handle button clicks from HTML here
+        }}
+        injectedJavaScript={`
+          document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => {
+              window.ReactNativeWebView.postMessage(btn.id || 'clicked');
+            });
+          });
+        `}
       />
     </View>
   );

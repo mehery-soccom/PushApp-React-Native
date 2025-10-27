@@ -135,6 +135,9 @@ export default function BottomSheetPoll({
           javaScriptEnabled
           domStorageEnabled
           scrollEnabled
+          allowsFullscreenVideo
+          allowsInlineMediaPlayback={true} // ✅ allow inline video
+          mediaPlaybackRequiresUserAction={false} // ✅ allow autoplay
           injectedJavaScript={injectedJS}
           onMessage={(event) => {
             try {
@@ -152,7 +155,7 @@ export default function BottomSheetPoll({
                 event.nativeEvent.data
               );
             }
-            onClose(); // always close after any button click or close
+            onClose();
           }}
         />
       </Animated.View>

@@ -41,11 +41,13 @@ export const PollOverlayProvider: React.FC = () => {
       setModalVisible(true);
     } else if (pollType.includes('banner')) {
       const cloned = React.cloneElement(element as React.ReactElement<any>, {
-        onClose: () =>
-          setBannerContents((prev) => prev.filter((el) => el !== element)),
+        onClose: () => setBannerContents([]),
+        key: Date.now(), // forces WebView reload
       });
 
-      setBannerContents((prev) => [...prev, cloned]);
+      setBannerContents([cloned]);
+
+      // Replace any existing banner
     } else if (pollType.includes('picture-in-picture')) {
       const alignment = (element as any).props?.alignment || 'center-center';
       const cloned = React.cloneElement(element as React.ReactElement<any>, {
@@ -107,7 +109,6 @@ export const PollOverlayProvider: React.FC = () => {
           {content}
         </View>
       ))}
-
       {/* PIP */}
       {pipContents.map((content, index) => {
         const isFullScreen = (content as any)?.props?.fullscreen;
