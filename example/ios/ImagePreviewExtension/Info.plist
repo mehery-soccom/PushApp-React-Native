@@ -3,21 +3,22 @@
 <plist version="1.0">
 <dict>
 	<key>NSExtension</key>
-	<dict>
-		<key>NSExtensionAttributes</key>
-		<dict>
-			<key>UNNotificationExtensionCategory</key>
-			<string>CONFIRMATION_CATEGORY</string>
-			<key>UNNotificationExtensionDefaultContentHidden</key>
-			<true/>
-			<key>UNNotificationExtensionInitialContentSizeRatio</key>
-			<real>1.0</real>
-		</dict>
-		<key>NSExtensionMainStoryboard</key>
-		<string>MainInterface</string>
-		<key>NSExtensionPointIdentifier</key>
-		<string>com.apple.usernotifications.content-extension</string>
-	</dict>
+<dict>
+  <key>NSExtensionAttributes</key>
+  <dict>
+    <key>UNNotificationExtensionCategory</key>
+      <string>imagePreviewCategory</string>
+    <key>UNNotificationExtensionDefaultContentHidden</key>
+    <true/>
+    <key>UNNotificationExtensionInitialContentSizeRatio</key>
+    <real>0.7</real>
+  </dict>
+  <key>NSExtensionMainStoryboard</key>
+  <string>MainInterface</string>
+  <key>NSExtensionPointIdentifier</key>
+  <string>com.apple.usernotifications.content-extension</string>
+</dict>
+
 	<key>RCTNewArchEnabled</key>
 	<true/>
 </dict>

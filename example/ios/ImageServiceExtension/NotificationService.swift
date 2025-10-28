@@ -1,56 +1,78 @@
 import UserNotifications
+import MobileCoreServices
+import os.log
 
 class NotificationService: UNNotificationServiceExtension {
-
   var contentHandler: ((UNNotificationContent) -> Void)?
   var bestAttemptContent: UNMutableNotificationContent?
 
-  override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
+  override func didReceive(_ request: UNNotificationRequest,
+                           withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
     self.contentHandler = contentHandler
     bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
 
+    os_log("Service: didReceive userInfo: %{public}@", log: .default, type: .info, request.content.userInfo.description)
+
     guard let bestAttemptContent = bestAttemptContent else {
+      os_log("Service: bestAttemptContent nil", type: .error)
+      contentHandler(request.content)
       return
     }
 
-    if let attachmentURLString = request.content.userInfo["image-url"] as? String,
-       let attachmentURL = URL(string: attachmentURLString) {
-      downloadImageFrom(url: attachmentURL) { attachment in
-        if let attachment = attachment {
-          bestAttemptContent.attachments = [attachment]
-        }
+    guard let urlString = bestAttemptContent.userInfo["image-url"] as? String,
+          let url = URL(string: urlString) else {
+      os_log("Service: no image-url in payload", type: .error)
+      contentHandler(bestAttemptContent)
+      return
+    }
+
+    os_log("Service: will download from %{public}@", url.absoluteString)
+    let task = URLSession.shared.downloadTask(with: url) { downloadedUrl, response, error in
+      if let err = error {
+        os_log("Service: download error: %{public}@", type: .error, err.localizedDescription)
         contentHandler(bestAttemptContent)
+        return
       }
-    } else {
-      contentHandler(bestAttemptContent)
-    }
-  }
-
-  override func serviceExtensionTimeWillExpire() {
-    if let contentHandler = contentHandler, let bestAttemptContent = bestAttemptContent {
-      contentHandler(bestAttemptContent)
-    }
-  }
-
-  private func downloadImageFrom(url: URL, completion: @escaping (UNNotificationAttachment?) -> Void) {
-    let task = URLSession.shared.downloadTask(with: url) { (downloadedUrl, _, error) in
       guard let downloadedUrl = downloadedUrl else {
-        completion(nil)
+        os_log("Service: downloadedUrl nil", type: .error)
+        contentHandler(bestAttemptContent)
         return
       }
 
       let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory())
-      let uniqueURL = tmpDir.appendingPathComponent(url.lastPathComponent)
-
-      try? FileManager.default.moveItem(at: downloadedUrl, to: uniqueURL)
+      let ext = url.pathExtension.isEmpty ? "jpg" : url.pathExtension
+      let dest = tmpDir.appendingPathComponent(UUID().uuidString + "." + ext)
 
       do {
-        let attachment = try UNNotificationAttachment(identifier: "image", url: uniqueURL, options: nil)
-        completion(attachment)
+        try FileManager.default.moveItem(at: downloadedUrl, to: dest)
+        os_log("Service: moved to %{public}@", dest.path)
+
+        // Type hint based on extension
+        let options = [
+          UNNotificationAttachmentOptionsTypeHintKey:
+            (ext.lowercased() == "png" ? kUTTypePNG : kUTTypeJPEG)
+        ]
+
+        let attachment = try UNNotificationAttachment(identifier: "image", url: dest, options: options)
+        bestAttemptContent.attachments = [attachment]
+
+        // ✅ Critical for linking to your NotificationViewController
+        bestAttemptContent.categoryIdentifier = "imagePreviewCategory"
+
+        os_log("Service: created attachment id=%{public}@", attachment.identifier)
       } catch {
-        completion(nil)
+        os_log("Service: attachment error: %{public}@", type: .error, String(describing: error))
       }
+
+      contentHandler(bestAttemptContent)
     }
     task.resume()
+  }
+
+  override func serviceExtensionTimeWillExpire() {
+    os_log("Service: timeWillExpire", type: .error)
+    if let handler = contentHandler, let content = bestAttemptContent {
+      handler(content)
+    }
   }
 }
