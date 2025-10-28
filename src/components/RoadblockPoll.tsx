@@ -5,7 +5,7 @@ import { hidePollOverlay } from './PollOverlay';
 
 export default function RoadblockPoll({ html, onClose }: any) {
   const webViewRef = useRef<WebView>(null);
-
+  console.log('html:', html);
   const sendTrackEvent = async (
     eventType: 'cta' | 'dismissed',
     ctaId?: string
@@ -31,8 +31,9 @@ export default function RoadblockPoll({ html, onClose }: any) {
   const onMessage = (event: any) => {
     try {
       const message = JSON.parse(event.nativeEvent.data);
+      console.log('event data:', event.nativeEvent);
       if (message.type === 'buttonClick') {
-        console.log('🖱️ Button clicked with value:', message.value);
+        console.log('🖱️ Button clicked with value:', message);
         sendTrackEvent('cta', message.value);
         if (onClose) onClose();
         else hidePollOverlay();
@@ -46,33 +47,38 @@ export default function RoadblockPoll({ html, onClose }: any) {
       console.warn('⚠️ Invalid message from WebView', event.nativeEvent.data);
     }
   };
-
   const injectedJS = `
-    (function() {
-      // Enable clicks
-      document.body.style.touchAction = 'manipulation';
-      document.body.style.webkitUserSelect = 'none';
-      document.body.style.userSelect = 'none';
-      
-      // Attach button click listeners
-      document.querySelectorAll('button').forEach(btn => {
-        btn.addEventListener('click', function() {
-          const value = this.value || this.innerText || '';
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'buttonClick', value }));
-        });
-      });
+  (function() {
+    document.body.style.touchAction = 'manipulation';
+    document.body.style.webkitUserSelect = 'none';
+    document.body.style.userSelect = 'none';
+    
+    // Attach button click listeners
+    document.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', function() {
+        let value = this.value || this.innerText || '';
 
-      // Close poll buttons
-      document.querySelectorAll('[data-close], .close-button, .poll-close').forEach(el => {
-        el.addEventListener('click', function() {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'closePoll' }));
-        });
-      });
+        // Try to extract the argument (e.g., 'sqoff') from onclick attribute
+        const onclickAttr = this.getAttribute('onclick');
+        if (onclickAttr) {
+          const match = onclickAttr.match(/'([^']+)'\\s*\\)$/); // get last 'arg'
+          if (match && match[1]) value = match[1];
+        }
 
-      // Prevent scroll blocking
-      window.addEventListener('touchmove', function(e) { e.stopPropagation(); }, { passive: true });
-    })();
-  `;
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'buttonClick', value }));
+      });
+    });
+
+    // Handle close buttons
+    document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn').forEach(el => {
+      el.addEventListener('click', function() {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'closePoll' }));
+      });
+    });
+
+    window.addEventListener('touchmove', function(e) { e.stopPropagation(); }, { passive: true });
+  })();
+`;
 
   return (
     <View style={styles.container}>

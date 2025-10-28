@@ -216,7 +216,9 @@ function showNextPoll(): void {
   }
 
   const { htmlContent, code } = nextPoll;
+
   if (code.includes('roadblock')) {
+    console.log('🎬 Showing next roadblock poll');
     showPollOverlay(
       <RoadblockPoll html={htmlContent} visible={true} pollType="roadblock" />
     );
@@ -262,6 +264,10 @@ export function OnAppOpen() {
 
 export function OnAppClose() {
   sendCustomEvent('app_close', {});
+}
+
+export function triggerNextPoll() {
+  showNextPoll();
 }
 
 /**

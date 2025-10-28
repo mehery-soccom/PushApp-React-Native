@@ -1,44 +1,115 @@
-// import { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-export default function BannerPoll({ html }: any) {
-  // const [visible, setVisible] = useState(true);
+export default function BannerPoll({ html, onClose }: any) {
+  // Clean up HTML (remove nested <body> tags if any)
+  const cleanHtml = html.replace(/<\/?body[^>]*>/g, '');
 
-  // if (!visible) return null;
-  // console.log('html:', html);
+  const sendTrackEvent = async (
+    eventType: 'cta' | 'dismissed',
+    ctaId?: string
+  ) => {
+    const payload = { event: eventType, data: ctaId ? { ctaId } : {} };
+    console.log('📤 Sending track event:', payload);
+    try {
+      const res = await fetch(
+        'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
+      const data = await res.json();
+      console.log('✅ Track API response:', data);
+    } catch (error) {
+      console.error('❌ Track API error:', error);
+    }
+  };
+  // Injected JS to extract CTA IDs and send them to RN
+  const injectedJS = `
+    (function() {
+      // Basic layout fixes
+      const style = document.createElement('style');
+      style.innerHTML = \`
+        html, body {
+          margin: 0; padding: 0;
+          overflow: hidden;
+          width: 100%; height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .preview-wrapper, .banner-wrapper {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        button {
+          cursor: pointer;
+        }
+      \`;
+      document.head.appendChild(style);
+
+      // Button click handler
+      document.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', function() {
+          let value = this.value || this.innerText || '';
+          const onclickAttr = this.getAttribute('onclick');
+
+          // Try to extract the last quoted argument (e.g., 'sqoff', 'Later', etc.)
+          if (onclickAttr) {
+            const match = onclickAttr.match(/'([^']+)'\\s*\\)$/);
+            if (match && match[1]) value = match[1];
+          }
+
+          // Send message to React Native
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'cta', value }));
+        });
+      });
+
+      // Close buttons
+      document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn').forEach(el => {
+        el.addEventListener('click', function() {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'dismissed' }));
+        });
+      });
+    })();
+  `;
+
   return (
     <View style={styles.container}>
-      {/* Close button on top */}
-      {/* <TouchableOpacity
-        style={styles.closeButton}
-        onPress={() => setVisible(false)}
-      >
-        <Text style={styles.closeText}>×</Text>
-      </TouchableOpacity> */}
-
-      {/* WebView */}
       <WebView
-        source={{ html }}
+        source={{ html: cleanHtml }}
         style={styles.webview}
         originWhitelist={['*']}
         javaScriptEnabled
         domStorageEnabled
         showsVerticalScrollIndicator={false}
         showsHorizontalScrollIndicator={false}
-        scrollEnabled={false} // keep scrolling disabled
+        scrollEnabled={true}
+        injectedJavaScript={injectedJS}
         onMessage={(event) => {
-          const data = event.nativeEvent.data;
-          console.log('Message from WebView:', data);
-          // handle button clicks from HTML here
+          try {
+            const msg = JSON.parse(event.nativeEvent.data);
+            console.log('📩 BannerPoll message:', msg);
+
+            if (msg.type === 'cta') {
+              sendTrackEvent('cta', msg.value);
+              if (onClose) onClose();
+            } else if (msg.type === 'dismissed') {
+              console.log('🚪 Banner dismissed');
+              // e.g., sendTrackEvent('dismissed');
+              if (onClose) onClose();
+            }
+          } catch (err) {
+            console.warn(
+              '⚠️ Invalid message from WebView:',
+              event.nativeEvent.data
+            );
+          }
         }}
-        injectedJavaScript={`
-          document.querySelectorAll('button').forEach(btn => {
-            btn.addEventListener('click', () => {
-              window.ReactNativeWebView.postMessage(btn.id || 'clicked');
-            });
-          });
-        `}
       />
     </View>
   );
@@ -47,32 +118,14 @@ export default function BannerPoll({ html }: any) {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 60,
-    width: '120%',
-    height: 75,
+    top: 20,
+    width: '100%',
+    height: 120,
     zIndex: 9999,
     backgroundColor: 'white',
   },
   webview: {
     flex: 1,
     backgroundColor: 'white',
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 5,
-    right: 15,
-    zIndex: 99999,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-    lineHeight: 18,
   },
 });

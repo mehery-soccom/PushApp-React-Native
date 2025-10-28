@@ -85,23 +85,34 @@ export default function BottomSheetPoll({
       console.error('❌ Track API error:', error);
     }
   };
-
   const injectedJS = `
-    (function() {
-      document.querySelectorAll('#media-container button').forEach(btn => {
-        btn.addEventListener('click', function() {
-          const value = this.value || this.innerText || '';
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'buttonClick', value }));
-        });
-      });
+  (function() {
+    // Attach button click listeners inside #media-container
+    document.querySelectorAll('#media-container button').forEach(btn => {
+      btn.addEventListener('click', function() {
+        let value = this.value || this.innerText || '';
 
-      document.querySelectorAll('[data-close], .close-button, .poll-close').forEach(el => {
-        el.addEventListener('click', function() {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'closePoll' }));
-        });
+        // Try to extract the argument (like 'sqoff') from inline onclick attribute
+        const onclickAttr = this.getAttribute('onclick');
+        if (onclickAttr) {
+          // Match the last quoted argument in the onclick call
+          const match = onclickAttr.match(/'([^']+)'\\s*\\)$/);
+          if (match && match[1]) value = match[1];
+        }
+
+        // Send message to React Native
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'buttonClick', value }));
       });
-    })();
-  `;
+    });
+
+    // Attach close listeners
+    document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn').forEach(el => {
+      el.addEventListener('click', function() {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'closePoll' }));
+      });
+    });
+  })();
+`;
 
   const injectedHtml = `
     <!DOCTYPE html>

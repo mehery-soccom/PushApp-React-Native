@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
+import { triggerNextPoll } from '../events/custom/CustomEvents';
 
 let showOverlayFn: ((element: React.ReactNode) => void) | null = null;
 let hideOverlayFn: (() => void) | null = null;
@@ -71,11 +72,22 @@ export const PollOverlayProvider: React.FC = () => {
       console.warn('Unknown poll type', pollType);
     }
   };
-
   hideOverlayFn = () => {
+    const wasRoadblock = (modalContent as any)?.props?.pollType === 'roadblock';
+
+    // Step 1: Close the current modal
     setModalVisible(false);
-    setModalContent(null);
-    setIsFloater(false);
+
+    // Step 2: Wait for modal to finish closing animation
+    setTimeout(() => {
+      setModalContent(null);
+      setIsFloater(false);
+
+      // Step 3: If it was a roadblock, show next poll from queue
+      if (wasRoadblock) {
+        triggerNextPoll();
+      }
+    }, 1000); // slightly less delay, smooth transition
   };
 
   useEffect(() => {
