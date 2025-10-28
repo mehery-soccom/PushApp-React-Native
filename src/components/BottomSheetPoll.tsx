@@ -5,6 +5,7 @@ import {
   Animated,
   Dimensions,
   StyleSheet,
+  Linking,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
@@ -57,7 +58,7 @@ export default function BottomSheetPoll({
     })
   ).current;
 
-  // 🔹 Track events like RoadblockPoll
+  // 🔹 Track events
   const sendTrackEvent = async (
     eventType: 'cta' | 'dismissed',
     ctaId?: string
@@ -66,9 +67,7 @@ export default function BottomSheetPoll({
       event: eventType,
       data: ctaId ? { ctaId } : {},
     };
-
     console.log('📤 Sending track event:', payload);
-
     try {
       const res = await fetch(
         'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
@@ -78,41 +77,40 @@ export default function BottomSheetPoll({
           body: JSON.stringify(payload),
         }
       );
-
       const data = await res.json();
       console.log('✅ Track API response:', data);
     } catch (error) {
       console.error('❌ Track API error:', error);
     }
   };
+
+  // 🔹 JS injected into WebView
   const injectedJS = `
-  (function() {
-    // Attach button click listeners inside #media-container
-    document.querySelectorAll('#media-container button').forEach(btn => {
-      btn.addEventListener('click', function() {
-        let value = this.value || this.innerText || '';
+    (function() {
+      // Attach button click listeners inside #media-container
+      document.querySelectorAll('#media-container button').forEach(btn => {
+        btn.addEventListener('click', function() {
+          let value = this.value || this.innerText || '';
 
-        // Try to extract the argument (like 'sqoff') from inline onclick attribute
-        const onclickAttr = this.getAttribute('onclick');
-        if (onclickAttr) {
-          // Match the last quoted argument in the onclick call
-          const match = onclickAttr.match(/'([^']+)'\\s*\\)$/);
-          if (match && match[1]) value = match[1];
-        }
+          const onclickAttr = this.getAttribute('onclick');
+          if (onclickAttr) {
+            const match = onclickAttr.match(/'([^']+)'\\s*\\)$/);
+            if (match && match[1]) value = match[1];
+          }
 
-        // Send message to React Native
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'buttonClick', value }));
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'buttonClick', value }));
+        });
       });
-    });
 
-    // Attach close listeners
-    document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn').forEach(el => {
-      el.addEventListener('click', function() {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'closePoll' }));
-      });
-    });
-  })();
-`;
+      // Attach close listeners
+      document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn')
+        .forEach(el => {
+          el.addEventListener('click', function() {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'closePoll' }));
+          });
+        });
+    })();
+  `;
 
   const injectedHtml = `
     <!DOCTYPE html>
@@ -121,10 +119,24 @@ export default function BottomSheetPoll({
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <style>
-          html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: transparent; }
-          #media-container { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #fff; }
-          #media-container img, #media-container video { width: 100%; max-height: 100%; object-fit: cover; margin: 0; padding: 0; display: block; }
-          #media-container button { padding: 12px 24px; font-size: 16px; margin-top: 10px; cursor: pointer; border-radius: 8px; }
+          html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: transparent;
+          }
+          #media-container {
+            width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            background-color: #fff;
+          }
+          #media-container img, #media-container video {
+            width: 100%; max-height: 100%; object-fit: cover;
+          }
+          #media-container button {
+            padding: 12px 24px; font-size: 16px;
+            margin-top: 10px; cursor: pointer;
+            border-radius: 8px;
+          }
         </style>
       </head>
       <body>
@@ -147,22 +159,33 @@ export default function BottomSheetPoll({
           domStorageEnabled
           scrollEnabled
           allowsFullscreenVideo
-          allowsInlineMediaPlayback={true} // ✅ allow inline video
-          mediaPlaybackRequiresUserAction={false} // ✅ allow autoplay
+          allowsInlineMediaPlayback
+          mediaPlaybackRequiresUserAction={false}
           injectedJavaScript={injectedJS}
-          onMessage={(event) => {
+          onMessage={async (event) => {
             try {
               const message = JSON.parse(event.nativeEvent.data);
+
               if (message.type === 'buttonClick') {
                 console.log('🖱️ BottomSheet button clicked:', message.value);
                 sendTrackEvent('cta', message.value);
+
+                // ✅ If button value looks like a link, open it
+                const value = message.value?.trim();
+                if (value && /^(https?:\/\/|www\\.)/i.test(value)) {
+                  const url = value.startsWith('http')
+                    ? value
+                    : `https://${value}`;
+                  console.log('🌐 Opening CTA link:', url);
+                  await Linking.openURL(url);
+                }
               } else if (message.type === 'closePoll') {
                 console.log('🚪 BottomSheet close requested');
                 sendTrackEvent('dismissed');
               }
             } catch (err) {
               console.warn(
-                '⚠️ Invalid message from WebView',
+                '⚠️ Invalid message from WebView:',
                 event.nativeEvent.data
               );
             }
@@ -191,6 +214,5 @@ const styles = StyleSheet.create({
   webview: {
     width: '100%',
     flex: 1,
-    // height: height * 0.5,
   },
 });

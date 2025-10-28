@@ -1,10 +1,10 @@
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-export default function BannerPoll({ html, onClose }: any) {
-  // Clean up HTML (remove nested <body> tags if any)
+export default function BannerPoll({ html }: any) {
   const cleanHtml = html.replace(/<\/?body[^>]*>/g, '');
 
+  // Send track event helper
   const sendTrackEvent = async (
     eventType: 'cta' | 'dismissed',
     ctaId?: string
@@ -26,10 +26,10 @@ export default function BannerPoll({ html, onClose }: any) {
       console.error('❌ Track API error:', error);
     }
   };
-  // Injected JS to extract CTA IDs and send them to RN
+
+  // Injected JavaScript for webview
   const injectedJS = `
     (function() {
-      // Basic layout fixes
       const style = document.createElement('style');
       style.innerHTML = \`
         html, body {
@@ -40,41 +40,38 @@ export default function BannerPoll({ html, onClose }: any) {
           align-items: center;
           justify-content: center;
         }
-        .preview-wrapper, .banner-wrapper {
-          width: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-        button {
-          cursor: pointer;
-        }
+        button, a { cursor: pointer; }
       \`;
       document.head.appendChild(style);
 
-      // Button click handler
       document.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', function() {
           let value = this.value || this.innerText || '';
           const onclickAttr = this.getAttribute('onclick');
-
-          // Try to extract the last quoted argument (e.g., 'sqoff', 'Later', etc.)
           if (onclickAttr) {
             const match = onclickAttr.match(/'([^']+)'\\s*\\)$/);
             if (match && match[1]) value = match[1];
           }
-
-          // Send message to React Native
           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'cta', value }));
         });
       });
 
-      // Close buttons
-      document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn').forEach(el => {
-        el.addEventListener('click', function() {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'dismissed' }));
+      document.querySelectorAll('a[href]').forEach(link => {
+        link.addEventListener('click', function(e) {
+          e.preventDefault();
+          const href = this.getAttribute('href');
+          if (href) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'link', url: href }));
+          }
         });
       });
+
+      document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn')
+        .forEach(el => {
+          el.addEventListener('click', function() {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'dismissed' }));
+          });
+        });
     })();
   `;
 
@@ -86,22 +83,32 @@ export default function BannerPoll({ html, onClose }: any) {
         originWhitelist={['*']}
         javaScriptEnabled
         domStorageEnabled
-        showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
-        scrollEnabled={true}
+        scrollEnabled
         injectedJavaScript={injectedJS}
-        onMessage={(event) => {
+        onMessage={async (event) => {
           try {
             const msg = JSON.parse(event.nativeEvent.data);
             console.log('📩 BannerPoll message:', msg);
 
             if (msg.type === 'cta') {
               sendTrackEvent('cta', msg.value);
-              if (onClose) onClose();
+
+              // ✅ Check if value is a valid URL, then open it
+              const value = msg.value?.trim();
+              if (value && /^(https?:\/\/|www\.)/i.test(value)) {
+                const url = value.startsWith('http')
+                  ? value
+                  : `https://${value}`;
+                console.log('🌐 Opening CTA link:', url);
+                await Linking.openURL(url);
+              }
+            } else if (msg.type === 'link') {
+              console.log('🌐 Opening link:', msg.url);
+              await Linking.openURL(msg.url);
+              sendTrackEvent('cta', msg.url);
             } else if (msg.type === 'dismissed') {
               console.log('🚪 Banner dismissed');
-              // e.g., sendTrackEvent('dismissed');
-              if (onClose) onClose();
+              sendTrackEvent('dismissed');
             }
           } catch (err) {
             console.warn(
