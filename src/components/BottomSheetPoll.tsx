@@ -54,7 +54,7 @@ export default function BottomSheetPoll({
             useNativeDriver: true,
           }).start(() => {
             sendTrackEvent('dismissed');
-            onClose();
+            onClose?.();
           });
         } else {
           Animated.spring(translateY, {
@@ -201,7 +201,7 @@ export default function BottomSheetPoll({
                 event.nativeEvent.data
               );
             }
-            onClose();
+            onClose?.();
           }}
         />
       </Animated.View>
