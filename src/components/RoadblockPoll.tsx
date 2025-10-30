@@ -16,18 +16,22 @@ export default function RoadblockPoll({
   messageId,
   filterId,
   pollType, // ✅ added here
+  style,
 }: {
   html: string;
   onClose?: () => void;
   messageId?: string;
   filterId?: string;
   pollType?: string; // ✅ added here
+  style?: string; // ✅ added here
 }) {
   const webViewRef = useRef<WebView>(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [overlayText, setOverlayText] = useState('');
 
   console.log('poll type:', pollType);
+  console.log('style:', style);
+
   console.log('📨 messageId:', messageId);
   console.log('📨 filterId:', filterId);
 
