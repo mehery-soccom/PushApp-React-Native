@@ -347,7 +347,7 @@ function showNextPoll(): void {
     showPollOverlay(
       <RoadblockPoll
         html={htmlContent}
-        visible={true}
+        // visible={true}
         pollType={code}
         style={style}
         filterId={filterId}

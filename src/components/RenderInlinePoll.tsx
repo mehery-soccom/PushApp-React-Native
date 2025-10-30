@@ -217,7 +217,7 @@ export function InlinePollContainer({
       }
     } catch (err) {
       console.warn('⚠️ Invalid message from WebView:', raw);
-      sendTrackEvent('unknown', { raw });
+      sendTrackEvent('unknown', JSON.stringify(raw));
     }
   };
 
