@@ -15,16 +15,19 @@ export default function RoadblockPoll({
   onClose,
   messageId,
   filterId,
+  pollType, // ✅ added here
 }: {
   html: string;
   onClose?: () => void;
   messageId?: string;
   filterId?: string;
+  pollType?: string; // ✅ added here
 }) {
   const webViewRef = useRef<WebView>(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [overlayText, setOverlayText] = useState('');
 
+  console.log('poll type:', pollType);
   console.log('📨 messageId:', messageId);
   console.log('📨 filterId:', filterId);
 
