@@ -9,6 +9,15 @@
 		<key>NSExtensionPrincipalClass</key>
 		<string>$(PRODUCT_MODULE_NAME).NotificationService</string>
 	</dict>
+
+	<!-- ✅ Fix for iOS 17/18 network restrictions -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+
+	<!-- Keep your existing React Native new arch flag -->
 	<key>RCTNewArchEnabled</key>
 	<true/>
 </dict>
