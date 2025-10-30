@@ -228,10 +228,7 @@ export async function sendPollEvent() {
 
         if (code.includes('inline') && event?.event_data?.compare) {
           const placeholderId = event.event_data.compare;
-          renderInlinePoll(placeholderId, htmlContent, style, {
-            filterId: filter_id,
-            messageId: message_id,
-          });
+          renderInlinePoll(placeholderId, htmlContent, style);
         } else if (event?.event_data?.compare && code.includes('tooltip')) {
           const tooltipData = {
             compare: event.event_data.compare,

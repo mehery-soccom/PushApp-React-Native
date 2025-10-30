@@ -13,8 +13,12 @@ const { height } = Dimensions.get('window');
 
 interface BottomSheetPollProps {
   html: string;
-  visible: boolean;
-  onClose: () => void;
+  visible?: boolean;
+  pollType?: string;
+  style?: any;
+  onClose?: () => void;
+  messageId?: string; // ✅ add this
+  filterId?: string; // ✅ add this
 }
 
 export default function BottomSheetPoll({
