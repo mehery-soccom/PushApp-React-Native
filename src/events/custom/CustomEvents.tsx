@@ -228,7 +228,12 @@ export async function sendPollEvent() {
 
         if (code.includes('inline') && event?.event_data?.compare) {
           const placeholderId = event.event_data.compare;
-          renderInlinePoll(placeholderId, htmlContent, style);
+
+          renderInlinePoll(placeholderId, htmlContent, style, {
+            filterId: filter_id,
+            messageId: message_id,
+          });
+          // setTimeout(() => {}, 2000);
         } else if (event?.event_data?.compare && code.includes('tooltip')) {
           const tooltipData = {
             compare: event.event_data.compare,
@@ -342,7 +347,7 @@ function showNextPoll(): void {
     showPollOverlay(
       <RoadblockPoll
         html={htmlContent}
-        // visible={true}
+        visible={true}
         pollType={code}
         style={style}
         filterId={filterId}

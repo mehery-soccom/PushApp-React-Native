@@ -1,18 +1,25 @@
 import { WebView } from 'react-native-webview';
 import { useEffect, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { sendCustomEvent } from '../events/custom/CustomEvents';
 
 const inlinePollRegistry: Record<
   string,
-  { htmlContent: string; style?: any; updatedAt: number }
+  {
+    htmlContent: string;
+    style?: any;
+    updatedAt: number;
+    messageId?: string;
+    filterId?: string;
+  }
 > = {};
 
 export async function renderInlinePoll(
   placeholderId: string,
   htmlContent: string | null,
-  style?: any
+  style?: any,
+  { messageId, filterId }: { messageId?: string; filterId?: string } = {}
 ) {
   // 🧹 Clear if null
   if (!htmlContent) {
@@ -29,7 +36,9 @@ export async function renderInlinePoll(
   const pollData = {
     htmlContent,
     style,
-    updatedAt: Date.now(), // ⏱ mark as latest
+    messageId, // ✅ store messageId
+    filterId, // ✅ store filterId
+    updatedAt: Date.now(),
   };
 
   // 🧠 Save in memory and disk
@@ -56,6 +65,7 @@ export function InlinePollContainer({
     inlinePollRegistry[placeholderId] || null
   );
 
+  // 🔄 Load poll data (memory + disk)
   useEffect(() => {
     const loadPoll = async () => {
       const memPoll = inlinePollRegistry[placeholderId];
@@ -65,7 +75,6 @@ export function InlinePollContainer({
         );
         const backup = backupStr ? JSON.parse(backupStr) : null;
 
-        // 🧩 Compare timestamps and pick the newest
         const chosenPoll =
           !memPoll && backup
             ? backup
@@ -92,7 +101,7 @@ export function InlinePollContainer({
     loadPoll();
   }, [placeholderId]);
 
-  // 🔁 Watch memory updates every 300ms and take the most recent
+  // 🔁 Watch for updates every 300ms
   useEffect(() => {
     const interval = setInterval(async () => {
       const memPoll = inlinePollRegistry[placeholderId];
@@ -135,11 +144,20 @@ export function InlinePollContainer({
 
   // 🛰 Track CTA and open events
   const sendTrackEvent = async (
-    eventType: 'cta' | 'dismissed',
+    eventType: 'cta' | 'dismissed' | 'longPress' | 'openUrl' | 'unknown',
     ctaId?: string
   ) => {
-    const payload = { event: eventType, data: ctaId ? { ctaId } : {} };
+    if (!poll) return;
+
+    const payload = {
+      messageId: poll.messageId, // ✅ fixed
+      filterId: poll.filterId, // ✅ fixed
+      event: eventType,
+      data: ctaId ? { ctaId } : {},
+    };
+
     console.log('📤 Sending track event:', payload);
+
     try {
       const res = await fetch(
         'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
@@ -149,6 +167,7 @@ export function InlinePollContainer({
           body: JSON.stringify(payload),
         }
       );
+
       const data = await res.json();
       console.log('✅ Track API response:', data);
     } catch (error) {
@@ -156,10 +175,60 @@ export function InlinePollContainer({
     }
   };
 
+  // 🧩 Handle messages from WebView
+  const onMessage = (event: any) => {
+    const raw = event.nativeEvent.data;
+    try {
+      const message = JSON.parse(raw);
+      console.log('📩 InlinePoll message:', message);
+
+      switch (message.type) {
+        case 'buttonClick':
+          console.log('🟢 Sending CTA button click:', message.value);
+          sendTrackEvent('cta', message.value);
+          sendCustomEvent('sendcta', {
+            ctaId: message.value,
+            compare: placeholderId,
+            messageId: poll?.messageId,
+            filterId: poll?.filterId,
+          });
+          break;
+
+        case 'closePoll':
+          sendTrackEvent('dismissed');
+          break;
+
+        case 'longPress':
+          sendTrackEvent('longPress', message.value);
+          break;
+
+        case 'openUrl':
+          sendTrackEvent('openUrl', message.url);
+          if (message.url) {
+            Linking.openURL(message.url).catch((err) =>
+              console.error('❌ Failed to open URL:', err)
+            );
+          }
+          break;
+
+        default:
+          console.warn('⚠️ Unknown message type:', message);
+          sendTrackEvent('unknown', message);
+      }
+    } catch (err) {
+      console.warn('⚠️ Invalid message from WebView:', raw);
+      sendTrackEvent('unknown', { raw });
+    }
+  };
+
   useEffect(() => {
     if (poll?.htmlContent) {
-      console.log('inline poll rendered:', placeholderId);
-      sendCustomEvent('widget_open', { compare: placeholderId });
+      console.log('🧩 Inline poll rendered:', placeholderId);
+      sendCustomEvent('widget_open', {
+        compare: placeholderId,
+        messageId: poll?.messageId,
+        filterId: poll?.filterId,
+      });
     } else {
       AsyncStorage.removeItem(`inline_poll_${placeholderId}`).catch(() => {});
     }
@@ -169,12 +238,22 @@ export function InlinePollContainer({
 
   const injectedJS = `
     (function() {
-      document.addEventListener('click', function(e) {
-        const target = e.target.closest('button');
-        if (target) {
-          const ctaId = target.id || target.getAttribute('data-cta-id') || 'unknown';
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'sendcta', ctaId }));
-        }
+      const send = (data) => window.ReactNativeWebView.postMessage(JSON.stringify(data));
+      document.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.preventDefault();
+          const value = btn.value || btn.innerText || '';
+          send({ type: 'buttonClick', value });
+        });
+      });
+      document.querySelectorAll('[data-close], .close-button').forEach(el => {
+        el.addEventListener('click', () => send({ type: 'closePoll' }));
+      });
+      document.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', e => {
+          e.preventDefault();
+          send({ type: 'openUrl', url: link.href });
+        });
       });
     })();
     true;
@@ -184,26 +263,9 @@ export function InlinePollContainer({
     <style>
       ::-webkit-scrollbar { display: none; }
       body { overflow: hidden; margin: 0; padding: 0; }
-      html { overflow: hidden; }
     </style>
     ${poll.htmlContent}
   `;
-
-  const handleWebViewMessage = (event: any) => {
-    try {
-      const message = JSON.parse(event.nativeEvent.data);
-      if (message.type === 'sendcta') {
-        console.log('🟢 CTA button clicked:', message.ctaId);
-        sendTrackEvent('cta', message.ctaId);
-        sendCustomEvent('sendcta', {
-          ctaId: message.ctaId,
-          compare: placeholderId,
-        });
-      }
-    } catch (err) {
-      console.warn('⚠️ Invalid message from WebView:', err);
-    }
-  };
 
   return (
     <View style={styles.container} key={poll?.updatedAt}>
@@ -211,7 +273,7 @@ export function InlinePollContainer({
         originWhitelist={['*']}
         source={{ html: injectedHTML }}
         injectedJavaScript={injectedJS}
-        onMessage={handleWebViewMessage}
+        onMessage={onMessage}
         style={styles.webview}
         scrollEnabled={false}
       />
