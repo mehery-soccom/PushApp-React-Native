@@ -1,78 +1,53 @@
 import UserNotifications
-import MobileCoreServices
-import os.log
 
 class NotificationService: UNNotificationServiceExtension {
-  var contentHandler: ((UNNotificationContent) -> Void)?
-  var bestAttemptContent: UNMutableNotificationContent?
-
-  override func didReceive(_ request: UNNotificationRequest,
-                           withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
-    self.contentHandler = contentHandler
-    bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
-
-    os_log("Service: didReceive userInfo: %{public}@", log: .default, type: .info, request.content.userInfo.description)
-
-    guard let bestAttemptContent = bestAttemptContent else {
-      os_log("Service: bestAttemptContent nil", type: .error)
-      contentHandler(request.content)
-      return
+    override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
+        let bestAttemptContent = (request.content.mutableCopy() as! UNMutableNotificationContent)
+        
+        if let mediaUrl = request.content.userInfo["media-url"] as? String,
+           let url = URL(string: mediaUrl) {
+            
+            downloadAndAttachImage(url: url, content: bestAttemptContent, contentHandler: contentHandler)
+        } else {
+            contentHandler(bestAttemptContent)
+        }
     }
-
-    guard let urlString = bestAttemptContent.userInfo["image-url"] as? String,
-          let url = URL(string: urlString) else {
-      os_log("Service: no image-url in payload", type: .error)
-      contentHandler(bestAttemptContent)
-      return
+    
+    private func downloadAndAttachImage(url: URL, content: UNMutableNotificationContent, contentHandler: @escaping (UNNotificationContent) -> Void) {
+        let task = URLSession.shared.downloadTask(with: url) { (location, response, error) in
+            if let error = error {
+                print("Error downloading image: \(error)")
+                contentHandler(content)
+                return
+            }
+            
+            guard let location = location else {
+                contentHandler(content)
+                return
+            }
+            
+            let tmpDirectory = NSTemporaryDirectory()
+            let tmpFile = "image_\(Date().timeIntervalSince1970).jpg"
+            let tmpUrl = URL(fileURLWithPath: tmpDirectory).appendingPathComponent(tmpFile)
+            
+            do {
+                try FileManager.default.moveItem(at: location, to: tmpUrl)
+                
+                if let attachment = try? UNNotificationAttachment(identifier: "image", url: tmpUrl, options: nil) {
+                    content.attachments = [attachment]
+                }
+                
+                contentHandler(content)
+            } catch {
+                print("Error moving downloaded file: \(error)")
+                contentHandler(content)
+            }
+        }
+        
+        task.resume()
     }
-
-    os_log("Service: will download from %{public}@", url.absoluteString)
-    let task = URLSession.shared.downloadTask(with: url) { downloadedUrl, response, error in
-      if let err = error {
-        os_log("Service: download error: %{public}@", type: .error, err.localizedDescription)
-        contentHandler(bestAttemptContent)
-        return
-      }
-      guard let downloadedUrl = downloadedUrl else {
-        os_log("Service: downloadedUrl nil", type: .error)
-        contentHandler(bestAttemptContent)
-        return
-      }
-
-      let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory())
-      let ext = url.pathExtension.isEmpty ? "jpg" : url.pathExtension
-      let dest = tmpDir.appendingPathComponent(UUID().uuidString + "." + ext)
-
-      do {
-        try FileManager.default.moveItem(at: downloadedUrl, to: dest)
-        os_log("Service: moved to %{public}@", dest.path)
-
-        // Type hint based on extension
-        let options = [
-          UNNotificationAttachmentOptionsTypeHintKey:
-            (ext.lowercased() == "png" ? kUTTypePNG : kUTTypeJPEG)
-        ]
-
-        let attachment = try UNNotificationAttachment(identifier: "image", url: dest, options: options)
-        bestAttemptContent.attachments = [attachment]
-
-        // ✅ Critical for linking to your NotificationViewController
-        bestAttemptContent.categoryIdentifier = "imagePreviewCategory"
-
-        os_log("Service: created attachment id=%{public}@", attachment.identifier)
-      } catch {
-        os_log("Service: attachment error: %{public}@", type: .error, String(describing: error))
-      }
-
-      contentHandler(bestAttemptContent)
+    
+    override func serviceExtensionTimeWillExpire() {
+        // Handle timeout
     }
-    task.resume()
-  }
-
-  override func serviceExtensionTimeWillExpire() {
-    os_log("Service: timeWillExpire", type: .error)
-    if let handler = contentHandler, let content = bestAttemptContent {
-      handler(content)
-    }
-  }
 }

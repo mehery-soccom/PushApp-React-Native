@@ -21,6 +21,8 @@ export default function BottomSheetPoll({
   html,
   visible,
   onClose,
+  messageId,
+  filterId,
 }: BottomSheetPollProps) {
   const translateY = useRef(new Animated.Value(height)).current;
 
@@ -32,6 +34,8 @@ export default function BottomSheetPoll({
     }).start();
   }, [visible, translateY]);
 
+  console.log('📨 messageId at BS:', messageId);
+  console.log('📨 filterId at bs:', filterId);
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 10,
@@ -57,17 +61,20 @@ export default function BottomSheetPoll({
       },
     })
   ).current;
-
-  // 🔹 Track events
+  // 🔹 Send tracking event to backend
   const sendTrackEvent = async (
-    eventType: 'cta' | 'dismissed',
+    eventType: 'cta' | 'dismissed' | 'longPress' | 'openUrl' | 'unknown',
     ctaId?: string
   ) => {
     const payload = {
+      messageId,
+      filterId,
       event: eventType,
       data: ctaId ? { ctaId } : {},
     };
+
     console.log('📤 Sending track event:', payload);
+
     try {
       const res = await fetch(
         'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
@@ -77,6 +84,7 @@ export default function BottomSheetPoll({
           body: JSON.stringify(payload),
         }
       );
+
       const data = await res.json();
       console.log('✅ Track API response:', data);
     } catch (error) {

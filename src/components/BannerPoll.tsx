@@ -1,16 +1,24 @@
 import { View, StyleSheet, Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-export default function BannerPoll({ html }: any) {
+export default function BannerPoll({ html, messageId, filterId }: any) {
   const cleanHtml = html.replace(/<\/?body[^>]*>/g, '');
-
+  console.log('📨 messageId at bann:', messageId);
+  console.log('📨 filterId at bann:', filterId);
   // Send track event helper
   const sendTrackEvent = async (
-    eventType: 'cta' | 'dismissed',
+    eventType: 'cta' | 'dismissed' | 'longPress' | 'openUrl' | 'unknown',
     ctaId?: string
   ) => {
-    const payload = { event: eventType, data: ctaId ? { ctaId } : {} };
+    const payload = {
+      messageId,
+      filterId,
+      event: eventType,
+      data: ctaId ? { ctaId } : {},
+    };
+
     console.log('📤 Sending track event:', payload);
+
     try {
       const res = await fetch(
         'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
@@ -20,6 +28,7 @@ export default function BannerPoll({ html }: any) {
           body: JSON.stringify(payload),
         }
       );
+
       const data = await res.json();
       console.log('✅ Track API response:', data);
     } catch (error) {
@@ -29,51 +38,62 @@ export default function BannerPoll({ html }: any) {
 
   // Injected JavaScript for webview
   const injectedJS = `
-    (function() {
-      const style = document.createElement('style');
-      style.innerHTML = \`
-        html, body {
-          margin: 0; padding: 0;
-          overflow: hidden;
-          width: 100%; height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+  (function() {
+    // Prevent zooming
+    let meta = document.createElement('meta');
+    meta.setAttribute('name', 'viewport');
+    meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+    document.head.appendChild(meta);
+
+    const style = document.createElement('style');
+    style.innerHTML = \`
+      html, body {
+        margin: 0; padding: 0;
+        overflow: hidden;
+        width: 100%; height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        touch-action: manipulation;
+      }
+      button, a { cursor: pointer; touch-action: manipulation; }
+    \`;
+    document.head.appendChild(style);
+
+    // Disable double-tap zoom and pinch
+    document.addEventListener('gesturestart', e => e.preventDefault());
+    document.addEventListener('dblclick', e => e.preventDefault());
+
+    document.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', function() {
+        let value = this.value || this.innerText || '';
+        const onclickAttr = this.getAttribute('onclick');
+        if (onclickAttr) {
+          const match = onclickAttr.match(/'([^']+)'\\s*\\)$/);
+          if (match && match[1]) value = match[1];
         }
-        button, a { cursor: pointer; }
-      \`;
-      document.head.appendChild(style);
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'cta', value }));
+      });
+    });
 
-      document.querySelectorAll('button').forEach(btn => {
-        btn.addEventListener('click', function() {
-          let value = this.value || this.innerText || '';
-          const onclickAttr = this.getAttribute('onclick');
-          if (onclickAttr) {
-            const match = onclickAttr.match(/'([^']+)'\\s*\\)$/);
-            if (match && match[1]) value = match[1];
-          }
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'cta', value }));
+    document.querySelectorAll('a[href]').forEach(link => {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const href = this.getAttribute('href');
+        if (href) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'link', url: href }));
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn')
+      .forEach(el => {
+        el.addEventListener('click', function() {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'dismissed' }));
         });
       });
-
-      document.querySelectorAll('a[href]').forEach(link => {
-        link.addEventListener('click', function(e) {
-          e.preventDefault();
-          const href = this.getAttribute('href');
-          if (href) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'link', url: href }));
-          }
-        });
-      });
-
-      document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn')
-        .forEach(el => {
-          el.addEventListener('click', function() {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'dismissed' }));
-          });
-        });
-    })();
-  `;
+  })();
+`;
 
   return (
     <View style={styles.container}>
@@ -83,7 +103,10 @@ export default function BannerPoll({ html }: any) {
         originWhitelist={['*']}
         javaScriptEnabled
         domStorageEnabled
-        scrollEnabled
+        scrollEnabled={false}
+        bounces={false}
+        overScrollMode="never"
+        scalesPageToFit={false}
         injectedJavaScript={injectedJS}
         onMessage={async (event) => {
           try {
@@ -105,10 +128,12 @@ export default function BannerPoll({ html }: any) {
             } else if (msg.type === 'link') {
               console.log('🌐 Opening link:', msg.url);
               await Linking.openURL(msg.url);
-              sendTrackEvent('cta', msg.url);
+              sendTrackEvent('openUrl', msg.url);
             } else if (msg.type === 'dismissed') {
               console.log('🚪 Banner dismissed');
               sendTrackEvent('dismissed');
+            } else {
+              sendTrackEvent('unknown');
             }
           } catch (err) {
             console.warn(

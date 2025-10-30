@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,10 +10,23 @@ import {
 import { WebView } from 'react-native-webview';
 import { hidePollOverlay } from './PollOverlay';
 
-export default function RoadblockPoll({ html, onClose }: any) {
+export default function RoadblockPoll({
+  html,
+  onClose,
+  messageId,
+  filterId,
+}: {
+  html: string;
+  onClose?: () => void;
+  messageId?: string;
+  filterId?: string;
+}) {
   const webViewRef = useRef<WebView>(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [overlayText, setOverlayText] = useState('');
+
+  console.log('📨 messageId:', messageId);
+  console.log('📨 filterId:', filterId);
 
   const showOverlay = (text: string) => {
     setOverlayText(text);
@@ -25,12 +38,20 @@ export default function RoadblockPoll({ html, onClose }: any) {
     setOverlayText('');
   };
 
+  // 🔹 Send tracking event to backend
   const sendTrackEvent = async (
-    eventType: 'cta' | 'dismissed',
+    eventType: 'cta' | 'dismissed' | 'longPress' | 'openUrl' | 'unknown',
     ctaId?: string
   ) => {
-    const payload = { event: eventType, data: ctaId ? { ctaId } : {} };
+    const payload = {
+      messageId,
+      filterId,
+      event: eventType,
+      data: ctaId ? { ctaId } : {},
+    };
+
     console.log('📤 Sending track event:', payload);
+
     try {
       const res = await fetch(
         'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
@@ -40,6 +61,7 @@ export default function RoadblockPoll({ html, onClose }: any) {
           body: JSON.stringify(payload),
         }
       );
+
       const data = await res.json();
       console.log('✅ Track API response:', data);
     } catch (error) {
@@ -47,32 +69,33 @@ export default function RoadblockPoll({ html, onClose }: any) {
     }
   };
 
+  // 🔹 Handle messages from WebView
   const onMessage = (event: any) => {
+    const raw = event.nativeEvent.data;
     try {
-      const message = JSON.parse(event.nativeEvent.data);
+      const message = JSON.parse(raw);
       console.log('📩 Message from WebView:', message);
 
       switch (message.type) {
         case 'buttonClick':
-          console.log('🖱️ Button clicked:', message.value);
           sendTrackEvent('cta', message.value);
-          onClose ? onClose() : hidePollOverlay();
+          onClose?.() ?? hidePollOverlay();
           break;
 
         case 'closePoll':
-          console.log('🚪 Poll closed');
           sendTrackEvent('dismissed');
-          onClose ? onClose() : hidePollOverlay();
+          onClose?.() ?? hidePollOverlay();
           break;
 
         case 'longPress':
+          sendTrackEvent('longPress', message.value);
           showOverlay(message.value);
           setTimeout(hideOverlay, 1500);
           break;
 
         case 'openUrl':
+          sendTrackEvent('openUrl', message.url);
           if (message.url) {
-            console.log('🌐 Opening URL externally:', message.url);
             Linking.openURL(message.url).catch((err) =>
               console.error('❌ Failed to open URL:', err)
             );
@@ -81,67 +104,63 @@ export default function RoadblockPoll({ html, onClose }: any) {
 
         default:
           console.warn('⚠️ Unknown WebView message type:', message);
+          sendTrackEvent('unknown', JSON.stringify(message));
       }
     } catch (err) {
-      console.warn('⚠️ Invalid message from WebView', event.nativeEvent.data);
+      console.warn('⚠️ Invalid message from WebView:', raw);
+      sendTrackEvent('unknown', 'invalid_json');
     }
   };
+
+  // 🔹 Inject JS to handle button events inside HTML
   const injectedJS = `
-  (function() {
-    document.body.style.touchAction = 'manipulation';
-    document.body.style.userSelect = 'none';
-  
-    document.querySelectorAll('button').forEach(btn => {
-      let pressTimer;
-  
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        e.preventDefault();
-  
-        let value = this.value || this.innerText || '';
-        let targetUrl = '';
-  
-        const onclickAttr = this.getAttribute('onclick');
-        const hrefAttr = this.getAttribute('data-href') || this.getAttribute('href');
-  
-        if (onclickAttr) {
-          const match = onclickAttr.match(/'(https?:[^']+)'/);
-          if (match && match[1]) targetUrl = match[1];
-          const valMatch = onclickAttr.match(/'([^']+)'\\s*\\)$/);
-          if (valMatch && valMatch[1]) value = valMatch[1];
-        } else if (hrefAttr) {
-          targetUrl = hrefAttr;
-        }
-  
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'buttonClick', value }));
-  
-        if (targetUrl) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'openUrl', url: targetUrl }));
-        }
+    (function() {
+      document.body.style.touchAction = 'manipulation';
+      document.body.style.userSelect = 'none';
+
+      const send = (data) => {
+        window.ReactNativeWebView.postMessage(JSON.stringify(data));
+      };
+
+      document.querySelectorAll('button').forEach(btn => {
+        let pressTimer;
+
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          let value = this.value || this.innerText || '';
+          let targetUrl = '';
+
+          const onclickAttr = this.getAttribute('onclick');
+          const hrefAttr = this.getAttribute('data-href') || this.getAttribute('href');
+
+          if (onclickAttr) {
+            const urlMatch = onclickAttr.match(/'(https?:[^']+)'/);
+            if (urlMatch) targetUrl = urlMatch[1];
+          } else if (hrefAttr) {
+            targetUrl = hrefAttr;
+          }
+
+          send({ type: 'buttonClick', value });
+          if (targetUrl) send({ type: 'openUrl', url: targetUrl });
+        });
+
+        btn.addEventListener('touchstart', function() {
+          let value = this.innerText || this.value || 'Button';
+          pressTimer = setTimeout(() => {
+            send({ type: 'longPress', value });
+          }, 600);
+        });
+
+        ['touchend', 'touchmove', 'touchcancel'].forEach(ev => {
+          btn.addEventListener(ev, () => clearTimeout(pressTimer));
+        });
       });
-  
-      btn.addEventListener('touchstart', function() {
-        let value = this.innerText || this.value || 'Button';
-        pressTimer = setTimeout(() => {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'longPress', value }));
-        }, 600);
-      });
-  
-      btn.addEventListener('touchend', function() {
-        clearTimeout(pressTimer);
-      });
-  
-      btn.addEventListener('touchmove', function() {
-        clearTimeout(pressTimer);
-      });
-    });
-  
-    document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn').forEach(el => {
-      el.addEventListener('click', function() {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'closePoll' }));
-      });
-    });
-  })();
+
+      document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn')
+        .forEach(el => el.addEventListener('click', () => send({ type: 'closePoll' })));
+    })();
   `;
 
   return (
@@ -163,7 +182,7 @@ export default function RoadblockPoll({ html, onClose }: any) {
         userAgent="Mozilla/5.0 (ReactNativeWebView)"
       />
 
-      {/* Fullscreen overlay */}
+      {/* Long press overlay */}
       <Modal transparent visible={overlayVisible} animationType="fade">
         <Pressable style={styles.overlay} onPress={hideOverlay}>
           <Text style={styles.overlayText}>{overlayText}</Text>

@@ -7,11 +7,14 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
     @IBOutlet weak var imageView: UIImageView!
     @IBOutlet weak var textLabel: UILabel!
 
+    // Landscape ratio (16:9)
+    private let landscapeAspectRatio: CGFloat = 16.0 / 9.0
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
         // Configure image view
-        imageView.contentMode = .scaleAspectFill
+        imageView.contentMode = .scaleAspectFit   // ✅ Keeps entire image visible
         imageView.clipsToBounds = true
         imageView.backgroundColor = .black
 
@@ -24,13 +27,17 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // Ensure full-screen layout on expand
-        preferredContentSize = CGSize(width: self.view.bounds.width, height: self.view.bounds.height)
+
+        // ✅ Set preferred height based on landscape ratio (width * 9/16)
+        let imageHeight = view.bounds.width * landscapeAspectRatio
+        let textHeight = textLabel.intrinsicContentSize.height + 16
+        let totalHeight = imageHeight + textHeight
+
+        preferredContentSize = CGSize(width: view.bounds.width, height: totalHeight)
     }
 
     func didReceive(_ notification: UNNotification) {
         print("✅ didReceive called in Content Extension")
-        self.extensionContext?.mediaPlayPauseButtonType = .default
 
         textLabel.text = notification.request.content.body
 
@@ -43,7 +50,7 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
                let image = UIImage(data: data) {
                 DispatchQueue.main.async {
                     self.imageView.image = image
-                    print("✅ Image displayed")
+                    print("✅ Landscape image displayed successfully")
                 }
             } else {
                 print("⚠️ Failed to load image data")

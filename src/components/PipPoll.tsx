@@ -7,6 +7,7 @@ import {
   StyleSheet,
   PanResponder,
   Animated,
+  Image,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
@@ -90,7 +91,13 @@ export default function PipPoll({ html, fullscreen, alignment }: PipPollProps) {
   // Fullscreen / Maximized Mode
   if (maximized || fullscreen) {
     return (
-      <View style={{ width, height }}>
+      <View
+        style={{
+          width,
+          height,
+          zIndex: 400,
+        }}
+      >
         <WebView
           source={{ html: htmlContent }}
           style={styles.web}
@@ -104,7 +111,7 @@ export default function PipPoll({ html, fullscreen, alignment }: PipPollProps) {
           style={styles.maxBtn}
           onPress={() => setMaximized(false)}
         >
-          <Text style={styles.maxBtnText}>Close</Text>
+          <Text style={styles.maxBtnText}>X</Text>
         </TouchableOpacity>
       </View>
     );
@@ -130,7 +137,11 @@ export default function PipPoll({ html, fullscreen, alignment }: PipPollProps) {
         style={styles.maxBtnSmall}
         onPress={() => setMaximized(true)}
       >
-        <Text style={styles.maxBtnText}>⬆️</Text>
+        <Image
+          source={require('../../assets/fullscreen.png')} // 👈 your image file path
+          style={styles.maxBtnImage}
+          resizeMode="contain"
+        />
       </TouchableOpacity>
     </Animated.View>
   );
@@ -163,4 +174,8 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   maxBtnText: { color: 'white', fontWeight: 'bold' },
+  maxBtnImage: {
+    width: 20,
+    height: 20,
+  },
 });
