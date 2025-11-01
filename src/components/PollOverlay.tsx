@@ -32,7 +32,7 @@ export const PollOverlayProvider: React.FC = () => {
     const pollType = (element as any)?.props?.pollType;
     console.log('Displaying poll type:', pollType);
 
-    if (pollType === 'roadblock') {
+    if (pollType && pollType.includes('roadblock')) {
       const cloned = React.cloneElement(element as React.ReactElement<any>, {
         onClose: hideOverlayFn,
       });

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -14,8 +14,7 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 interface FloaterProps {
   html?: string;
   videoUrl?: string;
-  initialTop?: number;
-  initialLeft?: number;
+  position?: 'top' | 'center' | 'bottom';
   width?: number;
   height?: number;
 }
@@ -23,38 +22,61 @@ interface FloaterProps {
 export default function Floater({
   html,
   videoUrl,
-  initialTop = 50,
-  initialLeft = 20,
-  width = screenWidth * 0.9,
-  height = 200,
+  position = 'bottom',
+  width = 130,
+  height = 130,
 }: FloaterProps) {
+  // ✅ Compute initial position based on alignment
+  const initialTop =
+    position === 'top'
+      ? 50
+      : position === 'center'
+        ? (screenHeight - height) / 2
+        : screenHeight - height - 80;
+
+  const initialLeft = (screenWidth - width) / 2;
+
   const pan = useRef(
     new Animated.ValueXY({ x: initialLeft, y: initialTop })
   ).current;
-  const offset = useRef({ x: initialLeft, y: initialTop }).current;
+  const positionRef = useRef({ x: initialLeft, y: initialTop }); // ✅ persistent tracker
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, gestureState) => {
-        pan.setValue({
-          x: offset.x + gestureState.dx,
-          y: offset.y + gestureState.dy,
-        });
+      onPanResponderMove: (_, gesture) => {
+        const newX = positionRef.current.x + gesture.dx;
+        const newY = positionRef.current.y + gesture.dy;
+
+        pan.setValue({ x: newX, y: newY });
       },
-      onPanResponderRelease: (_, gestureState) => {
-        offset.x += gestureState.dx;
-        offset.y += gestureState.dy;
+      onPanResponderRelease: (_, gesture) => {
+        let newX = positionRef.current.x + gesture.dx;
+        let newY = positionRef.current.y + gesture.dy;
 
-        if (offset.x < 0) offset.x = 0;
-        if (offset.y < 0) offset.y = 0;
-        if (offset.x + width > screenWidth) offset.x = screenWidth - width;
-        if (offset.y + height > screenHeight) offset.y = screenHeight - height;
+        // ✅ Clamp to screen bounds
+        if (newX < 0) newX = 0;
+        if (newY < 0) newY = 0;
+        if (newX + width > screenWidth) newX = screenWidth - width;
+        if (newY + height > screenHeight) newY = screenHeight - height;
 
-        pan.setValue({ x: offset.x, y: offset.y });
+        positionRef.current = { x: newX, y: newY };
+
+        Animated.spring(pan, {
+          toValue: { x: newX, y: newY },
+          useNativeDriver: false,
+        }).start();
       },
     })
   ).current;
+
+  // 🧹 Reset on unmount
+  useEffect(() => {
+    return () => {
+      pan.setValue({ x: initialLeft, y: initialTop });
+      positionRef.current = { x: initialLeft, y: initialTop };
+    };
+  }, [pan, initialLeft, initialTop]);
 
   return (
     <View style={styles.overlay}>
@@ -90,8 +112,6 @@ export default function Floater({
             mediaPlaybackRequiresUserAction={false}
             allowsFullscreenVideo
             scrollEnabled={false}
-            showsVerticalScrollIndicator={false}
-            showsHorizontalScrollIndicator={false}
           />
         )}
       </Animated.View>
@@ -107,19 +127,17 @@ const styles = StyleSheet.create({
     width: screenWidth,
     height: screenHeight,
     zIndex: 9998,
-    // backgroundColor: 'transparent',
-    backgroundColor: 'white',
+    backgroundColor: 'transparent',
   },
   container: {
     position: 'absolute',
-    // backgroundColor: 'white',
-    // borderRadius: 8,
+    backgroundColor: 'white',
+    borderRadius: 8,
     overflow: 'hidden',
+    elevation: 5,
   },
   webview: {
     flex: 1,
-    width: '100%',
-    height: '100%',
   },
   video: {
     width: '100%',

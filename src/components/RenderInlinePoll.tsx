@@ -283,7 +283,7 @@ export function InlinePollContainer({
 
 const styles = StyleSheet.create({
   container: {
-    height: 200,
+    height: 220,
   },
   webview: {
     flex: 1,
