@@ -31,7 +31,9 @@ class CustomNotificationService(private val context: Context) {
         bg_color_gradient: String,
         bg_color_gradient_dir: String,
         align: String,
-        notificationId: Int
+        notificationId: Int,
+        bitmap: Bitmap? = null,  // ✅ add this if you meant to use it
+
     ): NotificationCompat.Builder {
         val customView = RemoteViews(context.packageName, R.layout.custom_notification_layout)
 

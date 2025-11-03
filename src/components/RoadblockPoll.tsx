@@ -1,12 +1,5 @@
 import { useRef, useState } from 'react';
-import {
-  View,
-  StyleSheet,
-  Modal,
-  Text,
-  Pressable,
-  Linking,
-} from 'react-native';
+import { View, StyleSheet, Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { hidePollOverlay } from './PollOverlay';
 
@@ -34,6 +27,7 @@ export default function RoadblockPoll({
 
   console.log('📨 messageId:', messageId);
   console.log('📨 filterId:', filterId);
+  // console.log('📨 rb html:', html);
 
   const showOverlay = (text: string) => {
     setOverlayText(text);
@@ -44,6 +38,8 @@ export default function RoadblockPoll({
     setOverlayVisible(false);
     setOverlayText('');
   };
+  console.log('overlay visible:', overlayVisible);
+  console.log('overlay visible:', overlayText);
 
   // 🔹 Send tracking event to backend
   const sendTrackEvent = async (
@@ -190,11 +186,11 @@ export default function RoadblockPoll({
       />
 
       {/* Long press overlay */}
-      <Modal transparent visible={overlayVisible} animationType="fade">
+      {/* <Modal transparent visible={overlayVisible} animationType="fade">
         <Pressable style={styles.overlay} onPress={hideOverlay}>
           <Text style={styles.overlayText}>{overlayText}</Text>
         </Pressable>
-      </Modal>
+      </Modal> */}
     </View>
   );
 }
@@ -202,8 +198,8 @@ export default function RoadblockPoll({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    // backgroundColor: '#fff',
+    // borderRadius: 12,
     overflow: 'hidden',
   },
   webview: {

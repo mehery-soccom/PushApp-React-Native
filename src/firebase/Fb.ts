@@ -1,9 +1,12 @@
 import messaging from '@react-native-firebase/messaging';
 import app from '@react-native-firebase/app';
-import { PermissionsAndroid, Platform } from 'react-native';
+import { PermissionsAndroid } from 'react-native';
 import PushNotification from 'react-native-push-notification';
 import { getDeviceId } from '../utils/device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import { NativeModules, Platform } from 'react-native';
+const { LiveActivityModule } = NativeModules;
 
 let deviceRegistrationInProgress = false;
 let lastApiCallTime: number | null = null;
@@ -190,6 +193,36 @@ export function configurePushNotifications(): void {
 /**
  * Setup foreground listener
  */
+// export function setupForegroundNotificationListener(): () => void {
+//   const unsubscribe = messaging().onMessage((remoteMessage) => {
+//     console.log('📨 Foreground FCM message:', JSON.stringify(remoteMessage));
+
+//     const title =
+//       remoteMessage.notification?.title ||
+//       remoteMessage.data?.title ||
+//       'Notification';
+
+//     const message =
+//       remoteMessage.notification?.body ||
+//       remoteMessage.data?.body ||
+//       'You have a new message';
+
+//     console.log('📲 Displaying local notification:', title, message);
+
+//     PushNotification.localNotification({
+//       channelId: 'default-channel-id',
+//       title,
+//       message,
+//       playSound: true,
+//       soundName: 'default',
+//       importance: 'high',
+//       vibrate: true,
+//     });
+//   });
+
+//   return unsubscribe;
+// }
+
 export function setupForegroundNotificationListener(): () => void {
   const unsubscribe = messaging().onMessage((remoteMessage) => {
     console.log('📨 Foreground FCM message:', JSON.stringify(remoteMessage));
@@ -204,9 +237,15 @@ export function setupForegroundNotificationListener(): () => void {
       remoteMessage.data?.body ||
       'You have a new message';
 
-    console.log('📲 Displaying local notification:', title, message);
+    const image =
+      remoteMessage.notification?.android?.imageUrl ||
+      remoteMessage.notification?.image ||
+      remoteMessage.data?.image ||
+      null;
 
-    PushNotification.localNotification({
+    console.log('📲 Displaying local notification:', title, message, image);
+
+    const localNotif: any = {
       channelId: 'default-channel-id',
       title,
       message,
@@ -214,7 +253,24 @@ export function setupForegroundNotificationListener(): () => void {
       soundName: 'default',
       importance: 'high',
       vibrate: true,
-    });
+    };
+
+    // 👇 If an image exists, show it using bigPicture
+    if (image) {
+      localNotif.bigPicture = image; // <--- this line shows the image
+      localNotif.largeIcon = image; // optional, small thumb
+      localNotif.bigLargeIcon = image; // optional
+      localNotif.largeIconUrl = image;
+    }
+
+    PushNotification.localNotification(localNotif);
+
+    if (Platform.OS === 'android' && LiveActivityModule?.triggerLiveActivity) {
+      console.log('🚀 Triggering native live activity...');
+      LiveActivityModule.triggerLiveActivity(remoteMessage.data);
+    } else {
+      PushNotification.localNotification(localNotif); // fallback
+    }
   });
 
   return unsubscribe;

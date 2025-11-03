@@ -31,7 +31,7 @@ import {
   configurePushNotifications,
   setupForegroundNotificationListener,
 } from './firebase/Fb';
-import { triggerLiveActivity } from './native/LiveActivity';
+// import { triggerLiveActivity } from './native/LiveActivity';
 import { connectToServer } from './socket/WebSock';
 import { getDeviceId as fetchDeviceId } from './utils/device';
 // import { registerDeviceWithFCM } from './utils/registerDevice';
@@ -165,23 +165,23 @@ export const initSdk = async (
       configurePushNotifications();
       setupForegroundNotificationListener();
 
-      triggerLiveActivity({
-        message1: 'Welcome!',
-        message2: 'Live activity running',
-        message3: 'Tap to continue',
-        progressPercent: '0.85',
-        message1FontColorHex: '#000000',
-        message2FontColorHex: '#CCCCCC',
-        message3FontColorHex: '#888888',
-        progressColorHex: '#00FF00',
-        backgroundColorHex: '#FFFFFF',
-        imageUrl: 'https://example.com/sample.png',
-        bg_color_gradient: '',
-        bg_color_gradient_dir: '',
-        align: 'center',
-        activity_id: 'demo_activity_001',
-        theme: sandbox ? 'light' : 'dark',
-      });
+      // triggerLiveActivity({
+      //   message1: 'Welcome!',
+      //   message2: 'Live activity running',
+      //   message3: 'Tap to continue',
+      //   progressPercent: '0.85',
+      //   message1FontColorHex: '#000000',
+      //   message2FontColorHex: '#CCCCCC',
+      //   message3FontColorHex: '#888888',
+      //   progressColorHex: '#00FF00',
+      //   backgroundColorHex: '#FFFFFF',
+      //   imageUrl: 'https://example.com/sample.png',
+      //   bg_color_gradient: '',
+      //   bg_color_gradient_dir: '',
+      //   align: 'center',
+      //   activity_id: 'demo_activity_001',
+      //   theme: sandbox ? 'light' : 'dark',
+      // });
 
       await getFcmToken();
     }
