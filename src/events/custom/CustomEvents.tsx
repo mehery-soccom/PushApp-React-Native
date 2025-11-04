@@ -337,11 +337,6 @@ function showNextPoll(): void {
   showingPoll = true;
   const nextPoll = pollQueue.shift();
 
-  if (!nextPoll?.htmlContent) {
-    setTimeout(showNextPoll, 3000);
-    return;
-  }
-
   const { htmlContent, code, filterId, messageId, style } = nextPoll;
   if (code.includes('roadblock')) {
     showPollOverlay(

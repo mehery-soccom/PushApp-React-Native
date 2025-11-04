@@ -106,12 +106,13 @@ export default function RoadblockPoll({
           break;
 
         default:
-          console.warn('⚠️ Unknown WebView message type:', message);
-          sendTrackEvent('unknown', JSON.stringify(message));
+          console.log('default case');
+        // console.warn('⚠️ Unknown WebView message type:', message);
+        // sendTrackEvent('unknown', JSON.stringify(message));
       }
     } catch (err) {
-      console.warn('⚠️ Invalid message from WebView:', raw);
-      sendTrackEvent('unknown', 'invalid_json');
+      // console.warn('⚠️ Invalid message from WebView:', raw);
+      // sendTrackEvent('unknown', 'invalid_json');
     }
   };
 

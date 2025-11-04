@@ -63,31 +63,33 @@ export const PollOverlayProvider: React.FC = () => {
       setIsFloater(true);
       setModalVisible(true);
     } else if (pollType.includes('bottomsheet')) {
-      const cloned = React.cloneElement(element as React.ReactElement<any>, {
-        visible: true,
-        onClose: () => setBottomSheetContents([]),
-      });
-      setBottomSheetContents([cloned]);
+      setBottomSheetContents([element]);
     } else {
       console.warn('Unknown poll type', pollType);
     }
   };
   hideOverlayFn = () => {
-    const wasRoadblock = (modalContent as any)?.props?.pollType === 'roadblock';
+    // const wasRoadblock = (modalContent as any)?.props?.pollType === 'roadblock';
 
     // Step 1: Close the current modal
     setModalVisible(false);
 
     // Step 2: Wait for modal to finish closing animation
-    setTimeout(() => {
-      setModalContent(null);
-      setIsFloater(false);
+    setModalContent(null);
+    setIsFloater(false);
+    // slightly less delay, smooth transition
+  };
 
-      // Step 3: If it was a roadblock, show next poll from queue
-      if (wasRoadblock) {
-        triggerNextPoll();
-      }
-    }, 1000); // slightly less delay, smooth transition
+  const handleRoadblock = () => {
+    // Close current modal first
+    setModalVisible(false);
+    setModalContent(null);
+    setIsFloater(false);
+
+    // Slight delay to allow animation to finish
+    setTimeout(() => {
+      triggerNextPoll(); // now show next poll, if any
+    }, 500);
   };
 
   useEffect(() => {
@@ -103,7 +105,10 @@ export const PollOverlayProvider: React.FC = () => {
           <View style={styles.modalContainer}>
             {/* ❌ Only show close button if NOT floater */}
             {!isFloater && (
-              <TouchableOpacity style={styles.closeBtn} onPress={hideOverlayFn}>
+              <TouchableOpacity
+                style={styles.closeBtn}
+                onPress={handleRoadblock}
+              >
                 <Text style={styles.closeText}>✕</Text>
               </TouchableOpacity>
             )}
@@ -137,11 +142,9 @@ export const PollOverlayProvider: React.FC = () => {
       })}
 
       {/* BottomSheet */}
-      {bottomSheetContents.map((content, index) => (
-        <View
-          key={index}
-          style={[styles.bottomSheetContainer, { zIndex: 15 + index }]}
-        >
+      {/* BottomSheet */}
+      {bottomSheetContents.map((content, i) => (
+        <View key={i} style={[styles.bottomSheetContainer, { zIndex: 15 + i }]}>
           {content}
         </View>
       ))}
@@ -155,15 +158,12 @@ export const showPollOverlay = (element: React.ReactNode) => {
   else overlayQueue.push(element);
 };
 
-export const hidePollOverlay = () => {
-  if (hideOverlayFn) hideOverlayFn();
-};
-
 const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: '#000000aa',
     justifyContent: 'center',
+    paddingVertical: 45,
   },
   bannerContainer: {
     position: 'absolute',
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     position: 'absolute',
-    top: 50,
+    top: 80,
     right: 30,
     zIndex: 20000,
     backgroundColor: '#fff',
