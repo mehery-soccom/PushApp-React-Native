@@ -158,6 +158,10 @@ export const showPollOverlay = (element: React.ReactNode) => {
   else overlayQueue.push(element);
 };
 
+export const hidePollOverlay = () => {
+  if (hideOverlayFn) hideOverlayFn();
+};
+
 const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,

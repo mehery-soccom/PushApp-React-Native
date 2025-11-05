@@ -390,7 +390,16 @@ export function OnPageClose() {
 }
 
 export function OnAppOpen() {
-  sendCustomEvent('app_open', {});
+  console.log('⏳ Waiting 3 seconds before triggering app_open...');
+
+  setTimeout(() => {
+    try {
+      console.log('🚀 Triggering app_open event');
+      sendCustomEvent('app_open', {});
+    } catch (error) {
+      console.error('❌ Error during OnAppOpen:', error);
+    }
+  }, 1000); // 1000ms = 1 seconds delay
 }
 
 export function OnAppClose() {

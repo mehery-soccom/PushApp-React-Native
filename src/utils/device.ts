@@ -16,7 +16,7 @@ export async function getDeviceId(): Promise<string> {
     }
 
     // 2️⃣ If not found, generate a new one
-    const newId = `-mehery-${uuid.v4()}`;
+    const newId = `-mehery-${uuid.v4()}__${Date.now()}`;
     console.log('🎉 New Device ID generated:', newId);
 
     // 3️⃣ Save it persistently

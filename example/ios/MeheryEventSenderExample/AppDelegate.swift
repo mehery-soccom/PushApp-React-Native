@@ -102,13 +102,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     print("❌ Failed to register for remote notifications: \(error)")
   }
 
-  // MARK: - Firebase FCM token
-  func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-    let token = fcmToken ?? ""
-    print("🔥 FCM token: \(token)")
+  // // MARK: - Firebase FCM token
+  // func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+  //   let token = fcmToken ?? ""
+  //   print("🔥 FCM token: \(token)")
 
-    PushTokenManager.sendTokenEvent("fcm", token: token)
-  }
+  //   PushTokenManager.sendTokenEvent("fcm", token: token)
+  // }
 
   // MARK: - Live Activity
   @available(iOS 16.1, *)

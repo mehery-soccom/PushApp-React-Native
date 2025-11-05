@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import {
   Animated,
   Dimensions,
@@ -42,6 +42,37 @@ export default function BottomSheetPoll({
     }).start(onClose);
   };
 
+  // ✅ Updated sendTrackEvent using your version
+  const sendTrackEvent = async (
+    eventType: 'cta' | 'dismissed' | 'longPress' | 'openUrl' | 'unknown',
+    ctaId?: string
+  ) => {
+    const payload = {
+      messageId,
+      filterId,
+      event: eventType,
+      data: ctaId ? { ctaId } : {},
+    };
+
+    console.log('📤 Sending track event:', payload);
+
+    try {
+      const res = await fetch(
+        'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await res.json();
+      console.log('✅ Track API response:', data);
+    } catch (error) {
+      console.error('❌ Track API error:', error);
+    }
+  };
+
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 15,
@@ -59,69 +90,52 @@ export default function BottomSheetPoll({
     })
   ).current;
 
-  const sendTrackEvent = async (eventType: string, data?: any) => {
-    console.log('📤 Tracking:', { messageId, filterId, eventType, data });
-    try {
-      await fetch(
-        'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messageId, filterId, event: eventType, data }),
-        }
-      );
-    } catch (err) {
-      console.error('❌ Track error', err);
-    }
-  };
-
   const injectedJS = `
-  (function() {
-    const send = (data) => window.ReactNativeWebView.postMessage(JSON.stringify(data));
+    (function() {
+      const send = (data) => window.ReactNativeWebView.postMessage(JSON.stringify(data));
 
-    document.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.preventDefault();
-
-        let url = btn.getAttribute('data-href') || btn.getAttribute('href') || '';
-        send({ type:'buttonClick', value: btn.innerText||btn.value||'', url });
+      document.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.preventDefault();
+          let url = btn.getAttribute('data-href') || btn.getAttribute('href') || '';
+          send({ type: 'buttonClick', value: btn.innerText || btn.value || '', url });
+        });
       });
-    });
 
-    document.querySelectorAll('[data-close], .poll-close').forEach(el => 
-      el.addEventListener('click', ()=>send({ type:'closePoll' }))
-    );
-  })();
-`;
+      document.querySelectorAll('[data-close], .poll-close').forEach(el =>
+        el.addEventListener('click', () => send({ type: 'closePoll' }))
+      );
+    })();
+  `;
+
   const onMessage = async (event: any) => {
     try {
       const msg = JSON.parse(event.nativeEvent.data);
       switch (msg.type) {
         case 'buttonClick':
-          sendTrackEvent('cta', msg.value);
-
+          await sendTrackEvent('cta', msg.value);
           if (msg.url) {
             try {
+              await sendTrackEvent('openUrl', msg.url);
               await Linking.openURL(msg.url);
             } catch (err) {
               console.error('❌ Failed to open URL:', err);
             }
           }
-
           handleClose();
           break;
 
         case 'closePoll':
-          sendTrackEvent('dismissed');
+          await sendTrackEvent('dismissed');
           handleClose();
           break;
 
         default:
-          sendTrackEvent('unknown', msg);
+          await sendTrackEvent('unknown', JSON.stringify(msg));
           break;
       }
-    } catch {
-      sendTrackEvent('unknown', 'invalid_json');
+    } catch (error) {
+      await sendTrackEvent('unknown', 'invalid_json');
     }
   };
 
