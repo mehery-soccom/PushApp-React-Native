@@ -2,23 +2,32 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSExtension</key>
-	<dict>
-		<key>NSExtensionPointIdentifier</key>
-		<string>com.apple.usernotifications.service</string>
-		<key>NSExtensionPrincipalClass</key>
-		<string>$(PRODUCT_MODULE_NAME).NotificationService</string>
-	</dict>
 
-	<!-- ✅ Fix for iOS 17/18 network restrictions -->
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.usernotifications.service</string>
 
-	<!-- Keep your existing React Native new arch flag -->
-	<key>RCTNewArchEnabled</key>
-	<true/>
+        <key>NSExtensionPrincipalClass</key>
+        <string>$(PRODUCT_MODULE_NAME).NotificationService</string>
+
+        <key>NSExtensionAttributes</key>
+        <dict>
+            <key>UNNotificationExtensionCategory</key>
+            <array>
+                <string>carousel</string>
+            </array>
+        </dict>
+    </dict>
+
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
+
+    <key>RCTNewArchEnabled</key>
+    <true/>
+
 </dict>
 </plist>

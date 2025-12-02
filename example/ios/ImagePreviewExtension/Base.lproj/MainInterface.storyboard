@@ -1,63 +1,73 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="22522" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="M4Y-Lb-cyx">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23727" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="M4Y-Lb-cyx">
     <device id="retina6_1" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="22513"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23721"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="System colors in document resources" minToolsVersion="11.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
-        <!-- Notification View Controller -->
+        <!--Notification View Controller-->
         <scene sceneID="cwh-vc-ff4">
             <objects>
                 <viewController id="M4Y-Lb-cyx" userLabel="Notification View Controller" customClass="NotificationViewController" customModule="ImagePreviewExtension" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" simulatedAppContext="notificationCenter" id="S3S-Oj-5AN">
-                        <rect key="frame" x="0" y="0" width="393" height="852"/>
+                        <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-
-                            <!-- Fullscreen Image -->
-                            <imageView userInteractionEnabled="NO" clipsSubviews="YES" contentMode="scaleAspectFill" translatesAutoresizingMaskIntoConstraints="NO" id="ImageView">
-                                <rect key="frame" x="0" y="0" width="393" height="852"/>
-                            </imageView>
-
-                            <!-- Text Overlay (Bottom Centered) -->
-                            <label opaque="NO" userInteractionEnabled="NO" text="Sample Text" textAlignment="center" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="TextLabel">
-                                <rect key="frame" x="0" y="760" width="393" height="92"/>
-                                <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="scaleToFill" text="Sample Text" textAlignment="center" lineBreakMode="tailTruncation" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="TextLabel">
+                                <rect key="frame" x="0.0" y="796" width="414" height="100"/>
+                                <color key="backgroundColor" white="0.0" alpha="0.45000000000000001" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <fontDescription key="fontDescription" type="boldSystem" pointSize="20"/>
-                                <color key="backgroundColor" white="0" alpha="0.45" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                             </label>
-
+                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="MFM-dX-qH0" customClass="CarouselView" customModule="YCarousel">
+                                <rect key="frame" x="0.0" y="0.0" width="414" height="788"/>
+                                <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                            </view>
                         </subviews>
-
-                        <!-- Auto Layout -->
-                        <constraints>
-                            <!-- Image fills entire view -->
-                            <constraint firstItem="ImageView" firstAttribute="top" secondItem="S3S-Oj-5AN" secondAttribute="top" id="topImage"/>
-                            <constraint firstItem="ImageView" firstAttribute="leading" secondItem="S3S-Oj-5AN" secondAttribute="leading" id="leadingImage"/>
-                            <constraint firstAttribute="trailing" secondItem="ImageView" secondAttribute="trailing" id="trailingImage"/>
-                            <constraint firstAttribute="bottom" secondItem="ImageView" secondAttribute="bottom" id="bottomImage"/>
-
-                            <!-- Text label pinned to bottom -->
-                            <constraint firstAttribute="bottom" secondItem="TextLabel" secondAttribute="bottom" id="bottomLabel"/>
-                            <constraint firstItem="TextLabel" firstAttribute="leading" secondItem="S3S-Oj-5AN" secondAttribute="leading" id="leadingLabel"/>
-                            <constraint firstAttribute="trailing" secondItem="TextLabel" secondAttribute="trailing" id="trailingLabel"/>
-                            <constraint firstItem="TextLabel" firstAttribute="height" constant="100" id="labelHeight"/>
-                        </constraints>
-
                         <viewLayoutGuide key="safeArea" id="2BE-c3-nQJ"/>
-                        <color key="backgroundColor" white="0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                        <color key="backgroundColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                        <constraints>
+                            <constraint firstItem="MFM-dX-qH0" firstAttribute="centerX" secondItem="S3S-Oj-5AN" secondAttribute="centerX" id="1CI-PZ-heX">
+                                <string key="userLabel">TextLabel.trailing = superview.trailing
+</string>
+                            </constraint>
+                            <constraint firstItem="MFM-dX-qH0" firstAttribute="top" secondItem="S3S-Oj-5AN" secondAttribute="topMargin" constant="-96" id="4IF-He-EvE" userLabel="Carousel View.top = superview.top"/>
+                            <constraint firstItem="TextLabel" firstAttribute="top" secondItem="MFM-dX-qH0" secondAttribute="bottom" constant="8" id="GZ6-mq-ydb">
+                                <string key="userLabel">TextLabel.bottom = super.bottom
+</string>
+                            </constraint>
+                            <constraint firstItem="MFM-dX-qH0" firstAttribute="leading" secondItem="TextLabel" secondAttribute="leading" id="Hm5-OZ-r92" userLabel="Carousel View.leading = super.leading"/>
+                            <constraint firstAttribute="bottom" secondItem="TextLabel" secondAttribute="bottom" id="bottomLabel">
+                                <string key="userLabel">CarouselView.bottom = TextLabel.top
+</string>
+                            </constraint>
+                            <constraint firstItem="TextLabel" firstAttribute="height" constant="100" id="labelHeight">
+                                <string key="userLabel">+ TextLabel.height = 100
+</string>
+                            </constraint>
+                            <constraint firstItem="MFM-dX-qH0" firstAttribute="trailing" secondItem="TextLabel" secondAttribute="trailing" id="xiQ-at-PJJ" userLabel="Carousel View.trailing = super.trailing"/>
+                            <constraint firstItem="TextLabel" firstAttribute="leading" secondItem="2BE-c3-nQJ" secondAttribute="leading" id="zdk-Fa-E8w">
+                                <string key="userLabel">TextLabel.leading = super.leading
+</string>
+                            </constraint>
+                        </constraints>
                     </view>
-
-                    <!-- Outlets -->
                     <connections>
-                        <outlet property="imageView" destination="ImageView" id="imageOutlet"/>
-                        <outlet property="textLabel" destination="TextLabel" id="textOutlet"/>
+                        <outlet property="carouselView" destination="MFM-dX-qH0" id="pJk-H5-aca"/>
+                        <outlet property="textLabel" destination="TextLabel" id="hm8-ky-Nmf"/>
                     </connections>
                 </viewController>
-
                 <placeholder placeholderIdentifier="IBFirstResponder" id="vXp-U4-Rya" userLabel="First Responder" sceneMemberID="firstResponder"/>
             </objects>
+            <point key="canvasLocation" x="95.652173913043484" y="-1.3392857142857142"/>
         </scene>
     </scenes>
+    <resources>
+        <systemColor name="systemBackgroundColor">
+            <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+        </systemColor>
+    </resources>
 </document>
