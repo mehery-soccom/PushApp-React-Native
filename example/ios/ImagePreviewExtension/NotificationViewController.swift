@@ -7,18 +7,19 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
     @IBOutlet weak var imageView: UIImageView!
     @IBOutlet weak var textLabel: UILabel!
 
-    // Landscape ratio (16:9)
     private let landscapeAspectRatio: CGFloat = 16.0 / 9.0
+
+    private var images: [UIImage] = []
+    private var currentIndex: Int = 0
+    private var notification: UNNotification?
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // Configure image view
-        imageView.contentMode = .scaleAspectFit   // ✅ Keeps entire image visible
+        imageView.contentMode = .scaleAspectFit
         imageView.clipsToBounds = true
         imageView.backgroundColor = .black
 
-        // Configure text overlay
         textLabel.textAlignment = .center
         textLabel.numberOfLines = 0
         textLabel.textColor = .white
@@ -28,7 +29,6 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
 
-        // ✅ Set preferred height based on landscape ratio (width * 9/16)
         let imageHeight = view.bounds.width * landscapeAspectRatio
         let textHeight = textLabel.intrinsicContentSize.height + 16
         let totalHeight = imageHeight + textHeight
@@ -38,25 +38,65 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
 
     func didReceive(_ notification: UNNotification) {
         print("✅ didReceive called in Content Extension")
+        self.notification = notification
 
         textLabel.text = notification.request.content.body
+        
+        // LOAD ALL IMAGE ATTACHMENTS
+        let attachments = notification.request.content.attachments
+        
+        if attachments.isEmpty {
+            print("❌ No attachments found")
+            return
+        }
 
-        if let attachment = notification.request.content.attachments.first {
+        for attachment in attachments {
             let url = attachment.url
             _ = url.startAccessingSecurityScopedResource()
             defer { url.stopAccessingSecurityScopedResource() }
 
             if let data = try? Data(contentsOf: url),
-               let image = UIImage(data: data) {
-                DispatchQueue.main.async {
-                    self.imageView.image = image
-                    print("✅ Landscape image displayed successfully")
-                }
-            } else {
-                print("⚠️ Failed to load image data")
+               let img = UIImage(data: data) {
+                images.append(img)
             }
-        } else {
-            print("❌ No attachments found")
         }
+
+        print("📸 Loaded \(images.count) images")
+
+        // SHOW FIRST IMAGE
+        currentIndex = 0
+        updateImage()
+    }
+
+    private func updateImage() {
+        guard !images.isEmpty else { return }
+
+        let image = images[currentIndex]
+        DispatchQueue.main.async {
+            self.imageView.image = image
+        }
+        print("🖼 Showing image \(currentIndex + 1) / \(images.count)")
+    }
+
+    // 🔥 Handle NEXT / PREVIOUS actions
+    func didReceive(_ response: UNNotificationResponse,
+                    completionHandler completion: @escaping (UNNotificationContentExtensionResponseOption) -> Void) {
+
+        switch response.actionIdentifier {
+        case "PUSHAPP_NEXT":
+            print("➡️ NEXT pressed")
+            currentIndex = (currentIndex + 1) % images.count
+            updateImage()
+
+        case "PUSHAPP_PREVIOUS":
+            print("⬅️ PREVIOUS pressed")
+            currentIndex = (currentIndex - 1 + images.count) % images.count
+            updateImage()
+
+        default:
+            break
+        }
+
+        completion(.doNotDismiss)
     }
 }
