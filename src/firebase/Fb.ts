@@ -227,22 +227,54 @@ export function setupForegroundNotificationListener(): () => void {
   const unsubscribe = messaging().onMessage((remoteMessage) => {
     console.log('📨 Foreground FCM message:', JSON.stringify(remoteMessage));
 
+    const data = remoteMessage.data || {};
+
     const title =
-      remoteMessage.notification?.title ||
-      remoteMessage.data?.title ||
-      'Notification';
+      remoteMessage.notification?.title || data.title || 'Notification';
 
     const message =
-      remoteMessage.notification?.body ||
-      remoteMessage.data?.body ||
-      'You have a new message';
+      remoteMessage.notification?.body || data.body || 'You have a new message';
 
     const image =
       remoteMessage.notification?.android?.imageUrl ||
       remoteMessage.notification?.image ||
-      remoteMessage.data?.image ||
+      data.image ||
       null;
 
+    // 👇 Detect carousel payload
+    let carouselImages: string[] = [];
+
+    const carouselImagesRaw = data.carousel_images;
+
+    if (carouselImagesRaw) {
+      try {
+        const rawString =
+          typeof carouselImagesRaw === 'string'
+            ? carouselImagesRaw
+            : JSON.stringify(carouselImagesRaw);
+
+        carouselImages = JSON.parse(rawString);
+
+        console.log('🖼️ Carousel images parsed:', carouselImages);
+      } catch (err) {
+        console.error('❌ Failed to parse carousel images:', err);
+      }
+    }
+
+    // 👇 If carousel pushed → activate native module
+    if (carouselImages.length > 0) {
+      console.log('🚀 Triggering Carousel Live Activity...');
+      if (Platform.OS === 'android' && LiveActivityModule?.triggerCarousel) {
+        LiveActivityModule.triggerCarousel({
+          title,
+          message,
+          images: carouselImages,
+        });
+        return; // skip normal notification
+      }
+    }
+
+    // ===== Normal Notification Flow =====
     console.log('📲 Displaying local notification:', title, message, image);
 
     const localNotif: any = {
@@ -255,21 +287,17 @@ export function setupForegroundNotificationListener(): () => void {
       vibrate: true,
     };
 
-    // 👇 If an image exists, show it using bigPicture
     if (image) {
-      localNotif.bigPicture = image; // <--- this line shows the image
-      localNotif.largeIcon = image; // optional, small thumb
-      localNotif.bigLargeIcon = image; // optional
+      localNotif.bigPicture = image;
+      localNotif.largeIcon = image;
+      localNotif.bigLargeIcon = image;
       localNotif.largeIconUrl = image;
     }
 
     PushNotification.localNotification(localNotif);
 
     if (Platform.OS === 'android' && LiveActivityModule?.triggerLiveActivity) {
-      console.log('🚀 Triggering native live activity...');
-      LiveActivityModule.triggerLiveActivity(remoteMessage.data);
-    } else {
-      PushNotification.localNotification(localNotif); // fallback
+      LiveActivityModule.triggerLiveActivity(data);
     }
   });
 

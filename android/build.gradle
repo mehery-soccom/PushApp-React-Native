@@ -30,9 +30,9 @@ allprojects {
   }
 }
 
-
 apply plugin: "com.android.library"
 apply plugin: "kotlin-android"
+apply plugin: "kotlin-kapt"   
 
 
 def getExtOrIntegerDefault(name) {
@@ -65,6 +65,8 @@ android {
     sourceSets {
       main {
         res.srcDirs = ['src/main/res']
+        java.srcDirs = ["src/main/java"]
+
       }
     }
   }
@@ -82,15 +84,25 @@ android {
     }
   }
 
-  lintOptions {
-    disable "GradleCompatible"
+  // AGP 8 compatibility — replace old lintOptions
+  lint {
+        baseline = file("lint-baseline.xml")
+        checkReleaseBuilds = false
   }
 
   compileOptions {
     sourceCompatibility JavaVersion.VERSION_1_8
     targetCompatibility JavaVersion.VERSION_1_8
   }
-  
+
+  kotlinOptions {
+    jvmTarget = "17"
+  }
+  java {
+      toolchain {
+          languageVersion = JavaLanguageVersion.of(17)
+      }
+  }  
 }
 
 
@@ -106,5 +118,15 @@ dependencies {
   implementation 'com.google.firebase:firebase-messaging:24.0.0'
 
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+
+  // ⭐ Carousel support: ViewPager2
+  implementation "androidx.viewpager2:viewpager2:1.1.0"
+
+    // ⭐ Carousel image loader: Glide
+  implementation "com.github.bumptech.glide:glide:4.15.1"
+  kapt "com.github.bumptech.glide:compiler:4.15.1"
+
+  implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+
 }
 
