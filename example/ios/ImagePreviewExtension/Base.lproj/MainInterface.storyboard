@@ -10,53 +10,84 @@
         <scene sceneID="cwh-vc-ff4">
             <objects>
                 <viewController id="M4Y-Lb-cyx" userLabel="Notification View Controller" customClass="NotificationViewController" customModule="ImagePreviewExtension" customModuleProvider="target" sceneMemberID="viewController">
-                    <view key="view" contentMode="scaleToFill" simulatedAppContext="notificationCenter" id="S3S-Oj-5AN">
+                    <view key="view" contentMode="scaleToFill" simulatedAppContext="notificationCenter" id="RootView">
                         <rect key="frame" x="0" y="0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+
+                        <!-- FULLY TRANSPARENT ROOT -->
+                        <color key="backgroundColor" white="0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+
                         <subviews>
 
-                            <!-- Fullscreen Image -->
-                            <imageView userInteractionEnabled="NO" clipsSubviews="YES" contentMode="scaleAspectFill" translatesAutoresizingMaskIntoConstraints="NO" id="ImageView">
-                                <rect key="frame" x="0" y="0" width="393" height="852"/>
-                            </imageView>
+                            <!-- Transparent Container -->
+                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ContainerView">
+                                <rect key="frame" x="16" y="16" width="361" height="820"/>
 
-                            <!-- Text Overlay (Bottom Centered) -->
-                            <label opaque="NO" userInteractionEnabled="NO" text="Sample Text" textAlignment="center" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="TextLabel">
-                                <rect key="frame" x="0" y="760" width="393" height="92"/>
-                                <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                <fontDescription key="fontDescription" type="boldSystem" pointSize="20"/>
-                                <color key="backgroundColor" white="0" alpha="0.45" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                            </label>
+                                <subviews>
+                                    
+                                    <!-- ImageView: NO background, supports corner radius -->
+                                    <imageView id="ImageView"
+                                               userInteractionEnabled="NO"
+                                               clipsSubviews="YES"
+                                               contentMode="scaleAspectFit"
+                                               translatesAutoresizingMaskIntoConstraints="NO">
+                                        <rect key="frame" x="0" y="0" width="361" height="600"/>
+                                    </imageView>
+
+                                    <!-- TextLabel: NO background at all -->
+                                    <label id="TextLabel"
+                                           text="Sample Text"
+                                           textAlignment="center"
+                                           numberOfLines="0"
+                                           translatesAutoresizingMaskIntoConstraints="NO">
+                                        <rect key="frame" x="8" y="608" width="345" height="60"/>
+                                        <fontDescription key="fontDescription" type="boldSystem" pointSize="18"/>
+                                        <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                    </label>
+
+                                </subviews>
+
+                                <!-- Constraints inside Container -->
+                                <constraints>
+                                    <!-- Image -->
+                                    <constraint firstItem="ImageView" firstAttribute="top" secondItem="ContainerView" secondAttribute="top" id="imgTop"/>
+                                    <constraint firstItem="ImageView" firstAttribute="leading" secondItem="ContainerView" secondAttribute="leading" id="imgLeading"/>
+                                    <constraint firstAttribute="trailing" secondItem="ImageView" secondAttribute="trailing" id="imgTrailing"/>
+                                    <constraint firstItem="ImageView" firstAttribute="height"
+                                                secondItem="ContainerView" secondAttribute="width"
+                                                multiplier="0.56" id="imgHeightRatio"/>
+
+                                    <!-- Text -->
+                                    <constraint firstItem="TextLabel" firstAttribute="top" secondItem="ImageView" secondAttribute="bottom" constant="8" id="labelTop"/>
+                                    <constraint firstItem="TextLabel" firstAttribute="leading" secondItem="ContainerView" secondAttribute="leading" constant="8" id="labelLeading"/>
+                                    <constraint firstAttribute="trailing" secondItem="TextLabel" secondAttribute="trailing" constant="8" id="labelTrailing"/>
+                                    <constraint firstAttribute="bottom" secondItem="TextLabel" secondAttribute="bottom" constant="12" id="labelBottom"/>
+                                </constraints>
+
+                            </view>
 
                         </subviews>
 
-                        <!-- Auto Layout -->
+                        <!-- Root constraints -->
                         <constraints>
-                            <!-- Image fills entire view -->
-                            <constraint firstItem="ImageView" firstAttribute="top" secondItem="S3S-Oj-5AN" secondAttribute="top" id="topImage"/>
-                            <constraint firstItem="ImageView" firstAttribute="leading" secondItem="S3S-Oj-5AN" secondAttribute="leading" id="leadingImage"/>
-                            <constraint firstAttribute="trailing" secondItem="ImageView" secondAttribute="trailing" id="trailingImage"/>
-                            <constraint firstAttribute="bottom" secondItem="ImageView" secondAttribute="bottom" id="bottomImage"/>
-
-                            <!-- Text label pinned to bottom -->
-                            <constraint firstAttribute="bottom" secondItem="TextLabel" secondAttribute="bottom" id="bottomLabel"/>
-                            <constraint firstItem="TextLabel" firstAttribute="leading" secondItem="S3S-Oj-5AN" secondAttribute="leading" id="leadingLabel"/>
-                            <constraint firstAttribute="trailing" secondItem="TextLabel" secondAttribute="trailing" id="trailingLabel"/>
-                            <constraint firstItem="TextLabel" firstAttribute="height" constant="100" id="labelHeight"/>
+                            <constraint firstItem="ContainerView" firstAttribute="leading" secondItem="RootView" secondAttribute="leading" constant="16" id="ContainerLeading"/>
+                            <constraint firstAttribute="trailing" secondItem="ContainerView" secondAttribute="trailing" constant="16" id="ContainerTrailing"/>
+                            <constraint firstItem="ContainerView" firstAttribute="top" secondItem="RootView" secondAttribute="top" constant="16" id="ContainerTop"/>
+                            <constraint firstAttribute="bottom" secondItem="ContainerView" secondAttribute="bottom" constant="16" id="ContainerBottom"/>
                         </constraints>
 
-                        <viewLayoutGuide key="safeArea" id="2BE-c3-nQJ"/>
-                        <color key="backgroundColor" white="0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                        <viewLayoutGuide key="safeArea" id="SafeArea"/>
                     </view>
 
                     <!-- Outlets -->
                     <connections>
+                        <outlet property="containerView" destination="ContainerView" id="containerOutlet"/>
                         <outlet property="imageView" destination="ImageView" id="imageOutlet"/>
                         <outlet property="textLabel" destination="TextLabel" id="textOutlet"/>
                     </connections>
                 </viewController>
 
-                <placeholder placeholderIdentifier="IBFirstResponder" id="vXp-U4-Rya" userLabel="First Responder" sceneMemberID="firstResponder"/>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="FirstResponder" sceneMemberID="firstResponder"/>
             </objects>
         </scene>
     </scenes>

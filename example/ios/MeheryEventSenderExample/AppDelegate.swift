@@ -162,7 +162,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   // MARK: - Register Notification Categories
   func registerNotificationCategories() {
     let categoryMap: [(String, [(title: String, id: String)])] = [
-      ("CAROUSEL_CATEGORY", [("LEFT", "PUSHAPP_NEXT"), ("RIGHT", "PUSHAPP_PREVIOUS")]),
+      ("CAROUSEL_CATEGORY", []),
       ("CONFIRMATION_CATEGORY", [("Yes", "PUSHAPP_YES"), ("No", "PUSHAPP_NO")]),
       ("RESPONSE_CATEGORY", [("Accept", "PUSHAPP_ACCEPT"), ("Reject", "PUSHAPP_REJECT")]),
       ("SUBSCRIPTION_CATEGORY", [("Subscribe", "PUSHAPP_SUB"), ("Unsubscribe", "PUSHAPP_UNSUB")]),

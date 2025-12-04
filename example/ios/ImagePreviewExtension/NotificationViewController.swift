@@ -4,10 +4,9 @@ import UserNotificationsUI
 
 class NotificationViewController: UIViewController, UNNotificationContentExtension {
 
+    @IBOutlet weak var containerView: UIView!
     @IBOutlet weak var imageView: UIImageView!
     @IBOutlet weak var textLabel: UILabel!
-
-    private let landscapeAspectRatio: CGFloat = 16.0 / 9.0
 
     private var images: [UIImage] = []
     private var currentIndex: Int = 0
@@ -16,38 +15,64 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        imageView.contentMode = .scaleAspectFit
-        imageView.clipsToBounds = true
-        imageView.backgroundColor = .black
+        // Transparent everything
+        view.backgroundColor = .clear
+        containerView.backgroundColor = .clear
+        textLabel.backgroundColor = .clear
 
+        // Rounded image
+        imageView.layer.cornerRadius = 22
+        imageView.layer.masksToBounds = true
+
+        // Make image fill area (no black gaps)
+        imageView.contentMode = .scaleAspectFill
+        imageView.backgroundColor = .clear
+
+        // Text styling
         textLabel.textAlignment = .center
         textLabel.numberOfLines = 0
         textLabel.textColor = .white
-        textLabel.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        textLabel.font = UIFont.boldSystemFont(ofSize: 22)   // Bigger text
+
+        // Enable swipe gestures
+        let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipe(_:)))
+        swipeLeft.direction = .left
+        imageView.isUserInteractionEnabled = true
+        imageView.addGestureRecognizer(swipeLeft)
+
+        let swipeRight = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipe(_:)))
+        swipeRight.direction = .right
+        imageView.addGestureRecognizer(swipeRight)
     }
+
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
 
-        let imageHeight = view.bounds.width * landscapeAspectRatio
-        let textHeight = textLabel.intrinsicContentSize.height + 16
-        let totalHeight = imageHeight + textHeight
+        // Compact + clean layout
+        let maxWidth = view.bounds.width - 32                      // side padding
+        let imageHeight = maxWidth * 0.56                          // cinematic ratio (not too tall)
+        let textHeight = textLabel.intrinsicContentSize.height + 24
+        let totalHeight = imageHeight + textHeight + 24            // padding
 
-        preferredContentSize = CGSize(width: view.bounds.width, height: totalHeight)
+        preferredContentSize = CGSize(width: maxWidth, height: totalHeight)
     }
 
     func didReceive(_ notification: UNNotification) {
-        print("✅ didReceive called in Content Extension")
         self.notification = notification
 
+        let body = notification.request.content.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        textLabel.isHidden = body.isEmpty
+
+
         textLabel.text = notification.request.content.body
-        
-        // LOAD ALL IMAGE ATTACHMENTS
+
         let attachments = notification.request.content.attachments
-        
-        if attachments.isEmpty {
-            print("❌ No attachments found")
-            return
+
+        if notification.request.content.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            textLabel.isHidden = true
+        } else {
+            textLabel.isHidden = false
         }
 
         for attachment in attachments {
@@ -61,9 +86,6 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
             }
         }
 
-        print("📸 Loaded \(images.count) images")
-
-        // SHOW FIRST IMAGE
         currentIndex = 0
         updateImage()
     }
@@ -72,30 +94,48 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         guard !images.isEmpty else { return }
 
         let image = images[currentIndex]
-        DispatchQueue.main.async {
+
+        // Smooth fade animation
+        UIView.transition(with: imageView,
+                          duration: 0.25,
+                          options: .transitionCrossDissolve,
+                          animations: {
             self.imageView.image = image
-        }
-        print("🖼 Showing image \(currentIndex + 1) / \(images.count)")
+        }, completion: nil)
     }
 
-    // 🔥 Handle NEXT / PREVIOUS actions
-    func didReceive(_ response: UNNotificationResponse,
-                    completionHandler completion: @escaping (UNNotificationContentExtensionResponseOption) -> Void) {
+    // MARK: - Swipe Handler
+    @objc private func handleSwipe(_ gesture: UISwipeGestureRecognizer) {
+        if images.isEmpty { return }
 
-        switch response.actionIdentifier {
-        case "PUSHAPP_NEXT":
-            print("➡️ NEXT pressed")
+        switch gesture.direction {
+        case .left:
             currentIndex = (currentIndex + 1) % images.count
-            updateImage()
-
-        case "PUSHAPP_PREVIOUS":
-            print("⬅️ PREVIOUS pressed")
+        case .right:
             currentIndex = (currentIndex - 1 + images.count) % images.count
-            updateImage()
-
         default:
             break
         }
+
+        updateImage()
+    }
+
+    // MARK: - Notification Action Buttons (Next / Previous)
+    func didReceive(_ response: UNNotificationResponse,
+                    completionHandler completion: @escaping (UNNotificationContentExtensionResponseOption) -> Void) {
+
+        // switch response.actionIdentifier {
+        // case "PUSHAPP_NEXT":
+        //     currentIndex = (currentIndex + 1) % images.count
+        //     updateImage()
+
+        // case "PUSHAPP_PREVIOUS":
+        //     currentIndex = (currentIndex - 1 + images.count) % images.count
+        //     updateImage()
+
+        // default:
+        //     break
+        // }
 
         completion(.doNotDismiss)
     }
