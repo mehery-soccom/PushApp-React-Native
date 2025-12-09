@@ -13,6 +13,8 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
     private var images: [UIImage] = []
     private var currentIndex: Int = 0
     private var notification: UNNotification?
+    private var autoScrollTimer: Timer?
+
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -24,17 +26,17 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         titleLabel.backgroundColor = .clear
         titleLabel.textAlignment = .left
         titleLabel.textColor = .white
-        titleLabel.font = UIFont.boldSystemFont(ofSize: 20)
+        textLabel.font = UIFont.boldSystemFont(ofSize: 18)
 
         // Body style
         textLabel.backgroundColor = .clear
         textLabel.textAlignment = .left
         textLabel.numberOfLines = 0
         textLabel.textColor = .white
-        textLabel.font = UIFont.systemFont(ofSize: 17)
+        textLabel.font = UIFont.boldSystemFont(ofSize: 18)
 
         // Image styling
-        imageView.layer.cornerRadius = 22
+        // imageView.layer.cornerRadius = 22
         imageView.layer.masksToBounds = true
         imageView.contentMode = .scaleAspectFill
 
@@ -94,7 +96,20 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
 
         currentIndex = 0
         updateImage()
+        startAutoScroll()
+
     }
+
+    private func startAutoScroll() {
+    autoScrollTimer?.invalidate()  // stop previous timer if any
+    autoScrollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+        guard let self = self, !self.images.isEmpty else { return }
+
+        self.currentIndex = (self.currentIndex + 1) % self.images.count
+        self.updateImage()
+        }
+    }
+
 
     private func updateImage() {
         guard !images.isEmpty else { return }
@@ -112,19 +127,23 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
 
     // MARK: - Swipe Handler
     @objc private func handleSwipe(_ gesture: UISwipeGestureRecognizer) {
-        if images.isEmpty { return }
+    if images.isEmpty { return }
 
-        switch gesture.direction {
-        case .left:
-            currentIndex = (currentIndex + 1) % images.count
-        case .right:
-            currentIndex = (currentIndex - 1 + images.count) % images.count
-        default:
-            break
-        }
+    // Stop auto-scroll when user interacts
+    autoScrollTimer?.invalidate()
 
-        updateImage()
+    switch gesture.direction {
+    case .left:
+        currentIndex = (currentIndex + 1) % images.count
+    case .right:
+        currentIndex = (currentIndex - 1 + images.count) % images.count
+    default:
+        break
     }
+
+    updateImage()
+}
+
 
     // MARK: - Notification Action Buttons (Next / Previous)
     func didReceive(_ response: UNNotificationResponse,
