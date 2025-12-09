@@ -1,94 +1,113 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="22522" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="M4Y-Lb-cyx">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23727" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="M4Y-Lb-cyx">
     <device id="retina6_1" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="22513"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23721"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
-        <!-- Notification View Controller -->
+        <!--Notification View Controller-->
         <scene sceneID="cwh-vc-ff4">
             <objects>
                 <viewController id="M4Y-Lb-cyx" userLabel="Notification View Controller" customClass="NotificationViewController" customModule="ImagePreviewExtension" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" simulatedAppContext="notificationCenter" id="RootView">
-                        <rect key="frame" x="0" y="0" width="393" height="852"/>
+                        <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
-
-                        <!-- FULLY TRANSPARENT ROOT -->
-                        <color key="backgroundColor" white="0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-
                         <subviews>
-
-                            <!-- Transparent Container -->
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ContainerView">
-                                <rect key="frame" x="16" y="16" width="361" height="820"/>
-
+                                <rect key="frame" x="16" y="16" width="382" height="864"/>
                                 <subviews>
-                                    
-                                    <!-- ImageView: NO background, supports corner radius -->
-                                    <imageView id="ImageView"
-                                               userInteractionEnabled="NO"
-                                               clipsSubviews="YES"
-                                               contentMode="scaleAspectFit"
-                                               translatesAutoresizingMaskIntoConstraints="NO">
-                                        <rect key="frame" x="0" y="0" width="361" height="600"/>
-                                    </imageView>
-
-                                    <!-- TextLabel: NO background at all -->
-                                    <label id="TextLabel"
-                                           text="Sample Text"
-                                           textAlignment="center"
-                                           numberOfLines="0"
-                                           translatesAutoresizingMaskIntoConstraints="NO">
-                                        <rect key="frame" x="8" y="608" width="345" height="60"/>
+                                    <label contentMode="scaleToFill"  text="Title Text" lineBreakMode="tailTruncation" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="TitleLabel">
+                                        <rect key="frame" x="8" y="17" width="366" height="20"/>
+                                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                                         <fontDescription key="fontDescription" type="boldSystem" pointSize="18"/>
                                         <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                     </label>
-
+                                    <label contentMode="scaleToFill" misplaced="YES" text="Sample Text" lineBreakMode="tailTruncation" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="TextLabel">
+                                        <rect key="frame" x="8" y="39" width="366" height="20"/>
+                                        <fontDescription key="fontDescription" type="boldSystem" pointSize="18"/>
+                                        <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                    </label>
+                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" ambiguous="YES" misplaced="YES" translatesAutoresizingMaskIntoConstraints="NO" id="ImageView">
+                                        <rect key="frame" x="8" y="73" width="366" height="791"/>
+                                    </imageView>
                                 </subviews>
+                    <constraints>
 
-                                <!-- Constraints inside Container -->
-                                <constraints>
-                                    <!-- Image -->
-                                    <constraint firstItem="ImageView" firstAttribute="top" secondItem="ContainerView" secondAttribute="top" id="imgTop"/>
-                                    <constraint firstItem="ImageView" firstAttribute="leading" secondItem="ContainerView" secondAttribute="leading" id="imgLeading"/>
-                                    <constraint firstAttribute="trailing" secondItem="ImageView" secondAttribute="trailing" id="imgTrailing"/>
-                                    <constraint firstItem="ImageView" firstAttribute="height"
-                                                secondItem="ContainerView" secondAttribute="width"
-                                                multiplier="0.56" id="imgHeightRatio"/>
+    <!-- TITLE AT TOP -->
+    <constraint firstItem="TitleLabel" firstAttribute="top"
+                secondItem="ContainerView" secondAttribute="top"
+                constant="8" id="titleTop"/>
 
-                                    <!-- Text -->
-                                    <constraint firstItem="TextLabel" firstAttribute="top" secondItem="ImageView" secondAttribute="bottom" constant="8" id="labelTop"/>
-                                    <constraint firstItem="TextLabel" firstAttribute="leading" secondItem="ContainerView" secondAttribute="leading" constant="8" id="labelLeading"/>
-                                    <constraint firstAttribute="trailing" secondItem="TextLabel" secondAttribute="trailing" constant="8" id="labelTrailing"/>
-                                    <constraint firstAttribute="bottom" secondItem="TextLabel" secondAttribute="bottom" constant="12" id="labelBottom"/>
-                                </constraints>
+    <constraint firstItem="TitleLabel" firstAttribute="leading"
+                secondItem="ContainerView" secondAttribute="leading"
+                constant="8" id="titleLeading"/>
+
+    <constraint firstAttribute="trailing"
+                secondItem="TitleLabel" secondAttribute="trailing"
+                constant="8" id="titleTrailing"/>
+
+    
+    <!-- BODY BELOW TITLE -->
+    <constraint firstItem="TextLabel" firstAttribute="top"
+                secondItem="TitleLabel" secondAttribute="bottom"
+                constant="4" id="bodyBelowTitle"/>
+
+    <constraint firstItem="TextLabel" firstAttribute="leading"
+                secondItem="ContainerView" secondAttribute="leading"
+                constant="8" id="bodyLeading"/>
+
+    <constraint firstAttribute="trailing"
+                secondItem="TextLabel" secondAttribute="trailing"
+                constant="8" id="bodyTrailing"/>
+
+
+    <!-- IMAGE BELOW BODY -->
+    <constraint firstItem="ImageView" firstAttribute="top"
+                secondItem="TextLabel" secondAttribute="bottom"
+                constant="12" id="imageBelowBody"/>
+
+    <constraint firstItem="ImageView" firstAttribute="leading"
+                secondItem="ContainerView" secondAttribute="leading"
+                id="imgLeading"/>
+
+    <constraint firstAttribute="trailing"
+                secondItem="ImageView" secondAttribute="trailing"
+                id="imgTrailing"/>
+
+    <constraint firstItem="ImageView" firstAttribute="height"
+                secondItem="ContainerView" secondAttribute="width"
+                multiplier="0.56" id="imgHeightRatio"/>
+
+    <!-- CONTAINER BOTTOM -->
+    <constraint firstAttribute="bottom"
+                secondItem="ImageView" secondAttribute="bottom"
+                constant="12" id="containerBottomFix"/>
+
+</constraints>
 
                             </view>
-
                         </subviews>
-
-                        <!-- Root constraints -->
-                        <constraints>
-                            <constraint firstItem="ContainerView" firstAttribute="leading" secondItem="RootView" secondAttribute="leading" constant="16" id="ContainerLeading"/>
-                            <constraint firstAttribute="trailing" secondItem="ContainerView" secondAttribute="trailing" constant="16" id="ContainerTrailing"/>
-                            <constraint firstItem="ContainerView" firstAttribute="top" secondItem="RootView" secondAttribute="top" constant="16" id="ContainerTop"/>
-                            <constraint firstAttribute="bottom" secondItem="ContainerView" secondAttribute="bottom" constant="16" id="ContainerBottom"/>
-                        </constraints>
-
                         <viewLayoutGuide key="safeArea" id="SafeArea"/>
+                        <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                        <constraints>
+                            <constraint firstAttribute="bottom" secondItem="ContainerView" secondAttribute="bottom" constant="16" id="ContainerBottom"/>
+                            <constraint firstItem="ContainerView" firstAttribute="leading" secondItem="RootView" secondAttribute="leading" constant="16" id="ContainerLeading"/>
+                            <constraint firstItem="ContainerView" firstAttribute="top" secondItem="RootView" secondAttribute="top" constant="16" id="ContainerTop"/>
+                            <constraint firstAttribute="trailing" secondItem="ContainerView" secondAttribute="trailing" constant="16" id="ContainerTrailing"/>
+                        </constraints>
                     </view>
-
-                    <!-- Outlets -->
                     <connections>
                         <outlet property="containerView" destination="ContainerView" id="containerOutlet"/>
                         <outlet property="imageView" destination="ImageView" id="imageOutlet"/>
                         <outlet property="textLabel" destination="TextLabel" id="textOutlet"/>
+                        <outlet property="titleLabel" destination="TitleLabel" id="titleOutlet"/>
                     </connections>
                 </viewController>
-
                 <placeholder placeholderIdentifier="IBFirstResponder" id="FirstResponder" sceneMemberID="firstResponder"/>
             </objects>
+            <point key="canvasLocation" x="89.855072463768124" y="-1.3392857142857142"/>
         </scene>
     </scenes>
 </document>

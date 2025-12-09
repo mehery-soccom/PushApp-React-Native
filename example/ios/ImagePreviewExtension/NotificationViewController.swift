@@ -6,6 +6,8 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
 
     @IBOutlet weak var containerView: UIView!
     @IBOutlet weak var imageView: UIImageView!
+    @IBOutlet weak var titleLabel: UILabel!   // NEW
+
     @IBOutlet weak var textLabel: UILabel!
 
     private var images: [UIImage] = []
@@ -15,26 +17,28 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // Transparent everything
         view.backgroundColor = .clear
         containerView.backgroundColor = .clear
+        
+        // Title style
+        titleLabel.backgroundColor = .clear
+        titleLabel.textAlignment = .left
+        titleLabel.textColor = .white
+        titleLabel.font = UIFont.boldSystemFont(ofSize: 20)
+
+        // Body style
         textLabel.backgroundColor = .clear
-
-        // Rounded image
-        imageView.layer.cornerRadius = 22
-        imageView.layer.masksToBounds = true
-
-        // Make image fill area (no black gaps)
-        imageView.contentMode = .scaleAspectFill
-        imageView.backgroundColor = .clear
-
-        // Text styling
-        textLabel.textAlignment = .center
+        textLabel.textAlignment = .left
         textLabel.numberOfLines = 0
         textLabel.textColor = .white
-        textLabel.font = UIFont.boldSystemFont(ofSize: 22)   // Bigger text
+        textLabel.font = UIFont.systemFont(ofSize: 17)
 
-        // Enable swipe gestures
+        // Image styling
+        imageView.layer.cornerRadius = 22
+        imageView.layer.masksToBounds = true
+        imageView.contentMode = .scaleAspectFill
+
+        // Swipe gestures
         let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipe(_:)))
         swipeLeft.direction = .left
         imageView.isUserInteractionEnabled = true
@@ -45,16 +49,16 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         imageView.addGestureRecognizer(swipeRight)
     }
 
-
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
 
-        // Compact + clean layout
-        let maxWidth = view.bounds.width - 32                      // side padding
-        let imageHeight = maxWidth * 0.56                          // cinematic ratio (not too tall)
-        let textHeight = textLabel.intrinsicContentSize.height + 24
-        let totalHeight = imageHeight + textHeight + 24            // padding
+        let maxWidth = view.bounds.width - 32
+        let imageHeight = maxWidth * 0.56
+        let titleHeight = titleLabel.intrinsicContentSize.height + 12
+        let bodyHeight = textLabel.intrinsicContentSize.height + 12
 
+        let totalHeight = titleHeight + bodyHeight + imageHeight + 32
+        
         preferredContentSize = CGSize(width: maxWidth, height: totalHeight)
     }
 
@@ -62,8 +66,10 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         self.notification = notification
 
         let body = notification.request.content.body.trimmingCharacters(in: .whitespacesAndNewlines)
+
         textLabel.isHidden = body.isEmpty
 
+        titleLabel.text = notification.request.content.title
 
         textLabel.text = notification.request.content.body
 
