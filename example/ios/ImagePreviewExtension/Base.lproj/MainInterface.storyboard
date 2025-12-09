@@ -16,86 +16,44 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ContainerView">
-                                <rect key="frame" x="16" y="16" width="382" height="864"/>
+                                <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                                 <subviews>
-                                    <label contentMode="scaleToFill"  text="Title Text" lineBreakMode="tailTruncation" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="TitleLabel">
-                                        <rect key="frame" x="8" y="20" width="366" height="10"/>
-                                        <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                    <label contentMode="scaleToFill" ambiguous="YES" text="Title Text" lineBreakMode="tailTruncation" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="TitleLabel">
+                                        <rect key="frame" x="8" y="21" width="398" height="15"/>
                                         <fontDescription key="fontDescription" type="boldSystem" pointSize="18"/>
                                         <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                     </label>
-                                    <label contentMode="scaleToFill" misplaced="YES" text="Sample Text" lineBreakMode="tailTruncation" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="TextLabel">
-                                        <rect key="frame" x="8" y="24" width="366" height="10"/>
+                                    <label contentMode="scaleToFill" ambiguous="YES" text="Sample Text" lineBreakMode="tailTruncation" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="TextLabel">
+                                        <rect key="frame" x="8" y="33" width="398" height="15"/>
                                         <fontDescription key="fontDescription" type="boldSystem" pointSize="18"/>
                                         <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                     </label>
-                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" ambiguous="YES" misplaced="YES" translatesAutoresizingMaskIntoConstraints="NO" id="ImageView">
-                                            <rect key="frame" x="8" y="45" width="366" height="791"/>
+                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" translatesAutoresizingMaskIntoConstraints="NO" id="ImageView">
+                                        <rect key="frame" x="0.0" y="664" width="414" height="232"/>
                                     </imageView>
                                 </subviews>
-                    <constraints>
-
-    <!-- TITLE AT TOP -->
-<constraint firstItem="TitleLabel" firstAttribute="top"
-            secondItem="ContainerView" secondAttribute="top"
-            constant="0" id="titleTop"/>
-
-<constraint firstItem="TitleLabel" firstAttribute="leading"
-            secondItem="ContainerView" secondAttribute="leading"
-            constant="8" id="titleLeading"/>
-
-<constraint firstAttribute="trailing"
-            secondItem="TitleLabel" secondAttribute="trailing"
-            constant="8" id="titleTrailing"/>
-
-<!-- BODY BELOW TITLE -->
-<constraint firstItem="TextLabel" firstAttribute="top"
-            secondItem="TitleLabel" secondAttribute="bottom"
-            constant="0" id="bodyBelowTitle"/>
-
-<constraint firstItem="TextLabel" firstAttribute="leading"
-            secondItem="ContainerView" secondAttribute="leading"
-            constant="8" id="bodyLeading"/>
-
-<constraint firstAttribute="trailing"
-            secondItem="TextLabel" secondAttribute="trailing"
-            constant="8" id="bodyTrailing"/>
-
-
-
-    <!-- IMAGE BELOW BODY -->
-    <constraint firstItem="ImageView" firstAttribute="top"
-                secondItem="TextLabel" secondAttribute="bottom"
-                constant="0" id="imageBelowBody"/>
-
-    <constraint firstItem="ImageView" firstAttribute="leading"
-                secondItem="ContainerView" secondAttribute="leading"
-                id="imgLeading"/>
-
-    <constraint firstAttribute="trailing"
-                secondItem="ImageView" secondAttribute="trailing"
-                id="imgTrailing"/>
-
-    <constraint firstItem="ImageView" firstAttribute="height"
-                secondItem="ContainerView" secondAttribute="width"
-                multiplier="0.56" id="imgHeightRatio"/>
-
-    <!-- CONTAINER BOTTOM -->
-    <constraint firstAttribute="bottom"
-                secondItem="ImageView" secondAttribute="bottom"
-                constant="0" id="containerBottomFix"/>
-
-</constraints>
-
+                                <constraints>
+                                    <constraint firstItem="TextLabel" firstAttribute="top" secondItem="TitleLabel" secondAttribute="bottom" constant="-4" id="bodyBelowTitle"/>
+                                    <constraint firstItem="TextLabel" firstAttribute="leading" secondItem="ContainerView" secondAttribute="leading" constant="8" id="bodyLeading"/>
+                                    <constraint firstAttribute="trailing" secondItem="TextLabel" secondAttribute="trailing" constant="8" id="bodyTrailing"/>
+                                    <constraint firstAttribute="bottom" secondItem="ImageView" secondAttribute="bottom" id="containerBottomFix"/>
+                                    <constraint firstItem="ImageView" firstAttribute="top" secondItem="TextLabel" secondAttribute="bottom" constant="4" id="imageBelowBody"/>
+                                    <constraint firstItem="ImageView" firstAttribute="height" secondItem="ContainerView" secondAttribute="width" multiplier="0.56" id="imgHeightRatio"/>
+                                    <constraint firstItem="ImageView" firstAttribute="leading" secondItem="ContainerView" secondAttribute="leading" id="imgLeading"/>
+                                    <constraint firstAttribute="trailing" secondItem="ImageView" secondAttribute="trailing" id="imgTrailing"/>
+                                    <constraint firstItem="TitleLabel" firstAttribute="leading" secondItem="ContainerView" secondAttribute="leading" constant="8" id="titleLeading"/>
+                                    <constraint firstItem="TitleLabel" firstAttribute="top" secondItem="ContainerView" secondAttribute="top" id="titleTop"/>
+                                    <constraint firstAttribute="trailing" secondItem="TitleLabel" secondAttribute="trailing" constant="8" id="titleTrailing"/>
+                                </constraints>
                             </view>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="SafeArea"/>
                         <color key="backgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
-                            <constraint firstAttribute="bottom" secondItem="ContainerView" secondAttribute="bottom" constant="0" id="ContainerBottom"/>
-                            <constraint firstItem="ContainerView" firstAttribute="leading" secondItem="RootView" secondAttribute="leading" constant="0" id="ContainerLeading"/>
-                            <constraint firstItem="ContainerView" firstAttribute="top" secondItem="RootView" secondAttribute="top" constant="0" id="ContainerTop"/>
-                            <constraint firstAttribute="trailing" secondItem="ContainerView" secondAttribute="trailing" constant="0" id="ContainerTrailing"/>
+                            <constraint firstAttribute="bottom" secondItem="ContainerView" secondAttribute="bottom" id="ContainerBottom"/>
+                            <constraint firstItem="ContainerView" firstAttribute="leading" secondItem="RootView" secondAttribute="leading" id="ContainerLeading"/>
+                            <constraint firstItem="ContainerView" firstAttribute="top" secondItem="RootView" secondAttribute="top" id="ContainerTop"/>
+                            <constraint firstAttribute="trailing" secondItem="ContainerView" secondAttribute="trailing" id="ContainerTrailing"/>
                         </constraints>
                     </view>
                     <connections>

@@ -28,6 +28,7 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         titleLabel.textColor = .white
         textLabel.font = UIFont.boldSystemFont(ofSize: 18)
 
+
         // Body style
         textLabel.backgroundColor = .clear
         textLabel.textAlignment = .left
