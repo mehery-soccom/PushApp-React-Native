@@ -14,6 +14,8 @@ import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import androidx.core.app.NotificationCompat
+import org.json.JSONArray
+
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {
   private val TAG = "MyFirebaseMessagingService"
@@ -75,6 +77,33 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
             }
         }
     }
+
+    private fun extractImageList(data: Map<String, String>): List<String> {
+        val list = mutableListOf<String>()
+    
+        // 1️⃣ Check for JSON array: "[\"url1\", \"url2\"]"
+        data["imageUrls"]?.let { json ->
+            try {
+                val arr = org.json.JSONArray(json)
+                for (i in 0 until arr.length()) {
+                    list.add(arr.getString(i))
+                }
+            } catch (_: Exception) {}
+        }
+    
+        // 2️⃣ Check for numbered keys: image1, image2, image3...
+        var index = 1
+        while (true) {
+            val key = "image$index"
+            if (!data.containsKey(key)) break
+            data[key]?.let { list.add(it) }
+            index++
+        }
+    
+        // fallback
+        return list
+    }
+    
     private fun createUrlIntent(context: Context, url: String): PendingIntent {
         val intent = Intent(Intent.ACTION_VIEW).apply {
             data = android.net.Uri.parse(url)
@@ -91,8 +120,8 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
     private fun handleLiveActivityNotification(data: Map<String, String>) {
         try {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-            // ✅ Create the "live_activity_channel" if not already created
+    
+            // Create channel for live activity
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channelId = "live_activity_channel"
                 val channelName = "Live Activity Notifications"
@@ -103,11 +132,15 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
                 )
                 notificationManager.createNotificationChannel(channel)
             }
-
+    
             val customService = CustomNotificationService(this)
-
-            val notificationId = (data["activity_id"] ?: "activity_${System.currentTimeMillis()}").hashCode()
-
+    
+            // Extract image list from FCM
+            val imageList = extractImageList(data)
+    
+            val notificationId =
+                (data["activity_id"] ?: "activity_${System.currentTimeMillis()}").hashCode()
+    
             val notification = customService.createCustomNotification(
                 channelId = "live_activity_channel",
                 title = data["message1"] ?: "",
@@ -123,15 +156,15 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
                 bg_color_gradient = data["bg_color_gradient"] ?: "",
                 bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
                 align = data["align"] ?: "",
-                notificationId = notificationId
+                notificationId = notificationId,
+                imageUrls = imageList  // ✅ CORRECT
             )
-            println("NotifID 2")
-            println(notificationId)
+    
             notificationManager.notify(notificationId, notification.build())
-
+    
         } catch (e: Exception) {
             Log.e("MySdk", "Live activity error: ${e.message}", e)
         }
     }
+    
 }
-

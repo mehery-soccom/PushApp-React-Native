@@ -2,20 +2,38 @@ package com.meheryeventsender
 
 import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.graphics.*
+import android.os.Handler
+import android.os.Looper
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import android.os.Handler
-import android.os.Looper
 import android.app.NotificationManager
 import android.graphics.drawable.GradientDrawable
 import com.meheryeventsender.R
 
 class CustomNotificationService(private val context: Context) {
 
+    companion object {
+        const val ACTION_NEXT = "com.meheryeventsender.CAROUSEL_NEXT"
+        const val ACTION_PREV = "com.meheryeventsender.CAROUSEL_PREV"
+    }
+
+    // State caches
+    private val carouselIndexes = mutableMapOf<Int, Int>()
+    private val cachedBitmaps = mutableMapOf<Int, List<Bitmap?>>()
+    private val cachedTitles = mutableMapOf<Int, String>()
+    private val cachedMessages = mutableMapOf<Int, String>()
+    private val cachedTapTexts = mutableMapOf<Int, String>()
+    private val cachedChannels = mutableMapOf<Int, String>()
+
+
+    // ========================================================================================
+    //  CREATE NOTIFICATION
+    // ========================================================================================
     fun createCustomNotification(
         channelId: String,
         title: String,
@@ -32,28 +50,24 @@ class CustomNotificationService(private val context: Context) {
         bg_color_gradient_dir: String,
         align: String,
         notificationId: Int,
-        bitmap: Bitmap? = null,  // ✅ add this if you meant to use it
-
+        imageUrls: List<String> = emptyList()
     ): NotificationCompat.Builder {
+
         val customView = RemoteViews(context.packageName, R.layout.custom_notification_layout)
 
-        // 🔵 Apply background (solid or gradient)
+        // Background
         try {
             if (bg_color_gradient.isNotEmpty() && bg_color_gradient_dir.isNotEmpty()) {
                 val startColor = Color.parseColor(backgroundColor)
                 val endColor = Color.parseColor(bg_color_gradient)
-                val isHorizontal = bg_color_gradient_dir.equals("horizontal", ignoreCase = true)
-
-                val gradientBitmap = createGradientBitmap(startColor, endColor, isHorizontal)
-                customView.setImageViewBitmap(R.id.root_background, gradientBitmap)
+                val isHorizontal = bg_color_gradient_dir.equals("horizontal", true)
+                customView.setImageViewBitmap(R.id.root_background, createGradientBitmap(startColor, endColor, isHorizontal))
             } else {
-                val solidBitmap = createSolidColorBitmap(Color.parseColor(backgroundColor))
-                customView.setImageViewBitmap(R.id.root_background, solidBitmap)
+                customView.setImageViewBitmap(R.id.root_background, createSolidColorBitmap(Color.parseColor(backgroundColor)))
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        } catch (_: Exception) {}
 
+        // Text
         customView.setTextViewText(R.id.title, title)
         customView.setTextViewText(R.id.message, message)
         customView.setTextViewText(R.id.tap_text, tapText)
@@ -62,15 +76,16 @@ class CustomNotificationService(private val context: Context) {
             customView.setTextColor(R.id.title, Color.parseColor(titleColor))
             customView.setTextColor(R.id.message, Color.parseColor(messageColor))
             customView.setTextColor(R.id.tap_text, Color.parseColor(tapTextColor))
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        } catch (_: Exception) {}
 
         customView.setProgressBar(R.id.progress_bar, 100, progress, false)
         customView.setImageViewResource(R.id.icon, R.mipmap.ic_launcher)
 
-        // NOTE: Removed setLayoutDirection calls here because RemoteViews does not support them.
-        // Handle layoutDirection in your XML layouts with android:layoutDirection attribute if needed.
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        val pendingIntent = PendingIntent.getActivity(
+            context, 0, launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
@@ -79,64 +94,67 @@ class CustomNotificationService(private val context: Context) {
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setOngoing(true)
+            .setContentIntent(pendingIntent)
             .setAutoCancel(false)
-            .setContentTitle(title)
-            .setContentText(message)
-            .setSubText(tapText)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
 
-        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        builder.setContentIntent(pendingIntent)
+        // ------------------------------------------------------------------------------------
+        // MULTI-IMAGE (CAROUSEL MODE)
+        // ------------------------------------------------------------------------------------
+        if (imageUrls.isNotEmpty()) {
+            downloadImages(imageUrls) { bitmaps ->
 
-        if (imageUrl.isNotEmpty()) {
+                val safeBitmaps = bitmaps.filterNotNull()
+                if (safeBitmaps.isEmpty()) return@downloadImages
+
+                // Save state for carousel navigation
+                cachedBitmaps[notificationId] = safeBitmaps
+                cachedTitles[notificationId] = title
+                cachedMessages[notificationId] = message
+                cachedTapTexts[notificationId] = tapText
+                cachedChannels[notificationId] = channelId
+
+                carouselIndexes[notificationId] = 0
+
+                // Show first image
+                updateCarouselView(
+                    notificationId,
+                    channelId,
+                    title,
+                    message,
+                    tapText,
+                    safeBitmaps,
+                    0
+                )
+
+                // Start auto sliding
+                startAutoSlide(
+                    notificationId,
+                    channelId,
+                    title,
+                    message,
+                    tapText,
+                    safeBitmaps
+                )
+            }
+        }
+
+        // ------------------------------------------------------------------------------------
+        // SINGLE IMAGE FALLBACK
+        // ------------------------------------------------------------------------------------
+        else if (imageUrl.isNotEmpty()) {
             downloadImage(imageUrl) { bitmap ->
                 if (bitmap != null) {
-                    val updatedView = RemoteViews(context.packageName, R.layout.custom_notification_layout)
-
-                    try {
-                        val bgBitmap = if (bg_color_gradient.isNotEmpty() && bg_color_gradient_dir.isNotEmpty()) {
-                            val startColor = Color.parseColor(backgroundColor)
-                            val endColor = Color.parseColor(bg_color_gradient)
-                            val isHorizontal = bg_color_gradient_dir.equals("horizontal", ignoreCase = true)
-                            createGradientBitmap(startColor, endColor, isHorizontal)
-                        } else {
-                            createSolidColorBitmap(Color.parseColor(backgroundColor))
-                        }
-                        updatedView.setImageViewBitmap(R.id.root_background, bgBitmap)
-                    } catch (_: Exception) {}
+                    val updatedView =
+                        RemoteViews(context.packageName, R.layout.custom_notification_layout)
 
                     updatedView.setTextViewText(R.id.title, title)
                     updatedView.setTextViewText(R.id.message, message)
                     updatedView.setTextViewText(R.id.tap_text, tapText)
-                    updatedView.setTextColor(R.id.title, Color.parseColor(titleColor))
-                    updatedView.setTextColor(R.id.message, Color.parseColor(messageColor))
-                    updatedView.setTextColor(R.id.tap_text, Color.parseColor(tapTextColor))
-                    updatedView.setProgressBar(R.id.progress_bar, 100, progress, false)
                     updatedView.setImageViewBitmap(R.id.icon, bitmap)
 
-                    // Removed setLayoutDirection here as well.
-
-                    val updatedBuilder = NotificationCompat.Builder(context, channelId)
-                        .setSmallIcon(R.mipmap.ic_launcher)
-                        .setCustomContentView(updatedView)
-                        .setCustomBigContentView(updatedView)
-                        .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-                        .setPriority(NotificationCompat.PRIORITY_MAX)
-                        .setOngoing(true)
-                        .setAutoCancel(false)
-                        .setContentTitle(title)
-                        .setContentText(message)
-                        .setSubText(tapText)
-                        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                        .setContentIntent(pendingIntent)
-                    println("NotifID 3")
-                    println(notificationId)
-                    val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                    manager.notify(notificationId, updatedBuilder.build())
+                    val manager =
+                        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    manager.notify(notificationId, builder.build())
                 }
             }
         }
@@ -144,58 +162,173 @@ class CustomNotificationService(private val context: Context) {
         return builder
     }
 
-    fun createGradientBitmap(
-        startColor: Int,
-        endColor: Int,
-        isHorizontal: Boolean,
-        width: Int = 1080,
-        height: Int = 300
-    ): Bitmap {
-        val orientation = if (isHorizontal) GradientDrawable.Orientation.LEFT_RIGHT
-        else GradientDrawable.Orientation.TOP_BOTTOM
 
-        val gradient = GradientDrawable(orientation, intArrayOf(startColor, endColor))
-        gradient.setBounds(0, 0, width, height)
+    // ========================================================================================
+    //  MANUAL CAROUSEL NAVIGATION
+    // ========================================================================================
+    fun changeImage(notificationId: Int, forward: Boolean) {
+        val current = carouselIndexes[notificationId] ?: return
+        val bitmaps = cachedBitmaps[notificationId] ?: return
 
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        gradient.draw(canvas)
-        return bitmap
+        val newIndex =
+            if (forward) (current + 1) % bitmaps.size
+            else if (current == 0) bitmaps.size - 1
+            else current - 1
+
+        carouselIndexes[notificationId] = newIndex
+
+        updateCarouselView(
+            notificationId,
+            cachedChannels[notificationId]!!,
+            cachedTitles[notificationId]!!,
+            cachedMessages[notificationId]!!,
+            cachedTapTexts[notificationId]!!,
+            bitmaps,
+            newIndex
+        )
     }
 
-    fun createSolidColorBitmap(color: Int, width: Int = 1080, height: Int = 300): Bitmap {
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        bitmap.eraseColor(color)
-        return bitmap
+
+    // ========================================================================================
+    //  UPDATE CAROUSEL VIEW
+    // ========================================================================================
+    private fun updateCarouselView(
+        notificationId: Int,
+        channelId: String,
+        title: String,
+        message: String,
+        tapText: String,
+        bitmaps: List<Bitmap?>,
+        index: Int
+    ) {
+        val rv = RemoteViews(context.packageName, R.layout.carousel_notification_layout)
+
+        rv.setTextViewText(R.id.title, title)
+        rv.setTextViewText(R.id.message, message)
+        rv.setImageViewBitmap(R.id.carouselImage, bitmaps[index])
+
+        val nextIntent = PendingIntent.getBroadcast(
+            context, notificationId,
+            Intent(ACTION_NEXT).putExtra("id", notificationId),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val prevIntent = PendingIntent.getBroadcast(
+            context, notificationId + 1,
+            Intent(ACTION_PREV).putExtra("id", notificationId),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        rv.setOnClickPendingIntent(R.id.btnNext, nextIntent)
+        rv.setOnClickPendingIntent(R.id.btnPrev, prevIntent)
+
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setCustomContentView(rv)
+            .setCustomBigContentView(rv)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+
+        val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        mgr.notify(notificationId, builder.build())
     }
 
-    fun downloadImage(urlString: String, onResult: (Bitmap?) -> Unit) {
-        val cleanUrl = if (urlString.startsWith("@")) urlString.substring(1) else urlString
+
+    // ========================================================================================
+    //  AUTO-SLIDE (EVERY 3 SECONDS)
+    // ========================================================================================
+    private fun startAutoSlide(
+        notificationId: Int,
+        channelId: String,
+        title: String,
+        message: String,
+        tapText: String,
+        bitmaps: List<Bitmap?>
+    ) {
+        val handler = Handler(Looper.getMainLooper())
+
+        val runnable = object : Runnable {
+            override fun run() {
+                val curr = carouselIndexes[notificationId] ?: 0
+                val next = (curr + 1) % bitmaps.size
+                carouselIndexes[notificationId] = next
+
+                updateCarouselView(
+                    notificationId,
+                    channelId,
+                    title,
+                    message,
+                    tapText,
+                    bitmaps,
+                    next
+                )
+
+                handler.postDelayed(this, 3000)
+            }
+        }
+
+        handler.postDelayed(runnable, 3000)
+    }
+
+
+    // ========================================================================================
+    //  BITMAP HELPERS
+    // ========================================================================================
+    fun downloadImages(urlList: List<String>, onResult: (List<Bitmap?>) -> Unit) {
         Thread {
-            var bitmap: Bitmap? = null
-            try {
-                val url = URL(cleanUrl)
-                val connection = url.openConnection() as HttpURLConnection
-                connection.doInput = true
-                connection.connectTimeout = 15000
-                connection.readTimeout = 15000
-                connection.connect()
-                if (connection.responseCode == 200) {
-                    val input: InputStream = connection.inputStream
-                    bitmap = BitmapFactory.decodeStream(input)
+            val results = mutableListOf<Bitmap?>()
+
+            for (urlString in urlList) {
+                val clean = if (urlString.startsWith("@")) urlString.substring(1) else urlString
+                try {
+                    val url = URL(clean)
+                    val conn = url.openConnection() as HttpURLConnection
+                    conn.doInput = true
+                    conn.connect()
+                    results.add(BitmapFactory.decodeStream(conn.inputStream))
+                } catch (e: Exception) {
+                    results.add(null)
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
-            Handler(Looper.getMainLooper()).post {
-                onResult(bitmap)
-            }
+
+            Handler(Looper.getMainLooper()).post { onResult(results) }
         }.start()
     }
 
-    fun testImageLoading(imageUrl: String, callback: (Boolean) -> Unit) {
-        downloadImage(imageUrl) { bitmap ->
-            callback(bitmap != null)
-        }
+
+    fun downloadImage(urlString: String, onResult: (Bitmap?) -> Unit) {
+        Thread {
+            var bmp: Bitmap? = null
+            try {
+                val url = URL(urlString)
+                val conn = url.openConnection() as HttpURLConnection
+                conn.doInput = true
+                conn.connect()
+                bmp = BitmapFactory.decodeStream(conn.inputStream)
+            } catch (_: Exception) {}
+
+            Handler(Looper.getMainLooper()).post { onResult(bmp) }
+        }.start()
     }
+
+
+    fun createGradientBitmap(startColor: Int, endColor: Int, isHorizontal: Boolean): Bitmap {
+        val gradient = GradientDrawable(
+            if (isHorizontal) GradientDrawable.Orientation.LEFT_RIGHT
+            else GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(startColor, endColor)
+        )
+
+        val bmp = Bitmap.createBitmap(1080, 350, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        gradient.setBounds(0, 0, 1080, 350)
+        gradient.draw(canvas)
+        return bmp
+    }
+
+    fun createSolidColorBitmap(color: Int): Bitmap {
+        val bmp = Bitmap.createBitmap(1080, 350, Bitmap.Config.ARGB_8888)
+        bmp.eraseColor(color)
+        return bmp
+    }
+
 }

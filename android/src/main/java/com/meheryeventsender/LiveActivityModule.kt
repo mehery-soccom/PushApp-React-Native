@@ -1,6 +1,5 @@
 package com.meheryeventsender
 
-import android.content.Intent
 import com.facebook.react.bridge.*
 import com.facebook.react.module.annotations.ReactModule
 
@@ -14,7 +13,6 @@ class LiveActivityModule(private val reactContext: ReactApplicationContext) :
 
     override fun getName(): String = NAME
 
-    // Existing live activity method
     @ReactMethod
     fun triggerLiveActivity(dataMap: ReadableMap) {
         val data = mutableMapOf<String, String>()
@@ -28,32 +26,7 @@ class LiveActivityModule(private val reactContext: ReactApplicationContext) :
             }
         }
 
+        // ✅ Call the shared utility instead of private method
         LiveActivityUtils.handleLiveActivityNotification(reactContext, data)
-    }
-
-    // ⭐ New Carousel method (Kotlin-correct)
-    @ReactMethod
-    fun triggerCarousel(params: ReadableMap) {
-        val title = params.getString("title") ?: ""
-        val message = params.getString("message") ?: ""
-
-        val imagesArray = params.getArray("images")
-        val images = ArrayList<String>()
-
-        if (imagesArray != null) {
-            for (i in 0 until imagesArray.size()) {
-                val url = imagesArray.getString(i)
-                if (url != null) images.add(url)
-            }
-        }
-
-        // Launch CarouselActivity
-        val intent = Intent(reactContext, CarouselActivity::class.java)
-        intent.putStringArrayListExtra("images", images)
-        intent.putExtra("title", title)
-        intent.putExtra("message", message)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
-        reactContext.startActivity(intent)
     }
 }

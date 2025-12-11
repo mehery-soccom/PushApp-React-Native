@@ -7,13 +7,7 @@
 
     <application>
 
-        <!-- Carousel -->
-        <activity
-            android:name=".CarouselActivity"
-            android:exported="true"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar.FullScreen" />
-
-        <!-- Your SDK’s Firebase messaging service (optional) -->
+        <!-- Firebase Messaging Service -->
         <service
             android:name=".MyFirebaseMessagingService"
             android:exported="false">
@@ -22,10 +16,20 @@
             </intent-filter>
         </service>
 
-        <!-- Your custom notification service (optional) -->
+        <!-- Custom Notification Service -->
         <service
             android:name=".CustomNotificationService"
             android:exported="false" />
+
+        <!-- Carousel Receiver (REQUIRED for next / prev buttons) -->
+        <receiver
+            android:name=".CarouselReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.meheryeventsender.CAROUSEL_NEXT" />
+                <action android:name="com.meheryeventsender.CAROUSEL_PREV" />
+            </intent-filter>
+        </receiver>
 
     </application>
 
