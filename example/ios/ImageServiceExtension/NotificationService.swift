@@ -5,6 +5,9 @@ class NotificationService: UNNotificationServiceExtension {
     private var contentHandler: ((UNNotificationContent) -> Void)?
     private var bestAttemptContent: UNMutableNotificationContent?
 
+    // ---------------------------------------------------------
+    // MARK: - didReceive
+    // ---------------------------------------------------------
     override func didReceive(
         _ request: UNNotificationRequest,
         withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
@@ -18,30 +21,65 @@ class NotificationService: UNNotificationServiceExtension {
 
         let userInfo = request.content.userInfo
 
-        // -------------------------------
-        // 📌 1. MULTIPLE IMAGE SUPPORT
-        // -------------------------------
+        // ---------------------------------------------------------
+        // 📌 LOGO DOWNLOAD (must be processed before images)
+        // ---------------------------------------------------------
+        if let logoUrlString = userInfo["logo"] as? String,
+           let logoUrl = URL(string: logoUrlString) {
+
+            downloadTempFile(url: logoUrl) { tempUrl in
+                if let tempUrl = tempUrl,
+                   let attachment = try? UNNotificationAttachment(
+                       identifier: "logo",
+                       url: tempUrl
+                   ) {
+                    print("🟦 Logo downloaded & attached")
+                    content.attachments.insert(attachment, at: 0)
+                }
+
+                // Continue once logo is handled
+                self.processImages(
+                    userInfo: userInfo,
+                    content: content,
+                    contentHandler: contentHandler
+                )
+            }
+
+            return
+        }
+
+        // No logo → directly process images
+        processImages(userInfo: userInfo, content: content, contentHandler: contentHandler)
+    }
+
+    // ---------------------------------------------------------
+    // MARK: - Image Processing Logic
+    // ---------------------------------------------------------
+    private func processImages(
+        userInfo: [AnyHashable : Any],
+        content: UNMutableNotificationContent,
+        contentHandler: @escaping (UNNotificationContent) -> Void
+    ) {
+        // MULTIPLE IMAGE SUPPORT
         if let imageUrls = userInfo["images"] as? [String], !imageUrls.isEmpty {
             downloadMultipleImages(urlStrings: imageUrls, content: content, completion: contentHandler)
             return
         }
 
-        // -------------------------------
-        // 📌 2. Single image fallback
-        // -------------------------------
+        // SINGLE IMAGE SUPPORT
         if let mediaUrl = userInfo["media-url"] as? String,
            let url = URL(string: mediaUrl) {
             downloadAndAttachSingleImage(url: url, content: content, contentHandler: contentHandler)
             return
         }
 
-        // No images
+        // No images → return original content
         contentHandler(content)
     }
 
-    // ============================================================
+    // ---------------------------------------------------------
     // MARK: - MULTIPLE IMAGE DOWNLOAD
-    // ============================================================
+    // ---------------------------------------------------------
     private func downloadMultipleImages(
         urlStrings: [String],
         content: UNMutableNotificationContent,
@@ -55,13 +93,12 @@ class NotificationService: UNNotificationServiceExtension {
 
             group.enter()
             downloadTempFile(url: url) { tempUrl in
-                if let tempUrl = tempUrl {
-                    if let attachment = try? UNNotificationAttachment(
-                        identifier: "image_\(index)",
-                        url: tempUrl
-                    ) {
-                        attachments.append(attachment)
-                    }
+                if let tempUrl = tempUrl,
+                   let attachment = try? UNNotificationAttachment(
+                       identifier: "image_\(index)",
+                       url: tempUrl
+                   ) {
+                    attachments.append(attachment)
                 }
                 group.leave()
             }
@@ -69,15 +106,14 @@ class NotificationService: UNNotificationServiceExtension {
 
         group.notify(queue: .main) {
             print("📸 Downloaded \(attachments.count) images.")
-
-            content.attachments = attachments
+            content.attachments.append(contentsOf: attachments)
             completion(content)
         }
     }
 
-    // ============================================================
+    // ---------------------------------------------------------
     // MARK: - SINGLE IMAGE DOWNLOAD
-    // ============================================================
+    // ---------------------------------------------------------
     private func downloadAndAttachSingleImage(
         url: URL,
         content: UNMutableNotificationContent,
@@ -85,7 +121,10 @@ class NotificationService: UNNotificationServiceExtension {
     ) {
         downloadTempFile(url: url) { tempUrl in
             if let tempUrl = tempUrl,
-               let attachment = try? UNNotificationAttachment(identifier: "image", url: tempUrl) {
+               let attachment = try? UNNotificationAttachment(
+                   identifier: "image",
+                   url: tempUrl
+               ) {
                 content.attachments = [attachment]
                 print("✅ Single image attached")
             }
@@ -93,16 +132,17 @@ class NotificationService: UNNotificationServiceExtension {
         }
     }
 
-    // ============================================================
-    // MARK: - TEMP FILE DOWNLOAD HANDLER
-    // ============================================================
+    // ---------------------------------------------------------
+    // MARK: - TEMP FILE DOWNLOAD
+    // ---------------------------------------------------------
     private func downloadTempFile(url: URL, completion: @escaping (URL?) -> Void) {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 10
-        config.timeoutIntervalForResource = 10
+        config.timeoutIntervalForRequest = 12
+        config.timeoutIntervalForResource = 12
 
         let session = URLSession(configuration: config)
         let task = session.downloadTask(with: url) { location, _, error in
+
             if let error = error {
                 print("❌ Error downloading file: \(error.localizedDescription)")
                 completion(nil)
@@ -110,20 +150,20 @@ class NotificationService: UNNotificationServiceExtension {
             }
 
             guard let location = location else {
-                print("⚠️ Download location missing")
+                print("⚠️ Missing temp file location")
                 completion(nil)
                 return
             }
 
             let tmpDirectory = NSTemporaryDirectory()
             let filename = "img_\(UUID().uuidString).jpg"
-            let tmpUrl = URL(fileURLWithPath: tmpDirectory).appendingPathComponent(filename)
+            let tempUrl = URL(fileURLWithPath: tmpDirectory).appendingPathComponent(filename)
 
             do {
-                try FileManager.default.moveItem(at: location, to: tmpUrl)
-                completion(tmpUrl)
+                try FileManager.default.moveItem(at: location, to: tempUrl)
+                completion(tempUrl)
             } catch {
-                print("⚠️ File move error: \(error)")
+                print("⚠️ File move error: \(error.localizedDescription)")
                 completion(nil)
             }
         }
@@ -131,10 +171,12 @@ class NotificationService: UNNotificationServiceExtension {
         task.resume()
     }
 
+    // ---------------------------------------------------------
+    // MARK: - Fallback
+    // ---------------------------------------------------------
     override func serviceExtensionTimeWillExpire() {
-        // Called just before the extension times out
-        if let contentHandler = contentHandler, let bestAttemptContent = bestAttemptContent {
-            contentHandler(bestAttemptContent)
+        if let handler = contentHandler, let content = bestAttemptContent {
+            handler(content)
         }
     }
 }

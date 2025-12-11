@@ -4,10 +4,13 @@ import UserNotificationsUI
 
 class NotificationViewController: UIViewController, UNNotificationContentExtension {
 
+    // MARK: - Outlets
     @IBOutlet weak var containerView: UIView!
     @IBOutlet weak var titleLabel: UILabel!
     @IBOutlet weak var textLabel: UILabel!
+    @IBOutlet weak var logoImageView: UIImageView! // New outlet for logo
 
+    // MARK: - Properties
     private var images: [UIImage] = []
     private var currentIndex: Int = 0
     private var autoScrollTimer: Timer?
@@ -27,56 +30,135 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         view.backgroundColor = .clear
         containerView.backgroundColor = .clear
 
+        // Set up label appearance
         titleLabel.textColor = .white
         textLabel.textColor = .white
-        titleLabel.font = UIFont.boldSystemFont(ofSize: 18)
-        textLabel.font = UIFont.boldSystemFont(ofSize: 18)
 
+        textLabel.backgroundColor = .clear
+        titleLabel.backgroundColor = .clear
+
+        titleLabel.font = UIFont.boldSystemFont(ofSize: 18)
+        textLabel.font = UIFont.systemFont(ofSize: 16) // Changed body font to be slightly smaller and not bold for visual separation
+
+        // Configure logo appearance
+        logoImageView.contentMode = .scaleAspectFit
+        logoImageView.clipsToBounds = true
+        
         setupCarouselViews()
         setupGestures()
     }
 
-    // ---------------------------------------------------------
-    // MARK: - Layout Size
-    // ---------------------------------------------------------
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
+   // ---------------------------------------------------------
+// MARK: - Layout Size (Optimized)
+// ---------------------------------------------------------
+override func viewDidLayoutSubviews() {
+    super.viewDidLayoutSubviews()
 
-        let maxWidth = view.bounds.width - 32
-        let imageHeight = maxWidth * 0.56
-        let titleHeight = titleLabel.intrinsicContentSize.height + 12
-        let bodyHeight = textLabel.intrinsicContentSize.height + 12
+    // Adjustable constants (edit here only)
+    let sidePadding: CGFloat = 16
+    let spacingAboveCarousel: CGFloat = 40     // space between body text -> carousel
+    let carouselHeightMultiplier: CGFloat = 0.5
 
-        let totalHeight = titleHeight + bodyHeight + imageHeight + 32
+    // Width available for layout
+    let maxWidth = view.bounds.width - sidePadding
 
-        preferredContentSize = CGSize(width: maxWidth, height: totalHeight)
-    }
+    // Title + logo combined height
+    let logoHeight = logoImageView.bounds.height
+    let titleHeight = titleLabel.intrinsicContentSize.height
+    let titleBlockHeight = max(logoHeight, titleHeight) + 8
+
+    logoImageView.layer.cornerRadius = 8
+    logoImageView.layer.masksToBounds = true
+
+    // Body text height (0 if empty)
+    let bodyHeight = textLabel.isHidden
+        ? 0
+        : textLabel.intrinsicContentSize.height + 4
+
+    // Carousel height based on multiplier
+    let carouselHeight = maxWidth * carouselHeightMultiplier
+
+    // FINAL calculated height
+    let totalHeight =
+        titleBlockHeight
+        + bodyHeight
+        + spacingAboveCarousel
+        + carouselHeight
+        - 12
+
+    preferredContentSize = CGSize(width: maxWidth, height: totalHeight)
+}
+
+
 
     // ---------------------------------------------------------
     // MARK: - Receive Notification
     // ---------------------------------------------------------
     func didReceive(_ notification: UNNotification) {
-        self.notification = notification
+    self.notification = notification
 
-        titleLabel.text = notification.request.content.title
-        textLabel.text = notification.request.content.body
+    titleLabel.text = notification.request.content.title
+    textLabel.text = notification.request.content.body
 
-        textLabel.isHidden = notification.request.content.body.trimmingCharacters(in: .whitespaces).isEmpty
+    // ---------------------------------------------------------
+    // ✅ 1. LOAD LOGO FROM ATTACHMENT (if exists)
+    // ---------------------------------------------------------
+    if let logoAttachment = notification.request.content.attachments.first(where: { $0.identifier == "logo" }) {
+    _ = logoAttachment.url.startAccessingSecurityScopedResource()
+    if let data = try? Data(contentsOf: logoAttachment.url) {
+        logoImageView.image = UIImage(data: data)
+        print("🟦 Loaded remote logo")
+    }
+    logoAttachment.url.stopAccessingSecurityScopedResource()
+}
 
-        // Load images
-        for attachment in notification.request.content.attachments {
-            let url = attachment.url
-            _ = url.startAccessingSecurityScopedResource()
-            if let data = try? Data(contentsOf: url), let img = UIImage(data: data) {
+// (B) Fallback to local asset
+if logoImageView.image == nil {
+    logoImageView.image = UIImage(named: "logo")
+    print("🔵 Fallback local logo loaded:", UIImage(named: "logo") != nil)
+}
+    // Hide body label if empty
+    let isBodyEmpty = notification.request.content.body
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .isEmpty
+    textLabel.isHidden = isBodyEmpty
+
+    // Apply layout update
+    view.setNeedsLayout()
+    view.layoutIfNeeded()
+
+    // ---------------------------------------------------------
+    // ✅ 2. LOAD CAROUSEL IMAGES
+    // ---------------------------------------------------------
+    images.removeAll()
+
+    for attachment in notification.request.content.attachments {
+        // Skip the logo (identifier == "logo")
+        if attachment.identifier == "logo" { continue }
+
+        let ext = attachment.url.pathExtension.lowercased()
+        if ["png", "jpg", "jpeg"].contains(ext) {
+            _ = attachment.url.startAccessingSecurityScopedResource()
+            if let data = try? Data(contentsOf: attachment.url),
+               let img = UIImage(data: data) {
                 images.append(img)
             }
-            url.stopAccessingSecurityScopedResource()
+            attachment.url.stopAccessingSecurityScopedResource()
         }
+    }
 
+    // ---------------------------------------------------------
+    // ✅ 3. START CAROUSEL IF IMAGES EXIST
+    // ---------------------------------------------------------
+    if !images.isEmpty {
         currentIndex = 0
         updateImage(animated: false)
         startAutoScroll()
+    } else {
+        carouselView.removeFromSuperview()
     }
+}
+
 
     // ---------------------------------------------------------
     // MARK: - Setup Carousel Views
@@ -86,13 +168,13 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         carouselView.clipsToBounds = true
         containerView.addSubview(carouselView)
 
-        // Position carousel where old ImageView used to be
+        // Position carousel below TextLabel
         NSLayoutConstraint.activate([
             carouselView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             carouselView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            carouselView.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: 4),
-            carouselView.heightAnchor.constraint(equalTo: containerView.widthAnchor, multiplier: 0.56),
-            carouselView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
+            carouselView.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: 15), // spacing between image and texts
+            carouselView.heightAnchor.constraint(equalTo: containerView.widthAnchor, multiplier: 0.5), // Fixed aspect ratio
+            // carouselView.bottomAnchor.constraint(lessThanOrEqualTo: containerView.bottomAnchor, constant: -8) // Add small bottom margin
         ])
 
         // Add scrolling images
@@ -107,19 +189,27 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         carouselView.addSubview(currentImageView)
         carouselView.addSubview(nextImageView)
 
+        carouselView.clipsToBounds = true
+        carouselView.layer.masksToBounds = true
+
+        // Setup image view constraints
         NSLayoutConstraint.activate([
+            // Current image starts at the leading edge
             currentImageView.leadingAnchor.constraint(equalTo: carouselView.leadingAnchor),
             currentImageView.topAnchor.constraint(equalTo: carouselView.topAnchor),
             currentImageView.bottomAnchor.constraint(equalTo: carouselView.bottomAnchor),
             currentImageView.widthAnchor.constraint(equalTo: carouselView.widthAnchor),
 
-            nextImageView.leadingAnchor.constraint(equalTo: currentImageView.trailingAnchor, constant: -40),
+            // Next image is positioned right next to the current image's trailing edge
+            // **NOTE:** The constant '-40' in your original code causes an overlap/misalignment. 
+            // For a standard carousel, it should start outside the bounds.
+            nextImageView.leadingAnchor.constraint(equalTo: currentImageView.trailingAnchor),
             nextImageView.topAnchor.constraint(equalTo: carouselView.topAnchor),
             nextImageView.bottomAnchor.constraint(equalTo: carouselView.bottomAnchor),
             nextImageView.widthAnchor.constraint(equalTo: carouselView.widthAnchor)
         ])
     }
-
+    
     // ---------------------------------------------------------
     // MARK: - Gestures
     // ---------------------------------------------------------
@@ -167,21 +257,25 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         guard !images.isEmpty else { return }
 
         let nextIndex = (currentIndex + 1) % images.count
-
+        
+        // 1. Prepare for the animation: The next image is already correctly positioned 
+        //    at `currentImageView.trailingAnchor`. We just need to load the image.
         nextImageView.image = images[nextIndex]
 
+        // 2. Animate the transition
         UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseInOut, animations: {
-            self.currentImageView.transform = CGAffineTransform(translationX: -self.carouselView.bounds.width + 40, y: 0)
-            self.nextImageView.transform = CGAffineTransform(translationX: -self.carouselView.bounds.width + 40, y: 0)
+            // Move both views left by the width of the carousel view
+            let translation = -self.carouselView.bounds.width
+            self.currentImageView.transform = CGAffineTransform(translationX: translation, y: 0)
+            self.nextImageView.transform = CGAffineTransform(translationX: translation, y: 0)
         }, completion: { _ in
-            // Move forward
+            // 3. Update state and reset transforms
             self.currentIndex = nextIndex
-
-            // Reset transforms
+            
             self.currentImageView.transform = .identity
             self.nextImageView.transform = .identity
 
-            // Prepare next
+            // 4. Update the current image to the new one (which was the 'next' image)
             self.currentImageView.image = self.images[self.currentIndex]
         })
     }
@@ -197,6 +291,11 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         } else if gesture.direction == .right {
             animateBackward()
         }
+        
+        // Re-start timer after a brief delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.startAutoScroll()
+        }
     }
 
     private func animateBackward() {
@@ -204,19 +303,25 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
 
         let prevIndex = (currentIndex - 1 + images.count) % images.count
 
+        // 1. Prepare for the animation: Place the *previous* image into the `nextImageView`
+        //    and position it to the far left (off-screen).
         nextImageView.image = images[prevIndex]
+        nextImageView.transform = CGAffineTransform(translationX: -carouselView.bounds.width, y: 0)
+        currentImageView.transform = .identity // Current image is visible in the frame
 
-        // Place previous image to the left side
-        currentImageView.transform = .identity
-        nextImageView.transform = CGAffineTransform(translationX: -carouselView.bounds.width + 40, y: 0)
-
+        // 2. Animate the transition
         UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseInOut, animations: {
-            self.currentImageView.transform = CGAffineTransform(translationX: self.carouselView.bounds.width - 40, y: 0)
-            self.nextImageView.transform = .identity
+            // Move both views right by the width of the carousel view
+            let translation = self.carouselView.bounds.width
+            self.currentImageView.transform = CGAffineTransform(translationX: translation, y: 0)
+            self.nextImageView.transform = .identity // Bring the previous image into view
         }, completion: { _ in
+            // 3. Update state and reset transforms
             self.currentIndex = prevIndex
             self.currentImageView.transform = .identity
             self.nextImageView.transform = .identity
+            
+            // 4. Update the current image to the new one (which was the 'next' image)
             self.currentImageView.image = self.images[self.currentIndex]
         })
     }
