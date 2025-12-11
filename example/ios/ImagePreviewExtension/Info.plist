@@ -7,7 +7,19 @@
 		<key>NSExtensionAttributes</key>
 		<dict>
 			<key>UNNotificationExtensionCategory</key>
-			<string>CAROUSEL_CATEGORY</string>
+			<array>
+				<string>CAROUSEL_CATEGORY</string>
+				<string>CONFIRMATION_CATEGORY</string>
+				<string>RESPONSE_CATEGORY</string>
+				<string>SUBSCRIPTION_CATEGORY</string>
+				<string>TRANSACTION_CATEGORY</string>
+				<string>CONTENT_CATEGORY</string>
+				<string>CHECKOUT_CATEGORY</string>
+				<string>FORM_ACTION_CATEGORY</string>
+				<string>DESTRUCTIVE_ACTION_CATEGORY</string>
+				<string>CONTACT_CATEGORY</string>
+			</array>
+
 			<key>UNNotificationExtensionDefaultContentHidden</key>
 			<true/>
 			<key>UNNotificationExtensionInitialContentSizeRatio</key>
