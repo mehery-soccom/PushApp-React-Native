@@ -1,12 +1,20 @@
+Got you — you want a **full raw README.md**, untouched, **exactly copy-pasteable**, with all the Markdown formatting (`#`, `##`, code fences, etc.) and with the new poll sections inserted naturally.
+
+Here it is — **FINAL RAW README**, no extra commentary:
+
+---
+
+````md
 # react-native-mehery-event-sender
 
-A lightweight React Native SDK to support push notifications, custom in-app messages (popup, banner, PiP), event tracking, and session handling for your apps.
+A lightweight React Native SDK to support push notifications, custom in-app messages (popup, banner, PiP), event tracking, in-app polls, and session handling for your apps.
 
 ## Installation
 
 ```sh
 npm install react-native-mehery-event-sender
 ```
+````
 
 ## 🚀 Initialization
 
@@ -24,17 +32,17 @@ initSdk(
 );
 ```
 
-To login the user:
+### Login the user
 
 ```js
-import { onUserLogin } from 'react-native-mehery-event-sender';
+import { OnUserLogin } from 'react-native-mehery-event-sender';
 
 // ...
 
 OnUserLogin('user_id');
 ```
 
-To Initialize Page Open Event
+### Initialize Page Open Event
 
 ```js
 import { OnPageOpen } from 'react-native-mehery-event-sender';
@@ -44,14 +52,14 @@ import { OnPageOpen } from 'react-native-mehery-event-sender';
 OnPageOpen('page_name');
 ```
 
+---
+
 ## 🎯 Event Tracking
 
 To track user actions or custom events:
 
 ```js
 import { sendCustomEvent } from 'react-native-mehery-event-sender';
-
-// ...
 // Send a simple event
 sendCustomEvent('login_clicked', { userId: '12345' });
 
@@ -63,37 +71,103 @@ sendCustomEvent('purchase_made', {
 });
 ```
 
+---
+
 ## 🔔 Notification Handling
 
-The SDK auto-registers FCM token and handles push notifications. Ensure you have Firebase configured.
-
-## In-App Notifications
-
-The SDK handles: -- Popup full-screen . -- Banner with inline dismiss. -- PiP small floating view with expand logic to popup.
-No integration required from your side. The SDK renders them when triggered.
-
-## 📄 ProGuard
-
--keep class com.mehery.pushapp.\*_ { _; }
-
-## 🏷️ Versions
-
-Latest Version: 0.0.10 Hosted on npm.
-
-## 💬 Support
-
-Raise issues or feature requests in GitHub Issues
-
-<!-- ## Contributing
-
-See the [contributing guide](CONTRIBUTING.md) to learn how to contribute to the repository and the development workflow. -->
-
-<!-- ## License
-
-MIT
+The SDK auto-registers FCM token and handles push notifications.
+Ensure you have Firebase configured.
 
 ---
 
-Made with [create-react-native-library](https://github.com/callstack/react-native-builder-bob) -->
+## 🧩 In-App Polls (Inline & Tooltip)
 
-# react-native-mehery-event-sender
+The SDK supports inline polls (banners/cards inside screen layout) and tooltip-style polls that attach to UI elements.
+These require **no UI logic** from your side — they automatically render when triggered.
+
+### 📌 Inline Poll Container
+
+Render polls inline within your layout:
+
+```tsx
+import { InlinePollContainer } from 'react-native-mehery-event-sender';
+
+export default function ExampleScreen() {
+  return (
+    <View style={{ marginTop: 20 }}>
+      <InlinePollContainer placeholderId="home_banner" />
+      <Text>Welcome to the Home Screen</Text>
+    </View>
+  );
+}
+```
+
+### 📌 Tooltip Poll Container
+
+Attach polls to any UI element (icon, button, floating element):
+
+```tsx
+import { TooltipPollContainer } from 'react-native-mehery-event-sender';
+
+export default function ExampleScreen() {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <TooltipPollContainer placeholderId="floating_tooltip">
+        <View
+          style={{
+            width: 40,
+            height: 40,
+            backgroundColor: 'blue',
+            borderRadius: 20,
+          }}
+        />
+      </TooltipPollContainer>
+    </View>
+  );
+}
+```
+
+---
+
+## 📣 In-App Notifications
+
+The SDK handles:
+
+- Full-screen popup
+- Banner with inline dismiss
+- PiP floating widget with expand-to-popup
+
+No integration required — rendered automatically when triggered.
+
+---
+
+## 📄 ProGuard
+
+```
+-keep class com.mehery.pushapp.** { *; }
+```
+
+---
+
+## 🏷️ Versions
+
+Latest Version: **0.0.10** hosted on npm.
+
+---
+
+## 💬 Support
+
+Raise issues or feature requests in **GitHub Issues**.
+
+```
+
+---
+
+If you want, I can also generate:
+
+✅ A cleaned-up npm-optimized README
+✅ A version with images/screenshots
+✅ A version with API docs & TypeScript definitions
+
+Just tell me!
+```
