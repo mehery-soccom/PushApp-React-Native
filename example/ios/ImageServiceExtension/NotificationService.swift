@@ -56,26 +56,46 @@ class NotificationService: UNNotificationServiceExtension {
     // MARK: - Image Processing Logic
     // ---------------------------------------------------------
     private func processImages(
-        userInfo: [AnyHashable : Any],
-        content: UNMutableNotificationContent,
-        contentHandler: @escaping (UNNotificationContent) -> Void
-    ) {
-        // MULTIPLE IMAGE SUPPORT
-        if let imageUrls = userInfo["images"] as? [String], !imageUrls.isEmpty {
-            downloadMultipleImages(urlStrings: imageUrls, content: content, completion: contentHandler)
-            return
-        }
+    userInfo: [AnyHashable : Any],
+    content: UNMutableNotificationContent,
+    contentHandler: @escaping (UNNotificationContent) -> Void
+) {
 
-        // SINGLE IMAGE SUPPORT
-        if let mediaUrl = userInfo["media-url"] as? String,
-           let url = URL(string: mediaUrl) {
-            downloadAndAttachSingleImage(url: url, content: content, contentHandler: contentHandler)
-            return
-        }
-
-        // No images → return original content
-        contentHandler(content)
+    // ---------------------------------------------------------
+    // MARK: - HANDLE image_url (string OR array)
+    // ---------------------------------------------------------
+    if let singleImage = userInfo["image_url"] as? String,
+       let url = URL(string: singleImage) {
+        downloadAndAttachSingleImage(url: url, content: content, contentHandler: contentHandler)
+        return
     }
+
+    if let multiImages = userInfo["image_url"] as? [String], !multiImages.isEmpty {
+        downloadMultipleImages(urlStrings: multiImages, content: content, completion: contentHandler)
+        return
+    }
+
+    // ---------------------------------------------------------
+    // MARK: - EXISTING MULTIPLE IMAGES (images key)
+    // ---------------------------------------------------------
+    if let imageUrls = userInfo["images"] as? [String], !imageUrls.isEmpty {
+        downloadMultipleImages(urlStrings: imageUrls, content: content, completion: contentHandler)
+        return
+    }
+
+    // ---------------------------------------------------------
+    // MARK: - EXISTING SINGLE IMAGE (media-url key)
+    // ---------------------------------------------------------
+    if let mediaUrl = userInfo["media-url"] as? String,
+       let url = URL(string: mediaUrl) {
+        downloadAndAttachSingleImage(url: url, content: content, contentHandler: contentHandler)
+        return
+    }
+
+    // No images → return
+    contentHandler(content)
+}
+
 
     // ---------------------------------------------------------
     // MARK: - MULTIPLE IMAGE DOWNLOAD
