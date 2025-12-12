@@ -1,8 +1,4 @@
-Got you — you want a **full raw README.md**, untouched, **exactly copy-pasteable**, with all the Markdown formatting (`#`, `##`, code fences, etc.) and with the new poll sections inserted naturally.
 
-Here it is — **FINAL RAW README**, no extra commentary:
-
----
 
 ````md
 # react-native-mehery-event-sender
