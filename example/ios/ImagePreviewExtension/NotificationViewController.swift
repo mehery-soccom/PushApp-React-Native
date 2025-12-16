@@ -90,6 +90,10 @@ override func viewDidLayoutSubviews() {
 }
 
 
+private var isCarouselEnabled: Bool {
+    return images.count > 1
+}
+
 
     // ---------------------------------------------------------
     // MARK: - Receive Notification
@@ -151,12 +155,20 @@ if logoImageView.image == nil {
     // ✅ 3. START CAROUSEL IF IMAGES EXIST
     // ---------------------------------------------------------
     if !images.isEmpty {
-        currentIndex = 0
-        updateImage(animated: false)
+    currentIndex = 0
+    updateImage(animated: false)
+
+    if isCarouselEnabled {
         startAutoScroll()
+        carouselView.isUserInteractionEnabled = true
     } else {
-        carouselView.removeFromSuperview()
+        autoScrollTimer?.invalidate()
+        carouselView.isUserInteractionEnabled = false
     }
+} else {
+    carouselView.removeFromSuperview()
+}
+
 }
 
 
@@ -214,16 +226,18 @@ if logoImageView.image == nil {
     // MARK: - Gestures
     // ---------------------------------------------------------
     private func setupGestures() {
-        carouselView.isUserInteractionEnabled = true
-
         let left = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipe(_:)))
         left.direction = .left
-        carouselView.addGestureRecognizer(left)
 
         let right = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipe(_:)))
         right.direction = .right
+
+        carouselView.addGestureRecognizer(left)
         carouselView.addGestureRecognizer(right)
+
+        carouselView.isUserInteractionEnabled = false // default
     }
+
 
     // ---------------------------------------------------------
     // MARK: - Auto Scroll
@@ -253,78 +267,67 @@ if logoImageView.image == nil {
         }
     }
 
-    private func animateForward() {
-        guard !images.isEmpty else { return }
+   private func animateForward() {
+    guard isCarouselEnabled else { return }
+    guard !images.isEmpty else { return }
 
-        let nextIndex = (currentIndex + 1) % images.count
-        
-        // 1. Prepare for the animation: The next image is already correctly positioned 
-        //    at `currentImageView.trailingAnchor`. We just need to load the image.
-        nextImageView.image = images[nextIndex]
+    let nextIndex = (currentIndex + 1) % images.count
 
-        // 2. Animate the transition
-        UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseInOut, animations: {
-            // Move both views left by the width of the carousel view
-            let translation = -self.carouselView.bounds.width
-            self.currentImageView.transform = CGAffineTransform(translationX: translation, y: 0)
-            self.nextImageView.transform = CGAffineTransform(translationX: translation, y: 0)
-        }, completion: { _ in
-            // 3. Update state and reset transforms
-            self.currentIndex = nextIndex
-            
-            self.currentImageView.transform = .identity
-            self.nextImageView.transform = .identity
+    nextImageView.image = images[nextIndex]
 
-            // 4. Update the current image to the new one (which was the 'next' image)
-            self.currentImageView.image = self.images[self.currentIndex]
-        })
-    }
+    UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseInOut, animations: {
+        let translation = -self.carouselView.bounds.width
+        self.currentImageView.transform = CGAffineTransform(translationX: translation, y: 0)
+        self.nextImageView.transform = CGAffineTransform(translationX: translation, y: 0)
+    }, completion: { _ in
+        self.currentIndex = nextIndex
+        self.currentImageView.transform = .identity
+        self.nextImageView.transform = .identity
+        self.currentImageView.image = self.images[self.currentIndex]
+    })
+}
+
 
     // ---------------------------------------------------------
     // MARK: - Swipe Handling
     // ---------------------------------------------------------
     @objc private func handleSwipe(_ gesture: UISwipeGestureRecognizer) {
-        autoScrollTimer?.invalidate()
+    guard isCarouselEnabled else { return }
 
-        if gesture.direction == .left {
-            animateForward()
-        } else if gesture.direction == .right {
-            animateBackward()
-        }
-        
-        // Re-start timer after a brief delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.startAutoScroll()
-        }
+    autoScrollTimer?.invalidate()
+
+    if gesture.direction == .left {
+        animateForward()
+    } else if gesture.direction == .right {
+        animateBackward()
     }
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        self?.startAutoScroll()
+    }
+}
+
 
     private func animateBackward() {
-        guard !images.isEmpty else { return }
+    guard isCarouselEnabled else { return }
+    guard !images.isEmpty else { return }
 
-        let prevIndex = (currentIndex - 1 + images.count) % images.count
+    let prevIndex = (currentIndex - 1 + images.count) % images.count
 
-        // 1. Prepare for the animation: Place the *previous* image into the `nextImageView`
-        //    and position it to the far left (off-screen).
-        nextImageView.image = images[prevIndex]
-        nextImageView.transform = CGAffineTransform(translationX: -carouselView.bounds.width, y: 0)
-        currentImageView.transform = .identity // Current image is visible in the frame
+    nextImageView.image = images[prevIndex]
+    nextImageView.transform = CGAffineTransform(translationX: -carouselView.bounds.width, y: 0)
 
-        // 2. Animate the transition
-        UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseInOut, animations: {
-            // Move both views right by the width of the carousel view
-            let translation = self.carouselView.bounds.width
-            self.currentImageView.transform = CGAffineTransform(translationX: translation, y: 0)
-            self.nextImageView.transform = .identity // Bring the previous image into view
-        }, completion: { _ in
-            // 3. Update state and reset transforms
-            self.currentIndex = prevIndex
-            self.currentImageView.transform = .identity
-            self.nextImageView.transform = .identity
-            
-            // 4. Update the current image to the new one (which was the 'next' image)
-            self.currentImageView.image = self.images[self.currentIndex]
-        })
-    }
+    UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseInOut, animations: {
+        let translation = self.carouselView.bounds.width
+        self.currentImageView.transform = CGAffineTransform(translationX: translation, y: 0)
+        self.nextImageView.transform = .identity
+    }, completion: { _ in
+        self.currentIndex = prevIndex
+        self.currentImageView.transform = .identity
+        self.nextImageView.transform = .identity
+        self.currentImageView.image = self.images[self.currentIndex]
+    })
+}
 
     // ---------------------------------------------------------
     // MARK: - Notification Action Buttons
