@@ -84,7 +84,7 @@ override func viewDidLayoutSubviews() {
         + bodyHeight
         + spacingAboveCarousel
         + carouselHeight
-        - 12
+        - 16
 
     preferredContentSize = CGSize(width: maxWidth, height: totalHeight)
 }

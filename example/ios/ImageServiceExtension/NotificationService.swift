@@ -16,13 +16,14 @@ class NotificationService: UNNotificationServiceExtension {
         self.bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
 
         guard let content = bestAttemptContent else {
-            return contentHandler(request.content)
+            contentHandler(request.content)
+            return
         }
 
         let userInfo = request.content.userInfo
 
         // ---------------------------------------------------------
-        // 📌 LOGO DOWNLOAD (must be processed before images)
+        // LOGO (process first)
         // ---------------------------------------------------------
         if let logoUrlString = userInfo["logo"] as? String,
            let logoUrl = URL(string: logoUrlString) {
@@ -33,95 +34,98 @@ class NotificationService: UNNotificationServiceExtension {
                        identifier: "logo",
                        url: tempUrl
                    ) {
-                    print("🟦 Logo downloaded & attached")
                     content.attachments.insert(attachment, at: 0)
                 }
 
-                // Continue once logo is handled
                 self.processImages(
                     userInfo: userInfo,
                     content: content,
                     contentHandler: contentHandler
                 )
             }
-
             return
         }
 
-        // No logo → directly process images
-        processImages(userInfo: userInfo, content: content, contentHandler: contentHandler)
-    }
-
-    // ---------------------------------------------------------
-    // MARK: - Image Processing Logic
-    // ---------------------------------------------------------
-    private func processImages (
-    userInfo: [AnyHashable: Any],
-    content: UNMutableNotificationContent,
-    contentHandler: @escaping (UNNotificationContent) -> Void
-) {
-
-    var imageUrls: [String] = []
-
-    // ---------------------------------------------------------
-    // image_url → string OR array
-    // ---------------------------------------------------------
-    if let single = userInfo["image_url"] as? String {
-        imageUrls = [single]
-    } else if let multiple = userInfo["image_url"] as? [String] {
-        imageUrls = multiple
-    }
-
-    // ---------------------------------------------------------
-    // fallback: images (array)
-    // ---------------------------------------------------------
-    if imageUrls.isEmpty,
-       let images = userInfo["images"] as? [String] {
-        imageUrls = images
-    }
-
-    // ---------------------------------------------------------
-    // fallback: media-url (single)
-    // ---------------------------------------------------------
-    if imageUrls.isEmpty,
-       let media = userInfo["media-url"] as? String {
-        imageUrls = [media]
-    }
-
-    guard !imageUrls.isEmpty else {
-        contentHandler(content)
-        return
-    }
-
-    // ---------------------------------------------------------
-    // single vs multiple handling
-    // ---------------------------------------------------------
-    if imageUrls.count == 1,
-       let url = URL(string: imageUrls[0]) {
-        downloadAndAttachSingleImage(
-            url: url,
+        // No logo
+        processImages(
+            userInfo: userInfo,
             content: content,
             contentHandler: contentHandler
         )
-    } else {
-        downloadMultipleImages(
-            urlStrings: imageUrls,
-            content: content,
-            completion: contentHandler
-        )
     }
-}
-
 
     // ---------------------------------------------------------
-    // MARK: - MULTIPLE IMAGE DOWNLOAD
+    // MARK: - Image Processing
+    // ---------------------------------------------------------
+    private func processImages(
+        userInfo: [AnyHashable: Any],
+        content: UNMutableNotificationContent,
+        contentHandler: @escaping (UNNotificationContent) -> Void
+    ) {
+        var imageUrls: [String] = []
+
+        // image_url: string or array
+        if let single = userInfo["image_url"] as? String {
+            imageUrls = [single]
+        } else if let multiple = userInfo["image_url"] as? [String] {
+            imageUrls = multiple
+        }
+
+        // fallback: images
+        if imageUrls.isEmpty,
+           let images = userInfo["images"] as? [String] {
+            imageUrls = images
+        }
+
+        // fallback: media-url
+        if imageUrls.isEmpty,
+           let media = userInfo["media-url"] as? String {
+            imageUrls = [media]
+        }
+
+        // raw guard
+        guard !imageUrls.isEmpty else {
+            contentHandler(content)
+            return
+        }
+
+        // 🔥 sanitize dashboard garbage ("", "   ")
+        imageUrls = imageUrls
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        // post-clean guard
+        guard !imageUrls.isEmpty else {
+            contentHandler(content)
+            return
+        }
+
+        // single vs multiple
+        if imageUrls.count == 1,
+           let url = URL(string: imageUrls[0]) {
+            downloadAndAttachSingleImage(
+                url: url,
+                content: content,
+                contentHandler: contentHandler
+            )
+        } else {
+            downloadMultipleImages(
+                urlStrings: imageUrls,
+                content: content,
+                completion: contentHandler
+            )
+        }
+    }
+
+    // ---------------------------------------------------------
+    // MARK: - Multiple Images
     // ---------------------------------------------------------
     private func downloadMultipleImages(
         urlStrings: [String],
         content: UNMutableNotificationContent,
         completion: @escaping (UNNotificationContent) -> Void
     ) {
-        var attachments: [UNNotificationAttachment] = []
+        var attachments = Array<UNNotificationAttachment?>(repeating: nil, count: urlStrings.count)
         let group = DispatchGroup()
 
         for (index, urlString) in urlStrings.enumerated() {
@@ -129,26 +133,29 @@ class NotificationService: UNNotificationServiceExtension {
 
             group.enter()
             downloadTempFile(url: url) { tempUrl in
-                if let tempUrl = tempUrl,
-                   let attachment = try? UNNotificationAttachment(
-                       identifier: "image_\(index)",
-                       url: tempUrl
-                   ) {
-                    attachments.append(attachment)
+                defer { group.leave() }
+
+                guard let tempUrl = tempUrl,
+                      let attachment = try? UNNotificationAttachment(
+                          identifier: "image_\(index)",
+                          url: tempUrl
+                      ) else {
+                    return
                 }
-                group.leave()
+
+                attachments[index] = attachment
             }
         }
 
         group.notify(queue: .main) {
-            print("📸 Downloaded \(attachments.count) images.")
-            content.attachments.append(contentsOf: attachments)
+            let validAttachments = attachments.compactMap { $0 }
+            content.attachments.append(contentsOf: validAttachments)
             completion(content)
         }
     }
 
     // ---------------------------------------------------------
-    // MARK: - SINGLE IMAGE DOWNLOAD
+    // MARK: - Single Image
     // ---------------------------------------------------------
     private func downloadAndAttachSingleImage(
         url: URL,
@@ -158,60 +165,55 @@ class NotificationService: UNNotificationServiceExtension {
         downloadTempFile(url: url) { tempUrl in
             if let tempUrl = tempUrl,
                let attachment = try? UNNotificationAttachment(
-                   identifier: "image",
+                   identifier: "image_0",
                    url: tempUrl
                ) {
-                content.attachments = [attachment]
-                print("✅ Single image attached")
+                content.attachments.append(attachment)
             }
             contentHandler(content)
         }
     }
 
     // ---------------------------------------------------------
-    // MARK: - TEMP FILE DOWNLOAD
+    // MARK: - Temp File Download
     // ---------------------------------------------------------
-    private func downloadTempFile(url: URL, completion: @escaping (URL?) -> Void) {
+    private func downloadTempFile(
+        url: URL,
+        completion: @escaping (URL?) -> Void
+    ) {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 12
         config.timeoutIntervalForResource = 12
 
-        let session = URLSession(configuration: config)
-        let task = session.downloadTask(with: url) { location, _, error in
+        let task = URLSession(configuration: config)
+            .downloadTask(with: url) { location, _, error in
 
-            if let error = error {
-                print("❌ Error downloading file: \(error.localizedDescription)")
-                completion(nil)
-                return
+                guard error == nil, let location = location else {
+                    completion(nil)
+                    return
+                }
+
+                let tempDir = NSTemporaryDirectory()
+                let fileUrl = URL(fileURLWithPath: tempDir)
+                    .appendingPathComponent("img_\(UUID().uuidString).jpg")
+
+                do {
+                    try FileManager.default.moveItem(at: location, to: fileUrl)
+                    completion(fileUrl)
+                } catch {
+                    completion(nil)
+                }
             }
-
-            guard let location = location else {
-                print("⚠️ Missing temp file location")
-                completion(nil)
-                return
-            }
-
-            let tmpDirectory = NSTemporaryDirectory()
-            let filename = "img_\(UUID().uuidString).jpg"
-            let tempUrl = URL(fileURLWithPath: tmpDirectory).appendingPathComponent(filename)
-
-            do {
-                try FileManager.default.moveItem(at: location, to: tempUrl)
-                completion(tempUrl)
-            } catch {
-                print("⚠️ File move error: \(error.localizedDescription)")
-                completion(nil)
-            }
-        }
 
         task.resume()
     }
 
     // ---------------------------------------------------------
-    // MARK: - Fallback
+    // MARK: - Timeout Fallback
     // ---------------------------------------------------------
     override func serviceExtensionTimeWillExpire() {
-        if let handler = contentHandler, let content = bestAttemptContent {
+        if let handler = contentHandler,
+           let content = bestAttemptContent {
             handler(content)
         }
     }

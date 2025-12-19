@@ -1,5 +1,3 @@
-
-
 ````md
 # react-native-mehery-event-sender
 
