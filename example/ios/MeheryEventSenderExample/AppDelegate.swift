@@ -50,6 +50,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
                    didReceiveRemoteNotification userInfo: [AnyHashable: Any],
                    fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
     print("📦 Background push received: \(userInfo)")
+    PushTokenManager.sendNotificationEvent(userInfo)
+
 
     if #available(iOS 16.1, *) {
       startLiveActivity(userInfo: userInfo)
@@ -62,7 +64,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   func userNotificationCenter(_ center: UNUserNotificationCenter,
                               willPresent notification: UNNotification,
                               withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+    
+    let userInfo = notification.request.content.userInfo
     print("📢 Notification received in foreground")
+    PushTokenManager.sendNotificationEvent(userInfo)
+
     completionHandler([.banner, .sound, .badge, .list])
   }
 
@@ -72,8 +78,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
                               withCompletionHandler completionHandler: @escaping () -> Void) {
     let actionID = response.actionIdentifier
     let categoryID = response.notification.request.content.categoryIdentifier
+    let userInfo = response.notification.request.content.userInfo
 
     print("📩 User tapped action: \(actionID) in category: \(categoryID)")
+    print("📦 Payload on tap: \(userInfo)")
+
+    // ✅ SEND TO JS (include action info)
+    var payload = userInfo
+    payload["actionIdentifier"] = actionID
+    payload["categoryIdentifier"] = categoryID
+
+    PushTokenManager.sendNotificationEvent(payload)
 
     switch actionID {
     case "PUSHAPP_YES":

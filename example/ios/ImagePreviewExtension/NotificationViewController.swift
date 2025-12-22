@@ -332,10 +332,29 @@ if logoImageView.image == nil {
     // ---------------------------------------------------------
     // MARK: - Notification Action Buttons
     // ---------------------------------------------------------
-    func didReceive(
+        func didReceive(
         _ response: UNNotificationResponse,
         completionHandler completion: @escaping (UNNotificationContentExtensionResponseOption) -> Void
     ) {
-        completion(.doNotDismiss)
+        let actionId = response.actionIdentifier
+
+        switch actionId {
+
+        case "PUSHAPP_NEXT":
+            print("➡️ NEXT image")
+            autoScrollTimer?.invalidate()
+            animateForward()
+            completion(.doNotDismiss)
+
+        case "PUSHAPP_PREVIOUS":
+            print("⬅️ PREVIOUS image")
+            autoScrollTimer?.invalidate()
+            animateBackward()
+            completion(.doNotDismiss)
+
+        default:
+            completion(.doNotDismiss)
+        }
     }
+
 }
