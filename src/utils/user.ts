@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OnAppOpen } from '../events/custom/CustomEvents';
+import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+
 // import { OnPageOpen } from '../events/custom/CustomEvents';
 type UserDetails = {
   [key: string]: string;
@@ -47,16 +49,28 @@ export async function OnUserLogin(user_id: string) {
     channel_id: channel_id,
   };
   console.log('📦 Payload of login:', payload);
+  const commonHeaders = await buildCommonHeaders();
 
   try {
     const response = await fetch(
-      'https://demo.pushapp.co.in/pushapp/api/register/user',
+      'https://demo.pushapp.co.in/pushapp/api/device/link',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...commonHeaders,
+        },
         body: JSON.stringify(payload),
       }
     );
+    // const response = await fetch(
+    //   'https://demo.pushapp.co.in/pushapp/api/register/user',
+    //   {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify(payload),
+    //   }
+    // );
 
     const text = await response.text();
     console.log('Response text:', text);
@@ -104,10 +118,21 @@ export async function OnUserLogOut(user_id: string) {
     channel_id: channel_id,
   };
 
-  fetch('https://demo.pushapp.co.in/pushapp/api/register/logout', {
+  // fetch('https://demo.pushapp.co.in/pushapp/api/register/logout', {
+  //   method: 'POST',
+  //   headers: {
+  //     'Content-Type': 'application/json',
+  //   },
+  //   body: JSON.stringify(payload),
+  // })
+
+  const commonHeaders = await buildCommonHeaders();
+
+  fetch('https://demo.pushapp.co.in/pushapp/api/device/delink', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...commonHeaders,
     },
     body: JSON.stringify(payload),
   })

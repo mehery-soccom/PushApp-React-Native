@@ -7,6 +7,7 @@ import RoadblockPoll from '../../components/RoadblockPoll';
 import { renderInlinePoll } from '../../components/RenderInlinePoll';
 import { renderTooltipPoll } from '../../components/TooltipPollManager';
 import Floater from '../../components/FloaterPoll';
+import { buildCommonHeaders } from '../../helpers/buildCommonHeaders';
 
 // 📌 Sends a custom event, then triggers the poll fetchi
 export async function sendCustomEvent(event_name: string, event_data: object) {
@@ -20,6 +21,7 @@ export async function sendCustomEvent(event_name: string, event_data: object) {
   const payload = { user_id, channel_id, event_name, event_data };
 
   console.log(`📡 Sending ${event_name} event:`, payload);
+  const commonHeaders = await buildCommonHeaders();
 
   try {
     const res = await fetch('https://demo.pushapp.co.in/pushapp/api/v1/event', {
@@ -27,6 +29,7 @@ export async function sendCustomEvent(event_name: string, event_data: object) {
       headers: {
         'Content-Type': 'application/json',
         'x-device-id': device_id ?? '',
+        ...commonHeaders,
       },
       body: JSON.stringify(payload),
     });
@@ -189,13 +192,17 @@ export async function sendPollEvent() {
 
   console.log('showing poll:', showingPoll);
   const payload = { contact_id: `${user_id}_${device_id}` };
+  const commonHeaders = await buildCommonHeaders();
 
   try {
     const res = await fetch(
       'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/poll',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...commonHeaders,
+        },
         body: JSON.stringify(payload),
       }
     );
@@ -312,12 +319,17 @@ export async function sendAck(contactId: string, messageId: string) {
     contact_id: contactId,
   };
 
+  const commonHeaders = await buildCommonHeaders();
+
   try {
     const res = await fetch(
       'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/ack',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...commonHeaders,
+        },
         body: JSON.stringify(payload),
       }
     );

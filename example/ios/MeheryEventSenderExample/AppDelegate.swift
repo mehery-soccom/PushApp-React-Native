@@ -22,11 +22,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
       if let error = error {
         print("⚠️ Authorization error: \(error.localizedDescription)")
       }
+      // if granted {
+      //   DispatchQueue.main.async {
+      //     application.registerForRemoteNotifications()
+      //   }
+      // }
       if granted {
-        DispatchQueue.main.async {
-          application.registerForRemoteNotifications()
-        }
+      DispatchQueue.main.async {
+        application.registerForRemoteNotifications()
       }
+      }
+
     }
 
     // Register categories
@@ -50,8 +56,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
                    didReceiveRemoteNotification userInfo: [AnyHashable: Any],
                    fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
     print("📦 Background push received: \(userInfo)")
+
+    // ✅ Detect silent daily ping
+  if let type = userInfo["type"] as? String,
+     type == "silent_daily_ping" {
+
     PushTokenManager.sendNotificationEvent(userInfo)
 
+    // 🚫 DO NOT start Live Activity
+    completionHandler(.newData)
+    return
+  }
+    PushTokenManager.sendNotificationEvent(userInfo)
 
     if #available(iOS 16.1, *) {
       startLiveActivity(userInfo: userInfo)
@@ -67,6 +83,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     
     let userInfo = notification.request.content.userInfo
     print("📢 Notification received in foreground")
+
+    if let type = userInfo["type"] as? String,
+     type == "silent_daily_ping" {
+
+    // ✅ Silent = no UI
+    PushTokenManager.sendNotificationEvent(userInfo)
+    completionHandler([])
+    return
+  }
+
     PushTokenManager.sendNotificationEvent(userInfo)
 
     completionHandler([.banner, .sound, .badge, .list])

@@ -16,9 +16,11 @@ if linkage
 end
 
 target 'MeheryEventSenderExample' do
-  config = {
-    :reactNativePath => "../node_modules/react-native"
-  }
+  # config = {
+  #   :reactNativePath => "../node_modules/react-native"
+  # }
+
+  config = use_native_modules!
 
   use_react_native!(
     :path => config[:reactNativePath],

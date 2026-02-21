@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 
 let deviceRegistrationInProgress = false;
 let lastApiCallTime = 0;
@@ -89,15 +90,28 @@ export async function registerDeviceWithAPNS(token: string) {
     };
 
     console.log('📡 Registering/updating device...', payload);
+    const commonHeaders = await buildCommonHeaders();
 
     const response = await fetch(
-      'https://demo.pushapp.co.in/pushapp/api/register',
+      'https://demo.pushapp.co.in/pushapp/api/device/register',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...commonHeaders,
+        },
         body: JSON.stringify(payload),
       }
     );
+
+    // const response = await fetch(
+    //   'https://demo.pushapp.co.in/pushapp/api/register',
+    //   {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify(payload),
+    //   }
+    // );
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 

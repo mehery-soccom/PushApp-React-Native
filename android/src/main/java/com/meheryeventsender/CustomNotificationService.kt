@@ -14,6 +14,8 @@ import java.net.URL
 import android.app.NotificationManager
 import android.graphics.drawable.GradientDrawable
 import com.meheryeventsender.R
+import android.view.View
+
 
 class CustomNotificationService(private val context: Context) {
 
@@ -35,26 +37,36 @@ class CustomNotificationService(private val context: Context) {
     //  CREATE NOTIFICATION
     // ========================================================================================
     fun createCustomNotification(
-        channelId: String,
-        title: String,
-        message: String,
-        tapText: String,
-        progress: Int,
-        titleColor: String,
-        messageColor: String,
-        tapTextColor: String,
-        progressColor: String,
-        backgroundColor: String,
-        imageUrl: String,
-        bg_color_gradient: String,
-        bg_color_gradient_dir: String,
-        align: String,
-        notificationId: Int,
-        imageUrls: List<String> = emptyList()
-    ): NotificationCompat.Builder {
+    channelId: String,
+    title: String,
+    message: String,
+    tapText: String,
+    titleColor: String,
+    messageColor: String,
+    tapTextColor: String,
+    progressColor: String,            // ✅ KEPT
+    backgroundColor: String,
+    imageUrl: String,
+    bg_color_gradient: String,
+    bg_color_gradient_dir: String,
+    align: String,
+    notificationId: Int,
+    imageUrls: List<String> = emptyList(),
+    showProgress: Boolean = false,
+    progress: Int = 0,
+    isRichMedia: Boolean = false
 
-        val customView = RemoteViews(context.packageName, R.layout.custom_notification_layout)
+): NotificationCompat.Builder {
 
+
+    val layoutRes = if (isRichMedia) {
+        R.layout.rich_media_notification_layout
+    } else {
+        R.layout.custom_notification_layout
+    }
+    
+    val customView = RemoteViews(context.packageName, layoutRes)
+    
         // Background
         try {
             if (bg_color_gradient.isNotEmpty() && bg_color_gradient_dir.isNotEmpty()) {
@@ -78,8 +90,25 @@ class CustomNotificationService(private val context: Context) {
             customView.setTextColor(R.id.tap_text, Color.parseColor(tapTextColor))
         } catch (_: Exception) {}
 
-        customView.setProgressBar(R.id.progress_bar, 100, progress, false)
-        customView.setImageViewResource(R.id.icon, R.mipmap.ic_launcher)
+        if (!isRichMedia) {
+            if (showProgress) {
+                customView.setProgressBar(R.id.progress_bar, 100, progress, false)
+            
+                try {
+                    val color = Color.parseColor(progressColor)
+                    customView.setInt(
+                        R.id.progress_bar,
+                        "setColorFilter",
+                        color
+                    )
+                } catch (_: Exception) {}
+            } else {
+                customView.setViewVisibility(R.id.progress_bar, View.GONE)
+            }
+            
+        }
+        
+                customView.setImageViewResource(R.id.icon, R.mipmap.ic_launcher)
 
         val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
         val pendingIntent = PendingIntent.getActivity(
@@ -150,8 +179,12 @@ class CustomNotificationService(private val context: Context) {
                     updatedView.setTextViewText(R.id.title, title)
                     updatedView.setTextViewText(R.id.message, message)
                     updatedView.setTextViewText(R.id.tap_text, tapText)
-                    updatedView.setImageViewBitmap(R.id.icon, bitmap)
-
+                    if (isRichMedia) {
+                        updatedView.setImageViewBitmap(R.id.richImage, bitmap)
+                    } else {
+                        updatedView.setImageViewBitmap(R.id.icon, bitmap)
+                    }
+                    
                     val manager =
                         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     manager.notify(notificationId, builder.build())
@@ -207,26 +240,41 @@ class CustomNotificationService(private val context: Context) {
         rv.setTextViewText(R.id.message, message)
         rv.setImageViewBitmap(R.id.carouselImage, bitmaps[index])
 
+        // Explicit intents required for Android 8+ (implicit broadcasts blocked)
         val nextIntent = PendingIntent.getBroadcast(
-            context, notificationId,
-            Intent(ACTION_NEXT).putExtra("id", notificationId),
+            context, notificationId * 2,
+            Intent(context, CarouselReceiver::class.java).apply {
+                action = ACTION_NEXT
+                putExtra("id", notificationId)
+            },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
         val prevIntent = PendingIntent.getBroadcast(
-            context, notificationId + 1,
-            Intent(ACTION_PREV).putExtra("id", notificationId),
+            context, notificationId * 2 + 1,
+            Intent(context, CarouselReceiver::class.java).apply {
+                action = ACTION_PREV
+                putExtra("id", notificationId)
+            },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         rv.setOnClickPendingIntent(R.id.btnNext, nextIntent)
         rv.setOnClickPendingIntent(R.id.btnPrev, prevIntent)
 
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        val contentIntent = PendingIntent.getActivity(
+            context, 0, launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setCustomContentView(rv)
             .setCustomBigContentView(rv)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setContentIntent(contentIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
 
         val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         mgr.notify(notificationId, builder.build())

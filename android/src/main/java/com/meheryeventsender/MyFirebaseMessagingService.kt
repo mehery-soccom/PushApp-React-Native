@@ -33,7 +33,13 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
                     remoteMessage.data.containsKey("message3")) {
 
                     handleLiveActivityNotification(remoteMessage.data)
-                } else {
+                }
+                else if (hasImages(remoteMessage.data)) {
+                    // 🟣 RICH MEDIA NOTIFICATION
+                    handleRichMediaNotification(remoteMessage.data)
+                
+                }
+                else {
                     val title = remoteMessage.data["title"] ?: "Notification"
                     val message = remoteMessage.data["body"] ?: "You have a new message"
                     val title1 = remoteMessage.data["title1"]
@@ -78,29 +84,56 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
         }
     }
 
+    private fun hasImages(data: Map<String, String>): Boolean {
+        if (!data["imageUrl"].isNullOrBlank()) return true
+        if (!data["imageUrls"].isNullOrBlank()) return true
+        if (!data["image_urls"].isNullOrBlank()) return true
+        if (!data["carousel_images"].isNullOrBlank()) return true
+
+        var index = 1
+        while (data.containsKey("image$index")) {
+            return true
+        }
+        return false
+    }
+    
+
     private fun extractImageList(data: Map<String, String>): List<String> {
         val list = mutableListOf<String>()
     
-        // 1️⃣ Check for JSON array: "[\"url1\", \"url2\"]"
+        // 1️⃣ imageUrls - JSON array
         data["imageUrls"]?.let { json ->
             try {
                 val arr = org.json.JSONArray(json)
-                for (i in 0 until arr.length()) {
-                    list.add(arr.getString(i))
-                }
+                for (i in 0 until arr.length()) list.add(arr.getString(i))
+                if (list.isNotEmpty()) return list
             } catch (_: Exception) {}
         }
     
-        // 2️⃣ Check for numbered keys: image1, image2, image3...
-        var index = 1
-        while (true) {
-            val key = "image$index"
-            if (!data.containsKey(key)) break
-            data[key]?.let { list.add(it) }
-            index++
+        // 2️⃣ image_urls - JSON array
+        data["image_urls"]?.let { json ->
+            try {
+                val arr = org.json.JSONArray(json)
+                for (i in 0 until arr.length()) list.add(arr.getString(i))
+                if (list.isNotEmpty()) return list
+            } catch (_: Exception) {}
         }
     
-        // fallback
+        // 3️⃣ carousel_images - JSON array
+        data["carousel_images"]?.let { json ->
+            try {
+                val arr = org.json.JSONArray(json)
+                for (i in 0 until arr.length()) list.add(arr.getString(i))
+                if (list.isNotEmpty()) return list
+            } catch (_: Exception) {}
+        }
+    
+        // 4️⃣ image1, image2, image3...
+        var index = 1
+        while (data.containsKey("image$index")) {
+            data["image$index"]?.let { list.add(it) }
+            index++
+        }
         return list
     }
     
@@ -166,5 +199,54 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
             Log.e("MySdk", "Live activity error: ${e.message}", e)
         }
     }
+
+    private fun handleRichMediaNotification(data: Map<String, String>) {
+        val notificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    
+        val channelId = "rich_media_channel"
+    
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "Rich Media Notifications",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+    
+        val notificationId =
+            (data["notification_id"] ?: System.currentTimeMillis().toString()).hashCode()
+    
+        val customService = CustomNotificationService(this)
+    
+        val imageList = extractImageList(data)
+    
+        val builder = customService.createCustomNotification(
+            channelId = channelId,
+            title = data["title"] ?: "Notification",
+            message = data["body"] ?: "",
+            tapText = data["tapText"] ?: "",
+            titleColor = data["titleColorHex"] ?: "#000000",
+            messageColor = data["messageColorHex"] ?: "#000000",
+            tapTextColor = data["tapTextColorHex"] ?: "#666666",
+            backgroundColor = data["backgroundColorHex"] ?: "#FFFFFF",
+            imageUrl = data["imageUrl"] ?: "",
+            bg_color_gradient = data["bg_color_gradient"] ?: "",
+            bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
+            align = data["align"] ?: "",
+            notificationId = notificationId,
+            imageUrls = imageList,
+            showProgress = false, // ✅ IMPORTANT
+            isRichMedia = true,   // ✅ KEY LINE
+            progressColor = data["progressColorHex"] ?: "#00FF00",
+
+
+        )
+    
+        notificationManager.notify(notificationId, builder.build())
+    }
+    
+    
     
 }

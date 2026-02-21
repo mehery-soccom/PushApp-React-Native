@@ -76,29 +76,35 @@ class NotificationService: UNNotificationServiceExtension {
            let images = userInfo["images"] as? [String] {
             imageUrls = images
         }
-
-        // fallback: media-url
-        if imageUrls.isEmpty,
-           let media = userInfo["media-url"] as? String {
-            imageUrls = [media]
-        }
-
-        // raw guard
-        guard !imageUrls.isEmpty else {
-            contentHandler(content)
-            return
+        //fix for media-url
+        if imageUrls.isEmpty {
+            if let mediaSingle = userInfo["media-url"] as? String {
+                print("🎞️ [NSE] media-url (string):", mediaSingle)
+                imageUrls = [mediaSingle]
+            } else if let mediaMultiple = userInfo["media-url"] as? [String] {
+                print("🎞️ [NSE] media-url (array):", mediaMultiple)
+                imageUrls = mediaMultiple
+            }
         }
 
         // 🔥 sanitize dashboard garbage ("", "   ")
         imageUrls = imageUrls
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-
+        
         // post-clean guard
         guard !imageUrls.isEmpty else {
             contentHandler(content)
             return
         }
+
+        // 🔥 IMPORTANT: persist full array for Content Extension
+        persistMediaUrlsIfNeeded(
+            originalUserInfo: userInfo,
+            imageUrls: imageUrls,
+            content: content
+        )
+
 
         // single vs multiple
         if imageUrls.count == 1,
@@ -153,6 +159,25 @@ class NotificationService: UNNotificationServiceExtension {
             completion(content)
         }
     }
+  
+  private func persistMediaUrlsIfNeeded(
+      originalUserInfo: [AnyHashable: Any],
+      imageUrls: [String],
+      content: UNMutableNotificationContent
+  ) {
+      var updatedUserInfo = content.userInfo
+
+      // Always persist full array for Content Extension
+      updatedUserInfo["media-url"] = imageUrls
+
+      // Optional: normalize key for safety
+      updatedUserInfo["images"] = imageUrls
+
+      content.userInfo = updatedUserInfo
+
+      print("✅ [NSE] Persisted media-url array:", imageUrls)
+  }
+
 
     // ---------------------------------------------------------
     // MARK: - Single Image

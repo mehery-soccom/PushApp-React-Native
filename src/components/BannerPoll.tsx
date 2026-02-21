@@ -1,5 +1,6 @@
 import { View, StyleSheet, Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 
 export default function BannerPoll({ html, messageId, filterId }: any) {
   const cleanHtml = html.replace(/<\/?body[^>]*>/g, '');
@@ -18,13 +19,17 @@ export default function BannerPoll({ html, messageId, filterId }: any) {
     };
 
     console.log('📤 Sending track event:', payload);
+    const commonHeaders = await buildCommonHeaders();
 
     try {
       const res = await fetch(
         'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...commonHeaders,
+          },
           body: JSON.stringify(payload),
         }
       );

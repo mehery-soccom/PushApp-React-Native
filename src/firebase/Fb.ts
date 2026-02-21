@@ -4,6 +4,7 @@ import { PermissionsAndroid } from 'react-native';
 import PushNotification from 'react-native-push-notification';
 import { getDeviceId } from '../utils/device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 
 import { NativeModules, Platform } from 'react-native';
 const { LiveActivityModule } = NativeModules;
@@ -81,15 +82,27 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
     };
 
     console.log('📡 Registering device with payload:', payload);
+    const commonHeaders = await buildCommonHeaders();
 
     const response = await fetch(
-      'https://demo.pushapp.co.in/pushapp/api/register',
+      'https://demo.pushapp.co.in/pushapp/api/device/register',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...commonHeaders,
+        },
         body: JSON.stringify(payload),
       }
     );
+    // const response = await fetch(
+    //   'https://demo.pushapp.co.in/pushapp/api/register',
+    //   {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify(payload),
+    //   }
+    // );
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -147,22 +160,55 @@ export function requestUserPermission(): void {
   console.log('check perms');
 }
 
+const MAX_FCM_TOKEN_RETRIES = 4;
+const RETRY_DELAY_MS = 2000;
+
+function isRetryableFcmError(error: unknown): boolean {
+  const msg = String(
+    (error as { message?: string })?.message ?? error ?? ''
+  ).toLowerCase();
+  return (
+    msg.includes('service_not_available') ||
+    msg.includes('timeout') ||
+    msg.includes('internal_error') ||
+    msg.includes('network')
+  );
+}
+
 /**
- * Get the current device's FCM token
+ * Get the current device's FCM token with retry logic.
+ * SERVICE_NOT_AVAILABLE is often transient; we retry with exponential backoff.
  */
-export function getFcmToken() {
-  messaging()
-    .getToken()
-    .then(async (token) => {
-      console.log('📲 FCM Token:', token);
-      const id = await getDeviceId();
-      console.log('✅ Device is being registered with ID:', id);
-      await AsyncStorage.setItem('device_id', id);
-      await registerDeviceWithFCM(token, id);
-    })
-    .catch((error) => {
-      console.error('Error getting FCM token:', error);
-    });
+export async function getFcmToken(): Promise<string | null> {
+  for (let attempt = 1; attempt <= MAX_FCM_TOKEN_RETRIES; attempt++) {
+    try {
+      const token = await messaging().getToken();
+      if (token) {
+        console.log('📲 FCM Token:', token);
+        const id = await getDeviceId();
+        console.log('✅ Device is being registered with ID:', id);
+        await AsyncStorage.setItem('device_id', id);
+        await registerDeviceWithFCM(token, id);
+        return token;
+      }
+    } catch (error) {
+      const retryable = isRetryableFcmError(error);
+      console.error(
+        `Error getting FCM token (attempt ${attempt}/${MAX_FCM_TOKEN_RETRIES}):`,
+        error
+      );
+
+      if (attempt < MAX_FCM_TOKEN_RETRIES && retryable) {
+        const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+        console.log(`⏳ Retrying in ${delay / 1000}s...`);
+        await new Promise((r) => setTimeout(r, delay));
+      } else {
+        console.error('❌ Failed to get FCM token after retries.');
+        return null;
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -244,7 +290,7 @@ export function setupForegroundNotificationListener(): () => void {
     // 👇 Detect carousel payload
     let carouselImages: string[] = [];
 
-    const carouselImagesRaw = data.carousel_images;
+    const carouselImagesRaw = data.image_urls || data.carousel_images;
 
     if (carouselImagesRaw) {
       try {

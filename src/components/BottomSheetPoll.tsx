@@ -7,6 +7,7 @@ import {
   Linking,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 
 const { height } = Dimensions.get('window');
 
@@ -55,13 +56,17 @@ export default function BottomSheetPoll({
     };
 
     console.log('📤 Sending track event:', payload);
+    const commonHeaders = await buildCommonHeaders();
 
     try {
       const res = await fetch(
         'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...commonHeaders,
+          },
           body: JSON.stringify(payload),
         }
       );

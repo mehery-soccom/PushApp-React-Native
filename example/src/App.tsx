@@ -1,16 +1,51 @@
 // App.tsx
 import { useEffect, useState } from 'react';
-import { View, StyleSheet, TextInput, Button, Text } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  TextInput,
+  Button,
+  Text,
+  Platform,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   initSdk,
   OnUserLogin,
   OnPageOpen,
   OnAppOpen,
+  updateUserProfile,
 } from 'react-native-mehery-event-sender';
 import { PollOverlayProvider } from 'react-native-mehery-event-sender';
 import { InlinePollContainer } from 'react-native-mehery-event-sender';
 import { TooltipPollContainer } from 'react-native-mehery-event-sender';
+
+import DeviceInfo from 'react-native-device-info';
+import { setDeviceMetadata } from 'react-native-mehery-event-sender';
+
+const toSeconds = (ms: number) => Math.floor(ms / 1000);
+
+const randomExpiryTimestampMoreThan5Years = () => {
+  const now = Date.now();
+  const fiveYearsMs = 1000 * 60 * 60 * 24 * 365 * 5;
+  return toSeconds(now + fiveYearsMs);
+};
+
+const randomDobTimestamp = () => {
+  const minAge = 18;
+  const maxAge = 45;
+  const age = Math.floor(Math.random() * (maxAge - minAge + 1)) + minAge;
+
+  const dob = new Date();
+  dob.setFullYear(dob.getFullYear() - age);
+
+  return toSeconds(dob.getTime());
+};
+
+const randomGender = () => {
+  const genders = ['male', 'female'];
+  return genders[Math.floor(Math.random() * genders.length)];
+};
 
 function LoginPage({ onLogin }: { onLogin: (id: string) => void }) {
   const [userId, setUserId] = useState('');
@@ -51,6 +86,13 @@ function HomePage({
     try {
       OnAppOpen();
       OnPageOpen('login');
+
+      // 🔥 SEND RANDOM PROFILE UPDATE
+      updateUserProfile({
+        expiry_date: randomExpiryTimestampMoreThan5Years(),
+        dob: randomDobTimestamp(),
+        gender: randomGender(),
+      });
     } catch (error) {
       console.log('error in opening page:', error);
     }
@@ -77,14 +119,52 @@ function HomePage({
 // import { PollOverlayProvider } from './PollOverlayProvider';
 // import LoginPage from './LoginPage';
 // import HomePage from './HomePage';
+async function initDeviceMetadata() {
+  try {
+    const metadata: Record<string, string> = {
+      'X-Device-Model': DeviceInfo.getModel?.() || 'unknown',
+      'X-System-Name': DeviceInfo.getSystemName?.() || 'unknown',
+      'X-OS-Version': DeviceInfo.getSystemVersion?.() || 'unknown',
+    };
+
+    // 🔹 Android-only
+    if (Platform.OS === 'android') {
+      metadata['X-Manufacturer'] =
+        (await DeviceInfo.getManufacturer()) || 'unknown';
+
+      metadata['X-API-Level'] =
+        String(await DeviceInfo.getApiLevel()) || 'unknown';
+
+      metadata['X-CPU-ABI'] =
+        (await DeviceInfo.supportedAbis()).join(', ') || 'unknown';
+    }
+
+    // 🔹 iOS-only
+    if (Platform.OS === 'ios') {
+      metadata['X-Device-Name'] =
+        (await DeviceInfo.getDeviceName()) || 'unknown';
+    }
+
+    setDeviceMetadata(metadata);
+  } catch (err) {
+    console.warn('[App] Failed to init device metadata', err);
+  }
+}
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'login' | 'home'>('login');
   const [userId, setUserId] = useState<string>('');
 
   useEffect(() => {
-    // Initialize SDK once
-    initSdk(null, 'demo_1754408042569', true);
+    const init = async () => {
+      // 1️⃣ Inject device metadata FIRST
+      await initDeviceMetadata();
+
+      // 2️⃣ Initialize SDK
+      initSdk(null, 'demo_1754408042569', true);
+    };
+
+    init();
   }, []);
 
   useEffect(() => {

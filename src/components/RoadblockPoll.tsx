@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { View, StyleSheet, Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { hidePollOverlay } from './PollOverlay';
+import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 
 export default function RoadblockPoll({
   html,
@@ -54,13 +55,17 @@ export default function RoadblockPoll({
     };
 
     console.log('📤 Sending track event:', payload);
+    const commonHeaders = await buildCommonHeaders();
 
     try {
       const res = await fetch(
         'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...commonHeaders,
+          },
           body: JSON.stringify(payload),
         }
       );

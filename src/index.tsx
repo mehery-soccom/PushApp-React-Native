@@ -3,6 +3,8 @@ export { MeheryEventSenderView } from './native/MeheryEventSenderView';
 export { BannerScreen } from './components/BannerScreen';
 export { CustomBanner } from './components/CustomBanner';
 export { getDeviceId } from './utils/device';
+export { setDeviceMetadata } from './utils/deviceMetadata';
+
 export {
   logUserDetails,
   getLoggedUserDetails,
@@ -15,6 +17,9 @@ export {
   sendCustomEvent,
   OnAppOpen,
 } from './events/custom/CustomEvents';
+
+export { updateUserProfile } from './events/custom/ProfileUpdate';
+
 export { PollOverlayProvider } from './components/PollOverlay';
 export { showPollOverlay, hidePollOverlay } from './components/PollOverlay';
 
@@ -41,6 +46,8 @@ import { registerDeviceWithAPNS } from './firebase/IosAPNS';
 import { PollOverlayProvider } from './components/PollOverlay';
 
 export { TooltipPollContainer } from './components/TooltipPollContainer';
+
+import { buildCommonHeaders } from './helpers/buildCommonHeaders';
 
 const { PushTokenManager } = NativeModules;
 // const pushEmitter = PushTokenManager
@@ -74,6 +81,126 @@ export const iosChecker = () => {
   });
 
   iosListenerAdded = true;
+};
+
+let notificationListenerAdded = false;
+
+/* -------------------------------------------------------------------------- */
+/*                    SILENT NOTIFICATION DAILY LOGIC                           */
+/* -------------------------------------------------------------------------- */
+
+const SILENT_PING_KEY = 'mehery_last_silent_ping_date';
+
+const isAfterNoon = () => {
+  const now = new Date();
+
+  const noon = new Date();
+  noon.setHours(12, 0, 0, 0); // 12:00 PM local time
+
+  return now >= noon;
+};
+
+const shouldRunSilentPingToday = async (): Promise<boolean> => {
+  const lastRun = await AsyncStorage.getItem(SILENT_PING_KEY);
+  const today = new Date().toISOString().split('T')[0];
+
+  if (lastRun === today) return false;
+
+  await AsyncStorage.setItem(SILENT_PING_KEY, today ?? '');
+  return true;
+};
+
+const sendDailyPing = async () => {
+  try {
+    const channelId = await AsyncStorage.getItem('mehery_channel_id');
+    const contactId = await AsyncStorage.getItem('contact_id');
+
+    if (!channelId || !contactId) {
+      console.warn('⚠️ Missing channel_id or contact_id. Skipping ping.');
+      return;
+    }
+
+    const payload = {
+      channel_id: channelId,
+      contact_id: contactId,
+    };
+
+    console.log('📡 Sending silent daily ping:', payload);
+    const commonHeaders = await buildCommonHeaders();
+
+    await fetch('https://demo.pushapp.co.in/pushapp/api/ping', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    console.log('✅ Silent daily ping sent');
+  } catch (err) {
+    console.error('❌ Silent ping failed:', err);
+  }
+};
+
+// export const addNotificationDebugListener = () => {
+//   if (!PushTokenManager) {
+//     console.warn('⚠️ PushTokenManager not available for notification listener');
+//     return;
+//   }
+
+//   if (notificationListenerAdded) {
+//     console.log('ℹ️ Notification listener already added');
+//     return;
+//   }
+
+//   const emitter = new NativeEventEmitter(PushTokenManager);
+
+//   console.log('🔔 Setting up notification payload listener');
+
+//   emitter.addListener('PushNotificationEvent', async (payload) => {
+//     console.log(
+//       '📦 [SDK][JS] Notification payload received:',
+//       JSON.stringify(payload, null, 2)
+//     );
+//     console.log('🚨 LISTENER FIRED');
+//     console.log('📦 Payload raw:', payload);
+
+//     // 🚀 Send to Slack
+//     // await sendPayloadToSlack(payload);
+//   });
+
+//   notificationListenerAdded = true;
+// };
+
+export const addNotificationDebugListener = () => {
+  if (!PushTokenManager) return;
+  if (notificationListenerAdded) return;
+
+  const emitter = new NativeEventEmitter(PushTokenManager);
+
+  emitter.addListener('PushNotificationEvent', async (payload) => {
+    console.log('📦 Push payload received:', payload);
+
+    if (payload?.type !== 'silent_daily_ping') return;
+
+    // ⏰ Ensure it's after 12 noon
+    if (!isAfterNoon()) {
+      console.log('⏳ Silent ping received before 12 noon, skipping');
+      return;
+    }
+
+    // 🧠 Ensure only once per day
+    const shouldRun = await shouldRunSilentPingToday();
+    if (!shouldRun) {
+      console.log('⏭️ Silent ping already executed today');
+      return;
+    }
+
+    await sendDailyPing();
+  });
+
+  notificationListenerAdded = true;
 };
 
 let sdkMounted = false;
@@ -142,6 +269,7 @@ export const initSdk = async (
     // ✅ iOS specific setup
     if (Platform.OS === 'ios') {
       iosChecker();
+      addNotificationDebugListener(); // 👈 ADD THIS
     }
 
     // ✅ Connect to the socket server
