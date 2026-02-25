@@ -2,7 +2,8 @@
 //  DeliveryActivity.swift
 //  DeliveryActivity
 //
-//  Created by Neil Carnac on 29/07/25.
+//  Created by Ghost-ops721
+ on 29/07/25.
 //
 
 import WidgetKit

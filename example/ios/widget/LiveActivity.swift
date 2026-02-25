@@ -2,7 +2,8 @@
 //  LiveActivity.swift
 //  MeheryEventSenderExample
 //
-//  Created by Neil Carnac on 26/07/25.
+//  Created by Ghost-ops721
+ on 26/07/25.
 //
 
 import Foundation
