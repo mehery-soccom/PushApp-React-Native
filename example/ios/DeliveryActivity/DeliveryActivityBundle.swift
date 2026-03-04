@@ -2,8 +2,7 @@
 //  DeliveryActivityBundle.swift
 //  DeliveryActivity
 //
-//  Created by Ghost-ops721
- on 29/07/25.
+//  Created by Ghost-ops721 on 29/07/25.
 //
 
 import WidgetKit

@@ -46,14 +46,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/neilcarnac/react-native-mehery-event-sender.git"
+    "url": "git+https://github.com/mehery-soccom/PushApp-React-Native.git"
   },
-  "author": "Neil Carnac <ncarnac@gmail.com> (https://github.com/neilcarnac)",
+  "author": "Ghost-ops721 <ncarnac@gmail.com> (https://github.com/Ghost-ops721)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/neilcarnac/react-native-mehery-event-sender/issues"
+    "url": "https://github.com/mehery-soccom/PushApp-React-Native/issues"
   },
-  "homepage": "https://github.com/neilcarnac/react-native-mehery-event-sender#readme",
+  "homepage": "https://github.com/mehery-soccom/PushApp-React-Native#readme",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },

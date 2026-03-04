@@ -60,6 +60,17 @@ target 'MeheryEventSenderExample' do
     content = File.read(pbxproj_path)
     content.gsub!(/objectVersion = \d+;/, 'objectVersion = 55;')
     File.write(pbxproj_path, content)
+
+    # ✅ Fix glog build on ARM64 / newer Xcode
+    installer.pods_project.targets.each do |target|
+      if target.name == 'glog'
+        target.build_configurations.each do |config|
+          config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+          config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'HAVE_FULLFSYNC=1'
+          config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+        end
+      end
+    end
   end
   
   

@@ -125,6 +125,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         print("➡️ NEXT image requested")
     case "PUSHAPP_PREVIOUS":
         print("⬅️ PREVIOUS image requested")
+    case "PUSHAPP_ACTION_1":
+      print("✅ User tapped Action 1")
+    case "PUSHAPP_ACTION_2":
+      print("✅ User tapped Action 2")
+    case "PUSHAPP_ACTION_3":
+      print("✅ User tapped Action 3")
     default:
       break
     }
@@ -203,7 +209,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   // MARK: - Register Notification Categories
   func registerNotificationCategories() {
     let categoryMap: [(String, [(title: String, id: String)])] = [
-      ("CAROUSEL_CATEGORY", []),
+      ("THREE_BUTTON_CATEGORY", [("Action 1", "PUSHAPP_ACTION_1"), ("Action 2", "PUSHAPP_ACTION_2"), ("Action 3", "PUSHAPP_ACTION_3")]),
+      ("CAROUSEL_CATEGORY", [("Opt In", "PUSHAPP_OPT_IN"), ("Not Interested", "PUSHAPP_NOT_INTERESTED")]),
       ("CONFIRMATION_CATEGORY", [("Yes", "PUSHAPP_YES"), ("No", "PUSHAPP_NO")]),
       ("RESPONSE_CATEGORY", [("Accept", "PUSHAPP_ACCEPT"), ("Reject", "PUSHAPP_REJECT")]),
       ("SUBSCRIPTION_CATEGORY", [("Subscribe", "PUSHAPP_SUB"), ("Unsubscribe", "PUSHAPP_UNSUB")]),

@@ -8,6 +8,7 @@
 		<dict>
 			<key>UNNotificationExtensionCategory</key>
 			<array>
+				<string>THREE_BUTTON_CATEGORY</string>
 				<string>CAROUSEL_CATEGORY</string>
 				<string>CONFIRMATION_CATEGORY</string>
 				<string>RESPONSE_CATEGORY</string>
@@ -23,7 +24,7 @@
 			<key>UNNotificationExtensionDefaultContentHidden</key>
 			<true/>
 			<key>UNNotificationExtensionInitialContentSizeRatio</key>
-			<real>0.7</real>
+			<real>0.95</real>
 			<key>UNNotificationExtensionUserInteractionEnabled</key>
 			<true/>
 		</dict>

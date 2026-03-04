@@ -102,7 +102,9 @@ export const PollOverlayProvider: React.FC = () => {
       {/* ✅ Shared modal for roadblock and floater */}
       {modalContent && (
         <Modal visible={modalVisible} transparent animationType="fade">
-          <View style={styles.modalContainer}>
+          <View
+            style={[styles.modalContainer, !isFloater && styles.roadblockBg]}
+          >
             {/* ❌ Only show close button if NOT floater */}
             {!isFloater && (
               <TouchableOpacity
@@ -165,9 +167,12 @@ export const hidePollOverlay = () => {
 const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
-    backgroundColor: '#000000aa',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     paddingVertical: 45,
+  },
+  roadblockBg: {
+    backgroundColor: '#fff',
   },
   bannerContainer: {
     position: 'absolute',

@@ -64,10 +64,16 @@ class NotificationService: UNNotificationServiceExtension {
     ) {
         var imageUrls: [String] = []
 
-        // image_url: string or array
+        // image_url / image_urls: string or array
         if let single = userInfo["image_url"] as? String {
             imageUrls = [single]
         } else if let multiple = userInfo["image_url"] as? [String] {
+            imageUrls = multiple
+        } else if let single = userInfo["image_urls"] as? String {
+            if let parsed = try? JSONSerialization.jsonObject(with: Data(single.utf8)) as? [String] {
+                imageUrls = parsed
+            } else { imageUrls = [single] }
+        } else if let multiple = userInfo["image_urls"] as? [String] {
             imageUrls = multiple
         }
 

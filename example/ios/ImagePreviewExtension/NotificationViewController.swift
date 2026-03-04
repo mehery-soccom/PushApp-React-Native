@@ -20,6 +20,7 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
     private let carouselView = UIView()
     private let currentImageView = UIImageView()
     private let nextImageView = UIImageView()
+    private let pageControl = UIPageControl()
 
     // ---------------------------------------------------------
     // MARK: - viewDidLoad
@@ -28,11 +29,15 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         super.viewDidLoad()
 
         view.backgroundColor = .clear
-        containerView.backgroundColor = .clear
+        containerView.backgroundColor = UIColor(white: 0.12, alpha: 0.96)
+        containerView.layer.cornerRadius = 12
+        containerView.clipsToBounds = true
 
-        // Set up label appearance
+        // Set up label appearance - white on dark for visibility when expanded
         titleLabel.textColor = .white
-        textLabel.textColor = .white
+        textLabel.textColor = UIColor(white: 0.95, alpha: 1)
+        titleLabel.numberOfLines = 2
+        textLabel.numberOfLines = 3
 
         textLabel.backgroundColor = .clear
         titleLabel.backgroundColor = .clear
@@ -56,8 +61,8 @@ override func viewDidLayoutSubviews() {
 
     // Adjustable constants (edit here only)
     let sidePadding: CGFloat = 16
-    let spacingAboveCarousel: CGFloat = 40     // space between body text -> carousel
-    let carouselHeightMultiplier: CGFloat = 0.5
+    let spacingAboveCarousel: CGFloat = 24
+    let carouselHeightMultiplier: CGFloat = 0.7
 
     // Width available for layout
     let maxWidth = view.bounds.width - sidePadding
@@ -77,6 +82,7 @@ override func viewDidLayoutSubviews() {
 
     // Carousel height based on multiplier
     let carouselHeight = maxWidth * carouselHeightMultiplier
+    let pageControlHeight: CGFloat = isCarouselEnabled ? 24 : 0
 
     // FINAL calculated height
     let totalHeight =
@@ -84,9 +90,10 @@ override func viewDidLayoutSubviews() {
         + bodyHeight
         + spacingAboveCarousel
         + carouselHeight
-        - 16
+        + pageControlHeight
+        + 8
 
-    preferredContentSize = CGSize(width: maxWidth, height: totalHeight)
+    preferredContentSize = CGSize(width: view.bounds.width, height: totalHeight)
 }
 
 
@@ -155,19 +162,23 @@ if logoImageView.image == nil {
     // ✅ 3. START CAROUSEL IF IMAGES EXIST
     // ---------------------------------------------------------
     if !images.isEmpty {
-    currentIndex = 0
-    updateImage(animated: false)
+        currentIndex = 0
+        updateImage(animated: false)
+        pageControl.numberOfPages = images.count
+        pageControl.currentPage = 0
+        pageControl.isHidden = !isCarouselEnabled
 
-    if isCarouselEnabled {
-        startAutoScroll()
-        carouselView.isUserInteractionEnabled = true
+        if isCarouselEnabled {
+            startAutoScroll()
+            carouselView.isUserInteractionEnabled = true
+        } else {
+            autoScrollTimer?.invalidate()
+            carouselView.isUserInteractionEnabled = false
+        }
     } else {
-        autoScrollTimer?.invalidate()
-        carouselView.isUserInteractionEnabled = false
+        carouselView.removeFromSuperview()
+        pageControl.removeFromSuperview()
     }
-} else {
-    carouselView.removeFromSuperview()
-}
 
 }
 
@@ -185,7 +196,7 @@ if logoImageView.image == nil {
             carouselView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             carouselView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
             carouselView.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: 15), // spacing between image and texts
-            carouselView.heightAnchor.constraint(equalTo: containerView.widthAnchor, multiplier: 0.5), // Fixed aspect ratio
+            carouselView.heightAnchor.constraint(equalTo: containerView.widthAnchor, multiplier: 0.7),
             // carouselView.bottomAnchor.constraint(lessThanOrEqualTo: containerView.bottomAnchor, constant: -8) // Add small bottom margin
         ])
 
@@ -200,6 +211,13 @@ if logoImageView.image == nil {
 
         carouselView.addSubview(currentImageView)
         carouselView.addSubview(nextImageView)
+
+        pageControl.translatesAutoresizingMaskIntoConstraints = false
+        pageControl.currentPageIndicatorTintColor = .white
+        pageControl.pageIndicatorTintColor = UIColor.white.withAlphaComponent(0.4)
+        pageControl.hidesForSinglePage = true
+        pageControl.isUserInteractionEnabled = false
+        containerView.addSubview(pageControl)
 
         carouselView.clipsToBounds = true
         carouselView.layer.masksToBounds = true
@@ -218,7 +236,10 @@ if logoImageView.image == nil {
             nextImageView.leadingAnchor.constraint(equalTo: currentImageView.trailingAnchor),
             nextImageView.topAnchor.constraint(equalTo: carouselView.topAnchor),
             nextImageView.bottomAnchor.constraint(equalTo: carouselView.bottomAnchor),
-            nextImageView.widthAnchor.constraint(equalTo: carouselView.widthAnchor)
+            nextImageView.widthAnchor.constraint(equalTo: carouselView.widthAnchor),
+
+            pageControl.topAnchor.constraint(equalTo: carouselView.bottomAnchor, constant: 8),
+            pageControl.centerXAnchor.constraint(equalTo: containerView.centerXAnchor)
         ])
     }
     
@@ -284,6 +305,7 @@ if logoImageView.image == nil {
         self.currentImageView.transform = .identity
         self.nextImageView.transform = .identity
         self.currentImageView.image = self.images[self.currentIndex]
+        self.pageControl.currentPage = self.currentIndex
     })
 }
 
@@ -326,35 +348,65 @@ if logoImageView.image == nil {
         self.currentImageView.transform = .identity
         self.nextImageView.transform = .identity
         self.currentImageView.image = self.images[self.currentIndex]
+        self.pageControl.currentPage = self.currentIndex
     })
 }
 
     // ---------------------------------------------------------
     // MARK: - Notification Action Buttons
     // ---------------------------------------------------------
-        func didReceive(
+    func didReceive(
         _ response: UNNotificationResponse,
         completionHandler completion: @escaping (UNNotificationContentExtensionResponseOption) -> Void
     ) {
         let actionId = response.actionIdentifier
+        let userInfo = response.notification.request.content.userInfo
 
         switch actionId {
-
         case "PUSHAPP_NEXT":
-            print("➡️ NEXT image")
             autoScrollTimer?.invalidate()
             animateForward()
             completion(.doNotDismiss)
 
         case "PUSHAPP_PREVIOUS":
-            print("⬅️ PREVIOUS image")
             autoScrollTimer?.invalidate()
             animateBackward()
             completion(.doNotDismiss)
 
+        case "PUSHAPP_OPT_IN", "PUSHAPP_NOT_INTERESTED":
+            if let url = urlForAction(actionId, userInfo: userInfo) {
+                extensionContext?.open(url, completionHandler: { _ in })
+            }
+            completion(.dismissAndForwardAction)
+
         default:
-            completion(.doNotDismiss)
+            if let url = urlForAction(actionId, userInfo: userInfo) {
+                extensionContext?.open(url, completionHandler: { _ in })
+            }
+            completion(.dismissAndForwardAction)
         }
+    }
+
+    private func urlForAction(_ actionId: String, userInfo: [AnyHashable: Any]) -> URL? {
+        if let urls = userInfo["action_urls"] as? [String: String],
+           let urlString = urls[actionId],
+           let url = URL(string: urlString) { return url }
+        if actionId == "PUSHAPP_OPT_IN",
+           let urlString = userInfo["url_opt_in"] as? String,
+           let url = URL(string: urlString) { return url }
+        if actionId == "PUSHAPP_NOT_INTERESTED",
+           let urlString = userInfo["url_not_interested"] as? String,
+           let url = URL(string: urlString) { return url }
+        if let buttons = userInfo["cta_buttons"] as? [[String: Any]] {
+            for btn in buttons {
+                if (btn["id"] as? String) == actionId,
+                   let urlString = btn["url"] as? String,
+                   let url = URL(string: urlString) { return url }
+            }
+        }
+        if let urlString = userInfo["cta_url"] as? String,
+           let url = URL(string: urlString) { return url }
+        return nil
     }
 
 }

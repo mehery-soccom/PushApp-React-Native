@@ -72,6 +72,30 @@ sendCustomEvent('purchase_made', {
 The SDK auto-registers FCM token and handles push notifications.
 Ensure you have Firebase configured.
 
+### iOS: 3-Button Notification Category
+
+To show a notification with **3 action buttons** on iOS, include the `category` field in your APNs payload. The SDK registers `THREE_BUTTON_CATEGORY` with actions: **Action 1**, **Action 2**, **Action 3**.
+
+**FCM payload example** (server-side):
+
+```json
+{
+  "message": {
+    "token": "<device_token>",
+    "notification": { "title": "Title", "body": "Body" },
+    "apns": {
+      "payload": {
+        "aps": {
+          "category": "THREE_BUTTON_CATEGORY"
+        }
+      }
+    }
+  }
+}
+```
+
+Action IDs sent to JS on tap: `PUSHAPP_ACTION_1`, `PUSHAPP_ACTION_2`, `PUSHAPP_ACTION_3`.
+
 ---
 
 ## 🧩 In-App Polls (Inline & Tooltip)

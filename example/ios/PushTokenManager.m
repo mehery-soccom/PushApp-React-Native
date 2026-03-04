@@ -2,8 +2,7 @@
 //  PushTokenManager.m
 //  MeheryEventSenderExample
 //
-//  Created by Ghost-ops721
- on 14/08/25.
+//  Created by Ghost-ops721 on 14/08/25.
 //
 
 #import <React/RCTBridgeModule.h>
