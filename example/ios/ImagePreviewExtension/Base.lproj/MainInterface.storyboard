@@ -36,39 +36,38 @@
 
     <!-- LOGO POSITION -->
     <constraint firstItem="LogoImageView" firstAttribute="leading"
-                secondItem="ContainerView" secondAttribute="leading" constant="8" id="logoLeading"/>
+                secondItem="ContainerView" secondAttribute="leading" constant="16" id="logoLeading"/>
 
     <constraint firstItem="LogoImageView" firstAttribute="top"
-                secondItem="ContainerView" secondAttribute="top" constant="14" id="logoTop"/>
+                secondItem="ContainerView" secondAttribute="top" constant="16" id="logoTop"/>
 
     <constraint firstItem="LogoImageView" firstAttribute="width"
-                constant="42" id="logoWidth"/>
+                constant="36" id="logoWidth"/>
 
     <constraint firstItem="LogoImageView" firstAttribute="height"
-                constant="42" id="logoHeight"/>
-                
+                constant="36" id="logoHeight"/>
 
 
-    <!-- TITLE ALIGNMENT: Title RIGHT of logo + TOP aligned with logo -->
+    <!-- TITLE ALIGNMENT -->
     <constraint firstItem="TitleLabel" firstAttribute="leading"
-                secondItem="LogoImageView" secondAttribute="trailing" constant="8" id="titleLeadingToLogo"/>
+                secondItem="LogoImageView" secondAttribute="trailing" constant="12" id="titleLeadingToLogo"/>
 
     <constraint firstItem="TitleLabel" firstAttribute="top"
                 secondItem="LogoImageView" secondAttribute="top" id="titleTopToLogoTop"/>
 
     <constraint firstAttribute="trailing" secondItem="TitleLabel"
-                secondAttribute="trailing" constant="8" id="titleTrailing"/>
+                secondAttribute="trailing" constant="16" id="titleTrailing"/>
 
 
     <!-- BODY BELOW TITLE -->
     <constraint firstItem="TextLabel" firstAttribute="top"
-                secondItem="TitleLabel" secondAttribute="bottom" constant="2" id="bodyBelowTitle"/>
+                secondItem="TitleLabel" secondAttribute="bottom" constant="4" id="bodyBelowTitle"/>
 
     <constraint firstItem="TextLabel" firstAttribute="leading"
                 secondItem="TitleLabel" secondAttribute="leading" id="bodyLeadingToTitle"/>
 
     <constraint firstAttribute="trailing" secondItem="TextLabel"
-                secondAttribute="trailing" constant="8" id="bodyTrailing"/>
+                secondAttribute="trailing" constant="16" id="bodyTrailing"/>
 
 </constraints>
 
