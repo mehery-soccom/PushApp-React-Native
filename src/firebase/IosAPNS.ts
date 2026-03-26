@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+import messaging from '@react-native-firebase/messaging';
 
 let deviceRegistrationInProgress = false;
 let lastApiCallTime = 0;
@@ -64,9 +65,19 @@ export async function registerDeviceWithAPNS(token: string) {
       await AsyncStorage.setItem('device_id', device_id);
     }
 
+    // Fetch FCM token safely
+    let fcmToken: string | null = null;
+    try {
+      fcmToken = await messaging().getToken();
+      console.log('📲 Fetched iOS FCM Token:', fcmToken);
+    } catch (e) {
+      console.warn('⚠️ Could not fetch FCM token on iOS', e);
+    }
+
     // Compose a stable key representing last known registration
     const currentState = JSON.stringify({
       token,
+      fcmToken,
       storedSessionId,
       storedContactId,
     });
@@ -87,6 +98,7 @@ export async function registerDeviceWithAPNS(token: string) {
       channel_id: channel_id,
       platform: Platform.OS,
       token,
+      fcm_token: fcmToken,
     };
 
     console.log('📡 Registering/updating device...', payload);
@@ -133,6 +145,7 @@ export async function registerDeviceWithAPNS(token: string) {
         'lastRegisteredState',
         JSON.stringify({
           token,
+          fcmToken,
           storedSessionId: newSessionId,
           storedContactId: newContactId,
         }),

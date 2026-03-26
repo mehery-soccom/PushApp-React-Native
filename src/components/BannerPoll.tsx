@@ -41,62 +41,84 @@ export default function BannerPoll({ html, messageId, filterId }: any) {
     }
   };
 
+  const normalizeUrl = (rawUrl?: string) => {
+    if (!rawUrl || typeof rawUrl !== 'string') return '';
+    const value = rawUrl.trim();
+    if (!value) return '';
+    if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return value;
+    if (/^https?:\/\//i.test(value)) return value;
+    if (/^www\./i.test(value)) return `https://${value}`;
+    return '';
+  };
+
   // Injected JavaScript for webview
   const injectedJS = `
   (function() {
-    // Prevent zooming
-    let meta = document.createElement('meta');
-    meta.setAttribute('name', 'viewport');
-    meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
-    document.head.appendChild(meta);
+    function init() {
+      // Prevent zooming
+      let meta = document.createElement('meta');
+      meta.setAttribute('name', 'viewport');
+      meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+      document.head.appendChild(meta);
 
-    const style = document.createElement('style');
-    style.innerHTML = \`
-      html, body {
-        margin: 0; padding: 0;
-        overflow: hidden;
-        width: 100%; height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        touch-action: manipulation;
-      }
-      button, a { cursor: pointer; touch-action: manipulation; }
-    \`;
-    document.head.appendChild(style);
-
-    // Disable double-tap zoom and pinch
-    document.addEventListener('gesturestart', e => e.preventDefault());
-    document.addEventListener('dblclick', e => e.preventDefault());
-
-    document.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('click', function() {
-        let value = this.value || this.innerText || '';
-        const onclickAttr = this.getAttribute('onclick');
-        if (onclickAttr) {
-          const match = onclickAttr.match(/'([^']+)'\\s*\\)$/);
-          if (match && match[1]) value = match[1];
+      const style = document.createElement('style');
+      style.innerHTML = \`
+        html, body {
+          margin: 0; padding: 0;
+          overflow: hidden;
+          width: 100%; height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          touch-action: manipulation;
         }
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'cta', value }));
-      });
-    });
+        button, a { cursor: pointer; touch-action: manipulation; }
+      \`;
+      document.head.appendChild(style);
 
-    document.querySelectorAll('a[href]').forEach(link => {
-      link.addEventListener('click', function(e) {
-        e.preventDefault();
-        const href = this.getAttribute('href');
-        if (href) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'link', url: href }));
-        }
-      });
-    });
+      // Disable double-tap zoom and pinch
+      document.addEventListener('gesturestart', e => e.preventDefault());
+      document.addEventListener('dblclick', e => e.preventDefault());
 
-    document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn')
-      .forEach(el => {
-        el.addEventListener('click', function() {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'dismissed' }));
+      const extractUrl = (el) => {
+        const onclickAttr = el.getAttribute('onclick') || '';
+        const hrefAttr = el.getAttribute('data-href') || el.getAttribute('href') || '';
+        const onClickUrlMatch = onclickAttr.match(/['"]((?:https?:\\/\\/|www\\.)[^'"]+)['"]/i);
+        if (onClickUrlMatch && onClickUrlMatch[1]) return onClickUrlMatch[1];
+        return hrefAttr || '';
+      };
+
+      document.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const ctaId = this.value || this.innerText || '';
+          const url = extractUrl(this);
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'buttonClick', ctaId, url }));
         });
       });
+
+      document.querySelectorAll('a[href]').forEach(link => {
+        link.addEventListener('click', function(e) {
+          e.preventDefault();
+          const href = this.getAttribute('href');
+          if (href) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'link', url: href }));
+          }
+        });
+      });
+
+      document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn')
+        .forEach(el => {
+          el.addEventListener('click', function() {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'dismissed' }));
+          });
+        });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
   })();
 `;
 
@@ -118,27 +140,29 @@ export default function BannerPoll({ html, messageId, filterId }: any) {
             const msg = JSON.parse(event.nativeEvent.data);
             console.log('📩 BannerPoll message:', msg);
 
-            if (msg.type === 'cta') {
-              sendTrackEvent('cta', msg.value);
+            if (msg.type === 'buttonClick' || msg.type === 'cta') {
+              const ctaId = msg.ctaId || msg.value || '';
+              const rawUrl = msg.url || msg.value || '';
+              const url = normalizeUrl(rawUrl);
 
-              // ✅ Check if value is a valid URL, then open it
-              const value = msg.value?.trim();
-              if (value && /^(https?:\/\/|www\.)/i.test(value)) {
-                const url = value.startsWith('http')
-                  ? value
-                  : `https://${value}`;
+              await sendTrackEvent('cta', ctaId);
+              if (url) {
                 console.log('🌐 Opening CTA link:', url);
                 await Linking.openURL(url);
+                await sendTrackEvent('openUrl', url);
               }
-            } else if (msg.type === 'link') {
-              console.log('🌐 Opening link:', msg.url);
-              await Linking.openURL(msg.url);
-              sendTrackEvent('openUrl', msg.url);
+            } else if (msg.type === 'link' || msg.type === 'openUrl') {
+              const url = normalizeUrl(msg.url);
+              if (url) {
+                console.log('🌐 Opening link:', url);
+                await Linking.openURL(url);
+                await sendTrackEvent('openUrl', url);
+              }
             } else if (msg.type === 'dismissed') {
               console.log('🚪 Banner dismissed');
-              sendTrackEvent('dismissed');
+              await sendTrackEvent('dismissed');
             } else {
-              sendTrackEvent('unknown');
+              await sendTrackEvent('unknown');
             }
           } catch (err) {
             console.warn(
@@ -155,14 +179,22 @@ export default function BannerPoll({ html, messageId, filterId }: any) {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 20,
-    width: '100%',
+    top: 45,
+    width: '92%',
+    alignSelf: 'center',
     height: 120,
     zIndex: 9999,
     backgroundColor: 'white',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
   },
   webview: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: 'transparent',
   },
 });

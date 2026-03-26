@@ -168,23 +168,16 @@ class CustomNotificationService(private val context: Context) {
         }
 
         // ------------------------------------------------------------------------------------
-        // SINGLE IMAGE FALLBACK
+        // SINGLE IMAGE FALLBACK - update customView in place so notification shows image
         // ------------------------------------------------------------------------------------
         else if (imageUrl.isNotEmpty()) {
             downloadImage(imageUrl) { bitmap ->
                 if (bitmap != null) {
-                    val updatedView =
-                        RemoteViews(context.packageName, R.layout.custom_notification_layout)
-
-                    updatedView.setTextViewText(R.id.title, title)
-                    updatedView.setTextViewText(R.id.message, message)
-                    updatedView.setTextViewText(R.id.tap_text, tapText)
                     if (isRichMedia) {
-                        updatedView.setImageViewBitmap(R.id.richImage, bitmap)
+                        customView.setImageViewBitmap(R.id.richImage, bitmap)
                     } else {
-                        updatedView.setImageViewBitmap(R.id.icon, bitmap)
+                        customView.setImageViewBitmap(R.id.icon, bitmap)
                     }
-                    
                     val manager =
                         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     manager.notify(notificationId, builder.build())

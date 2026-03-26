@@ -77,38 +77,63 @@ export default function RoadblockPoll({
     }
   };
 
+  const normalizeUrl = (rawUrl?: string) => {
+    if (!rawUrl || typeof rawUrl !== 'string') return '';
+    const value = rawUrl.trim();
+    if (!value) return '';
+    if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return value;
+    if (/^https?:\/\//i.test(value)) return value;
+    if (/^www\./i.test(value)) return `https://${value}`;
+    return '';
+  };
+
   // 🔹 Handle messages from WebView
-  const onMessage = (event: any) => {
+  const onMessage = async (event: any) => {
     const raw = event.nativeEvent.data;
     try {
       const message = JSON.parse(raw);
       console.log('📩 Message from WebView:', message);
 
       switch (message.type) {
-        case 'buttonClick':
-          sendTrackEvent('cta', message.value);
+        case 'buttonClick': {
+          const ctaId = message.ctaId || message.value || '';
+          const url = normalizeUrl(message.url || '');
+          await sendTrackEvent('cta', ctaId);
+          if (url) {
+            try {
+              await sendTrackEvent('openUrl', url);
+              await Linking.openURL(url);
+            } catch (err) {
+              console.error('❌ Failed to open URL:', err);
+            }
+          }
           onClose?.() ?? hidePollOverlay();
           break;
+        }
 
         case 'closePoll':
-          sendTrackEvent('dismissed');
+          await sendTrackEvent('dismissed');
           onClose?.() ?? hidePollOverlay();
           break;
 
         case 'longPress':
-          sendTrackEvent('longPress', message.value);
+          await sendTrackEvent('longPress', message.value);
           showOverlay(message.value);
           setTimeout(hideOverlay, 1500);
           break;
 
-        case 'openUrl':
-          sendTrackEvent('openUrl', message.url);
-          if (message.url) {
-            Linking.openURL(message.url).catch((err) =>
-              console.error('❌ Failed to open URL:', err)
-            );
+        case 'openUrl': {
+          const url = normalizeUrl(message.url || '');
+          if (url) {
+            try {
+              await sendTrackEvent('openUrl', url);
+              await Linking.openURL(url);
+            } catch (err) {
+              console.error('❌ Failed to open URL:', err);
+            }
           }
           break;
+        }
 
         default:
           console.log('default case');
@@ -124,51 +149,58 @@ export default function RoadblockPoll({
   // 🔹 Inject JS to handle button events inside HTML
   const injectedJS = `
     (function() {
-      document.body.style.touchAction = 'manipulation';
-      document.body.style.userSelect = 'none';
+      function init() {
+        document.body.style.touchAction = 'manipulation';
+        document.body.style.userSelect = 'none';
 
-      const send = (data) => {
-        window.ReactNativeWebView.postMessage(JSON.stringify(data));
-      };
+        const send = (data) => {
+          window.ReactNativeWebView.postMessage(JSON.stringify(data));
+        };
+        const extractUrl = (el) => {
+          const onclickAttr = el.getAttribute('onclick') || '';
+          const hrefAttr = el.getAttribute('data-href') || el.getAttribute('href') || '';
+          const onClickUrlMatch = onclickAttr.match(/['"]((?:https?:\\/\\/|www\\.)[^'"]+)['"]/i);
+          if (onClickUrlMatch && onClickUrlMatch[1]) return onClickUrlMatch[1];
+          return hrefAttr || '';
+        };
 
-      document.querySelectorAll('button').forEach(btn => {
-        let pressTimer;
+        const attachClickListener = (element) => {
+          let pressTimer;
 
-        btn.addEventListener('click', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
+          element.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
 
-          let value = this.value || this.innerText || '';
-          let targetUrl = '';
+            let value = this.value || this.innerText || '';
+            const targetUrl = extractUrl(this);
 
-          const onclickAttr = this.getAttribute('onclick');
-          const hrefAttr = this.getAttribute('data-href') || this.getAttribute('href');
+            send({ type: 'buttonClick', ctaId: value, url: targetUrl });
+          });
 
-          if (onclickAttr) {
-            const urlMatch = onclickAttr.match(/'(https?:[^']+)'/);
-            if (urlMatch) targetUrl = urlMatch[1];
-          } else if (hrefAttr) {
-            targetUrl = hrefAttr;
-          }
+          element.addEventListener('touchstart', function() {
+            let value = this.innerText || this.value || 'Button';
+            pressTimer = setTimeout(() => {
+              send({ type: 'longPress', value });
+            }, 600);
+          });
 
-          send({ type: 'buttonClick', value });
-          if (targetUrl) send({ type: 'openUrl', url: targetUrl });
-        });
+          ['touchend', 'touchmove', 'touchcancel'].forEach(ev => {
+            element.addEventListener(ev, () => clearTimeout(pressTimer));
+          });
+        };
 
-        btn.addEventListener('touchstart', function() {
-          let value = this.innerText || this.value || 'Button';
-          pressTimer = setTimeout(() => {
-            send({ type: 'longPress', value });
-          }, 600);
-        });
+        document.querySelectorAll('button').forEach(attachClickListener);
+        document.querySelectorAll('a[href]').forEach(attachClickListener);
 
-        ['touchend', 'touchmove', 'touchcancel'].forEach(ev => {
-          btn.addEventListener(ev, () => clearTimeout(pressTimer));
-        });
-      });
+        document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn')
+          .forEach(el => el.addEventListener('click', () => send({ type: 'closePoll' })));
+      }
 
-      document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn')
-        .forEach(el => el.addEventListener('click', () => send({ type: 'closePoll' })));
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
     })();
   `;
 

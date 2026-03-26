@@ -5,9 +5,11 @@ import {
   Dimensions,
   Animated,
   PanResponder,
+  Linking,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import Video from 'react-native-video';
+import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -17,6 +19,8 @@ interface FloaterProps {
   position?: 'top' | 'center' | 'bottom';
   width?: number;
   height?: number;
+  messageId?: string;
+  filterId?: string;
 }
 
 export default function Floater({
@@ -25,6 +29,8 @@ export default function Floater({
   position = 'bottom',
   width = 130,
   height = 130,
+  messageId,
+  filterId,
 }: FloaterProps) {
   // ✅ Compute initial position based on alignment
   const initialTop =
@@ -78,6 +84,120 @@ export default function Floater({
     };
   }, [pan, initialLeft, initialTop]);
 
+  const sendTrackEvent = async (
+    eventType: 'cta' | 'dismissed' | 'longPress' | 'openUrl' | 'unknown',
+    ctaId?: string
+  ) => {
+    const payload = {
+      messageId,
+      filterId,
+      event: eventType,
+      data: ctaId ? { ctaId } : {},
+    };
+    const commonHeaders = await buildCommonHeaders();
+
+    try {
+      await fetch(
+        'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...commonHeaders,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+    } catch (error) {
+      console.error('❌ Track API error:', error);
+    }
+  };
+
+  const normalizeUrl = (rawUrl?: string) => {
+    if (!rawUrl || typeof rawUrl !== 'string') return '';
+    const value = rawUrl.trim();
+    if (!value) return '';
+    if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return value;
+    if (/^https?:\/\//i.test(value)) return value;
+    if (/^www\./i.test(value)) return `https://${value}`;
+    return '';
+  };
+
+  const injectedJS = `
+    (function() {
+      function initListeners() {
+        const send = (data) => window.ReactNativeWebView.postMessage(JSON.stringify(data));
+        const extractUrl = (el) => {
+          const onclickAttr = el.getAttribute('onclick') || '';
+          const hrefAttr = el.getAttribute('data-href') || el.getAttribute('href') || '';
+          const onClickUrlMatch = onclickAttr.match(/['"]((?:https?:\\/\\/|www\\.)[^'"]+)['"]/i);
+          if (onClickUrlMatch && onClickUrlMatch[1]) return onClickUrlMatch[1];
+          return hrefAttr || '';
+        };
+
+        const attachClickListener = (element) => {
+          element.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const ctaId = this.value || this.innerText || '';
+            const url = extractUrl(this);
+            send({ type: 'buttonClick', ctaId, url });
+          });
+        };
+
+        document.querySelectorAll('button').forEach(attachClickListener);
+        document.querySelectorAll('a[href]').forEach(attachClickListener);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initListeners);
+      } else {
+        initListeners();
+      }
+    })();
+    true;
+  `;
+
+  const onMessage = async (event: any) => {
+    try {
+      const msg = JSON.parse(event.nativeEvent.data);
+      switch (msg.type) {
+        case 'buttonClick':
+        case 'cta': {
+          const ctaId = msg.ctaId || msg.value || '';
+          const url = normalizeUrl(msg.url || msg.value || '');
+          await sendTrackEvent('cta', ctaId);
+          if (url) {
+            try {
+              await sendTrackEvent('openUrl', url);
+              await Linking.openURL(url);
+            } catch (err) {
+              console.error('❌ Failed to open URL:', err);
+            }
+          }
+          break;
+        }
+        case 'openUrl':
+        case 'link': {
+          const url = normalizeUrl(msg.url);
+          if (url) {
+            try {
+              await sendTrackEvent('openUrl', url);
+              await Linking.openURL(url);
+            } catch (err) {
+              console.error('❌ Failed to open URL:', err);
+            }
+          }
+          break;
+        }
+        default:
+          await sendTrackEvent('unknown', JSON.stringify(msg));
+      }
+    } catch (error) {
+      await sendTrackEvent('unknown', 'invalid_json');
+    }
+  };
+
   return (
     <View style={styles.overlay}>
       <Animated.View
@@ -112,6 +232,8 @@ export default function Floater({
             mediaPlaybackRequiresUserAction={false}
             allowsFullscreenVideo
             scrollEnabled={false}
+            injectedJavaScript={injectedJS}
+            onMessage={onMessage}
           />
         )}
       </Animated.View>

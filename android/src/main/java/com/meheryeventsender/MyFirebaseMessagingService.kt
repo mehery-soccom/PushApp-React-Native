@@ -174,23 +174,28 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
             val notificationId =
                 (data["activity_id"] ?: "activity_${System.currentTimeMillis()}").hashCode()
     
+            val progressPercent = data["progressPercent"]?.toDoubleOrNull() ?: 0.0
+            val progressInt = (progressPercent * 100).toInt().coerceIn(0, 100)
+            val showProgress = !data["progressPercent"].isNullOrBlank()
+
             val notification = customService.createCustomNotification(
                 channelId = "live_activity_channel",
                 title = data["message1"] ?: "",
                 message = data["message2"] ?: "",
                 tapText = data["message3"] ?: "",
-                progress = ((data["progressPercent"]?.toDoubleOrNull() ?: 0.0) * 100).toInt(),
                 titleColor = data["message1FontColorHex"] ?: "#FF0000",
                 messageColor = data["message2FontColorHex"] ?: "#000000",
                 tapTextColor = data["message3FontColorHex"] ?: "#CCCCCC",
                 progressColor = data["progressColorHex"] ?: "#00FF00",
                 backgroundColor = data["backgroundColorHex"] ?: "#FFFFFF",
-                imageUrl = data["imageUrl"] ?: "",
+                imageUrl = data["imageUrl"] ?: data["image_url"] ?: "",
                 bg_color_gradient = data["bg_color_gradient"] ?: "",
                 bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
                 align = data["align"] ?: "",
                 notificationId = notificationId,
-                imageUrls = imageList  // ✅ CORRECT
+                imageUrls = imageList,
+                showProgress = showProgress,
+                progress = progressInt
             )
     
             notificationManager.notify(notificationId, notification.build())
@@ -231,7 +236,7 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
             messageColor = data["messageColorHex"] ?: "#000000",
             tapTextColor = data["tapTextColorHex"] ?: "#666666",
             backgroundColor = data["backgroundColorHex"] ?: "#FFFFFF",
-            imageUrl = data["imageUrl"] ?: "",
+            imageUrl = data["imageUrl"] ?: data["image_url"] ?: "",
             bg_color_gradient = data["bg_color_gradient"] ?: "",
             bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
             align = data["align"] ?: "",

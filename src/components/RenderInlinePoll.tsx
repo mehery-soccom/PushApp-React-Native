@@ -189,6 +189,16 @@ export function InlinePollContainer({
     }
   };
 
+  const normalizeUrl = (rawUrl?: string) => {
+    if (!rawUrl || typeof rawUrl !== 'string') return '';
+    const value = rawUrl.trim();
+    if (!value) return '';
+    if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return value;
+    if (/^https?:\/\//i.test(value)) return value;
+    if (/^www\./i.test(value)) return `https://${value}`;
+    return '';
+  };
+
   // Reset height when poll content changes
   useEffect(() => {
     if (poll?.htmlContent) setContentHeight(FALLBACK_HEIGHT);
@@ -214,9 +224,10 @@ export function InlinePollContainer({
       console.log('📩 InlinePoll message:', message);
 
       switch (message.type) {
-        case 'buttonClick': {
-          const ctaId = message.value || message.ctaId || '';
-          const url = message.url || '';
+        case 'buttonClick':
+        case 'cta': {
+          const ctaId = message.ctaId || message.value || '';
+          const url = normalizeUrl(message.url || message.value || '');
           // console.log('🟢 Sending CTA button click:', ctaId, url ? `→ ${url}` : '');
           sendTrackEvent('cta', ctaId);
           sendCustomEvent('sendcta', {
@@ -226,10 +237,7 @@ export function InlinePollContainer({
             messageId: poll?.messageId,
             filterId: poll?.filterId,
           });
-          if (
-            url &&
-            (url.startsWith('http://') || url.startsWith('https://'))
-          ) {
+          if (url) {
             Linking.openURL(url).catch((err) =>
               console.error('❌ Failed to open URL:', err)
             );
@@ -246,17 +254,20 @@ export function InlinePollContainer({
           break;
 
         case 'openUrl':
-          sendTrackEvent('openUrl', message.url);
-          if (message.url) {
-            Linking.openURL(message.url).catch((err) =>
+        case 'link': {
+          const url = normalizeUrl(message.url);
+          sendTrackEvent('openUrl', url);
+          if (url) {
+            Linking.openURL(url).catch((err) =>
               console.error('❌ Failed to open URL:', err)
             );
           }
           break;
+        }
 
         default:
           console.warn('⚠️ Unknown message type:', message);
-          sendTrackEvent('unknown', message);
+          sendTrackEvent('unknown', JSON.stringify(message));
       }
     } catch (err) {
       console.warn('⚠️ Invalid message from WebView:', raw);
@@ -303,27 +314,40 @@ function measureAndSend() {
         img.onload = measureAndSend;
         if (img.complete) measureAndSend();
       });
-      document.querySelectorAll('button').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          var value = btn.value || btn.innerText || '';
-          var url = '';
-          var onclick = (btn.getAttribute('onclick') || '');
-          var match = onclick.match(/handleClick\\s*\\([^,]*,[^,]*,\\s*['"]([^'"]+)['"]\\)/) || onclick.match(/['"](https?:\\/\\/[^'"]+)['"]/);
-          if (match) url = match[1] || '';
-          send({ type: 'buttonClick', value: value, url: url });
-        }, true);
-      });
-      document.querySelectorAll('[data-close], .close-button').forEach(el => {
-        el.addEventListener('click', () => send({ type: 'closePoll' }));
-      });
-      document.querySelectorAll('a').forEach(link => {
-        link.addEventListener('click', e => {
-          e.preventDefault();
-          send({ type: 'openUrl', url: link.href });
+      
+      function initListeners() {
+        const attachClickListener = function(element) {
+          element.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            var value = this.value || this.innerText || '';
+            var url = '';
+            var onclick = (this.getAttribute('onclick') || '');
+            var href = (this.getAttribute('data-href') || this.getAttribute('href') || '');
+            
+            var match = onclick.match(/handleClick\\s*\\([^,]*,[^,]*,\\s*['"]([^'"]+)['"]\\)/) || onclick.match(/['"]((?:https?:\\/\\/|www\\.)[^'"]+)['"]/);
+            if (match) {
+              url = match[1] || '';
+            } else if (href) {
+              url = href;
+            }
+            send({ type: 'buttonClick', ctaId: value, url: url });
+          }, true);
+        };
+
+        document.querySelectorAll('button').forEach(attachClickListener);
+        document.querySelectorAll('a').forEach(attachClickListener);
+
+        document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn').forEach(el => {
+          el.addEventListener('click', () => send({ type: 'closePoll' }));
         });
-      });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initListeners);
+      } else {
+        initListeners();
+      }
     })();
     true;
   `;
