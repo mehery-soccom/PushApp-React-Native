@@ -100,7 +100,7 @@ export async function registerDeviceWithAPNS(token: string) {
       token,
       fcm_token: fcmToken,
     };
-
+    console.log('payload:', fcmToken);
     console.log('📡 Registering/updating device...', payload);
     const commonHeaders = await buildCommonHeaders();
 

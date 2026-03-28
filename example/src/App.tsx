@@ -1,5 +1,6 @@
 // App.tsx
 import { useEffect, useState } from 'react';
+import messaging from '@react-native-firebase/messaging';
 import {
   View,
   StyleSheet,
@@ -162,6 +163,14 @@ export default function App() {
 
       // 2️⃣ Initialize SDK
       initSdk(null, 'demo_1754408042569', true);
+      // 3️⃣ Log FCM Token
+      try {
+        await messaging().requestPermission();
+        const token = await messaging().getToken();
+        console.log('Firebase Cloud Messaging Token:', token);
+      } catch (error) {
+        console.warn('Failed to get FCM token', error);
+      }
     };
 
     init();
