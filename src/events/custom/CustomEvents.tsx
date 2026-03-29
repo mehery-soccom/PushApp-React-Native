@@ -8,6 +8,7 @@ import { renderInlinePoll } from '../../components/RenderInlinePoll';
 import { renderTooltipPoll } from '../../components/TooltipPollManager';
 import Floater from '../../components/FloaterPoll';
 import { buildCommonHeaders } from '../../helpers/buildCommonHeaders';
+import { getApiBaseUrl } from '../../helpers/getApiBaseUrl';
 
 // 📌 Sends a custom event, then triggers the poll fetchi
 export async function sendCustomEvent(event_name: string, event_data: object) {
@@ -18,17 +19,17 @@ export async function sendCustomEvent(event_name: string, event_data: object) {
   const channel_id = await AsyncStorage.getItem('mehery_channel_id');
   console.log('channel id at custom:', channel_id);
 
-  const payload = { user_id, channel_id, event_name, event_data };
+  const payload = { user_id, channel_id, event_name, event_data, device_id };
 
   console.log(`📡 Sending ${event_name} event:`, payload);
   const commonHeaders = await buildCommonHeaders();
+  const baseUrl = await getApiBaseUrl();
 
   try {
-    const res = await fetch('https://demo.pushapp.co.in/pushapp/api/v1/event', {
+    const res = await fetch(`${baseUrl}/events`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-device-id': device_id ?? '',
         ...commonHeaders,
       },
       body: JSON.stringify(payload),
@@ -193,19 +194,17 @@ export async function sendPollEvent() {
   console.log('showing poll:', showingPoll);
   const payload = { contact_id: `${user_id}_${device_id}` };
   const commonHeaders = await buildCommonHeaders();
+  const baseUrl = await getApiBaseUrl();
 
   try {
-    const res = await fetch(
-      'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/poll',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...commonHeaders,
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const res = await fetch(`${baseUrl}/v1/notification/in-app/poll`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
+      body: JSON.stringify(payload),
+    });
 
     const data = await res.json();
     console.log('poll data:', data);
@@ -320,19 +319,17 @@ export async function sendAck(contactId: string, messageId: string) {
   };
 
   const commonHeaders = await buildCommonHeaders();
+  const baseUrl = await getApiBaseUrl();
 
   try {
-    const res = await fetch(
-      'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/ack',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...commonHeaders,
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const res = await fetch(`${baseUrl}/v1/notification/in-app/ack`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
+      body: JSON.stringify(payload),
+    });
 
     const data = await res.json();
     console.log('✅ Acknowledgement response:', data);

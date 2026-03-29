@@ -5,6 +5,11 @@ import PushNotification from 'react-native-push-notification';
 import { getDeviceId } from '../utils/device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+import {
+  getApiBaseUrl,
+  getChannelId,
+  getTenant,
+} from '../helpers/getApiBaseUrl';
 
 import { NativeModules, Platform } from 'react-native';
 const { LiveActivityModule } = NativeModules;
@@ -58,11 +63,16 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
       await AsyncStorage.setItem('device_id', finalDeviceId);
     }
 
+    const channel_id = await getChannelId();
+    const tenant_id = await getTenant();
+
     // Create state key to check for changes
     const currentState = JSON.stringify({
       token,
       deviceId: finalDeviceId,
       platform: Platform.OS,
+      channel_id,
+      tenant_id,
     });
 
     // 🔁 Skip if last registration is identical
@@ -71,8 +81,6 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
       deviceRegistrationInProgress = false;
       return;
     }
-
-    const channel_id = await AsyncStorage.getItem('mehery_channel_id');
 
     const payload = {
       device_id: finalDeviceId,
@@ -84,17 +92,16 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
     console.log('📡 Registering device with payload:', payload);
     const commonHeaders = await buildCommonHeaders();
 
-    const response = await fetch(
-      'https://demo.pushapp.co.in/pushapp/api/device/register',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...commonHeaders,
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const baseUrl = await getApiBaseUrl();
+
+    const response = await fetch(`${baseUrl}/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
+      body: JSON.stringify(payload),
+    });
     // const response = await fetch(
     //   'https://demo.pushapp.co.in/pushapp/api/register',
     //   {

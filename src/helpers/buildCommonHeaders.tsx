@@ -1,6 +1,6 @@
 import { Dimensions, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDeviceMetadata } from '../utils/deviceMetadata';
+import { getDeviceId } from '../utils/device';
 
 export async function buildCommonHeaders() {
   const { width, height } = Dimensions.get('window');
@@ -9,12 +9,7 @@ export async function buildCommonHeaders() {
 
   const locale = Intl.DateTimeFormat().resolvedOptions().locale || 'en';
 
-  let deviceId = '';
-  try {
-    deviceId = (await AsyncStorage.getItem('device_id')) ?? '';
-  } catch {
-    deviceId = '';
-  }
+  const deviceId = await getDeviceId();
 
   const orientation = width > height ? 'Landscape' : 'Portrait';
 

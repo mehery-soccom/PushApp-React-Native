@@ -2,6 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import messaging from '@react-native-firebase/messaging';
+import {
+  getApiBaseUrl,
+  getChannelId,
+  getTenant,
+} from '../helpers/getApiBaseUrl';
 
 let deviceRegistrationInProgress = false;
 let lastApiCallTime = 0;
@@ -74,12 +79,17 @@ export async function registerDeviceWithAPNS(token: string) {
       console.warn('⚠️ Could not fetch FCM token on iOS', e);
     }
 
+    const channel_id = await getChannelId();
+    const tenant_id = await getTenant();
+
     // Compose a stable key representing last known registration
     const currentState = JSON.stringify({
       token,
       fcmToken,
       storedSessionId,
       storedContactId,
+      channel_id,
+      tenant_id,
     });
 
     // If registration state hasn’t changed, skip entirely
@@ -89,8 +99,6 @@ export async function registerDeviceWithAPNS(token: string) {
       return storedSessionId;
     }
     await AsyncStorage.setItem('UserRegistered', 'true');
-    const channel_id = await AsyncStorage.getItem('mehery_channel_id');
-    console.log('channel id at custom:', channel_id);
 
     // Prepare payload
     const payload = {
@@ -104,17 +112,16 @@ export async function registerDeviceWithAPNS(token: string) {
     console.log('📡 Registering/updating device...', payload);
     const commonHeaders = await buildCommonHeaders();
 
-    const response = await fetch(
-      'https://demo.pushapp.co.in/pushapp/api/device/register',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...commonHeaders,
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const baseUrl = await getApiBaseUrl();
+
+    const response = await fetch(`${baseUrl}/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
+      body: JSON.stringify(payload),
+    });
 
     // const response = await fetch(
     //   'https://demo.pushapp.co.in/pushapp/api/register',

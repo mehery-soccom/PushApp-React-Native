@@ -162,7 +162,7 @@ export default function App() {
       await initDeviceMetadata();
 
       // 2️⃣ Initialize SDK
-      initSdk(null, 'demo_1754408042569', true);
+      await initSdk(null, 'demo_1754408042569', true);
       // 3️⃣ Log FCM Token
       try {
         await messaging().requestPermission();

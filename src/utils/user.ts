@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OnAppOpen } from '../events/custom/CustomEvents';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+import { getApiBaseUrl, getChannelId } from '../helpers/getApiBaseUrl';
 
 // import { OnPageOpen } from '../events/custom/CustomEvents';
 type UserDetails = {
@@ -40,8 +41,8 @@ export async function OnUserLogin(user_id: string) {
     return;
   }
 
-  const channel_id = await AsyncStorage.getItem('mehery_channel_id');
-  console.log('channel id at custom:', channel_id);
+  const channel_id = await getChannelId();
+  console.log('channel id at login:', channel_id);
 
   const payload = {
     device_id: device_id,
@@ -50,27 +51,17 @@ export async function OnUserLogin(user_id: string) {
   };
   console.log('📦 Payload of login:', payload);
   const commonHeaders = await buildCommonHeaders();
+  const baseUrl = await getApiBaseUrl();
 
   try {
-    const response = await fetch(
-      'https://demo.pushapp.co.in/pushapp/api/device/link',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...commonHeaders,
-        },
-        body: JSON.stringify(payload),
-      }
-    );
-    // const response = await fetch(
-    //   'https://demo.pushapp.co.in/pushapp/api/register/user',
-    //   {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify(payload),
-    //   }
-    // );
+    const response = await fetch(`${baseUrl}/register/user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
+      body: JSON.stringify(payload),
+    });
 
     const text = await response.text();
     console.log('Response text:', text);
@@ -93,17 +84,12 @@ export async function OnUserLogin(user_id: string) {
 }
 
 export async function OnUserLogOut(user_id: string) {
-  console.log('userid from fornt end:', user_id);
-  // if (!user_id) {
-  //   console.warn('❌ user_id is missing. Skipping device registration.');
-  //   return;
-  // }
+  console.log('userid from frontend:', user_id);
   const userID = await AsyncStorage.getItem('user_id');
-
   const device_id = await AsyncStorage.getItem('device_id');
 
-  const channel_id = await AsyncStorage.getItem('mehery_channel_id');
-  console.log('channel id at custom:', channel_id);
+  const channel_id = await getChannelId();
+  console.log('channel id at logout:', channel_id);
 
   if (!device_id) {
     console.warn('❌ Device ID not available.');
@@ -127,8 +113,9 @@ export async function OnUserLogOut(user_id: string) {
   // })
 
   const commonHeaders = await buildCommonHeaders();
+  const baseUrl = await getApiBaseUrl();
 
-  fetch('https://demo.pushapp.co.in/pushapp/api/device/delink', {
+  fetch(`${baseUrl}/register/logout`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

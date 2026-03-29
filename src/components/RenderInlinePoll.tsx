@@ -4,6 +4,7 @@ import { View, StyleSheet, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { sendCustomEvent } from '../events/custom/CustomEvents';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+import { getApiBaseUrl } from '../helpers/getApiBaseUrl';
 
 const inlinePollRegistry: Record<
   string,
@@ -168,19 +169,17 @@ export function InlinePollContainer({
 
     console.log('📤 Sending track event:', payload);
     const commonHeaders = await buildCommonHeaders();
+    const baseUrl = await getApiBaseUrl();
 
     try {
-      const res = await fetch(
-        'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...commonHeaders,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await fetch(`${baseUrl}/v1/notification/in-app/track`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...commonHeaders,
+        },
+        body: JSON.stringify(payload),
+      });
 
       const data = await res.json();
       console.log('✅ Track API response:', data);

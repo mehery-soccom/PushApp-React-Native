@@ -1,6 +1,7 @@
 import { View, StyleSheet, Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+import { getApiBaseUrl } from '../helpers/getApiBaseUrl';
 
 export default function BannerPoll({ html, messageId, filterId }: any) {
   const cleanHtml = html.replace(/<\/?body[^>]*>/g, '');
@@ -20,19 +21,17 @@ export default function BannerPoll({ html, messageId, filterId }: any) {
 
     console.log('📤 Sending track event:', payload);
     const commonHeaders = await buildCommonHeaders();
+    const baseUrl = await getApiBaseUrl();
 
     try {
-      const res = await fetch(
-        'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...commonHeaders,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await fetch(`${baseUrl}/v1/notification/in-app/track`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...commonHeaders,
+        },
+        body: JSON.stringify(payload),
+      });
 
       const data = await res.json();
       console.log('✅ Track API response:', data);

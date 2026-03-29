@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+import { getApiBaseUrl } from '../helpers/getApiBaseUrl';
 
 const { width, height } = Dimensions.get('window');
 
@@ -109,19 +110,17 @@ export default function PipPoll({
       data: ctaId ? { ctaId } : {},
     };
     const commonHeaders = await buildCommonHeaders();
+    const baseUrl = await getApiBaseUrl();
 
     try {
-      await fetch(
-        'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...commonHeaders,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      await fetch(`${baseUrl}/v1/notification/in-app/track`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...commonHeaders,
+        },
+        body: JSON.stringify(payload),
+      });
     } catch (error) {
       console.error('❌ Track API error:', error);
     }
