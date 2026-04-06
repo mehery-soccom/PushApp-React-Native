@@ -8,6 +8,7 @@ import { renderInlinePoll } from '../../components/RenderInlinePoll';
 import { renderTooltipPoll } from '../../components/TooltipPollManager';
 import Floater from '../../components/FloaterPoll';
 import { buildCommonHeaders } from '../../helpers/buildCommonHeaders';
+import { getApiBaseUrl } from '../../helpers/tenantContext';
 
 // 📌 Sends a custom event, then triggers the poll fetchi
 export async function sendCustomEvent(event_name: string, event_data: object) {
@@ -22,9 +23,9 @@ export async function sendCustomEvent(event_name: string, event_data: object) {
 
   console.log(`📡 Sending ${event_name} event:`, payload);
   const commonHeaders = await buildCommonHeaders();
-
+  const apiBaseUrl = await getApiBaseUrl();
   try {
-    const res = await fetch('https://demo.pushapp.co.in/pushapp/api/v1/event', {
+    const res = await fetch(`${apiBaseUrl}/v1/event`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -193,19 +194,17 @@ export async function sendPollEvent() {
   console.log('showing poll:', showingPoll);
   const payload = { contact_id: `${user_id}_${device_id}` };
   const commonHeaders = await buildCommonHeaders();
+  const apiBaseUrl = await getApiBaseUrl();
 
   try {
-    const res = await fetch(
-      'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/poll',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...commonHeaders,
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const res = await fetch(`${apiBaseUrl}/v1/notification/in-app/poll`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
+      body: JSON.stringify(payload),
+    });
 
     const data = await res.json();
     console.log('poll data:', data);
@@ -320,19 +319,17 @@ export async function sendAck(contactId: string, messageId: string) {
   };
 
   const commonHeaders = await buildCommonHeaders();
+  const apiBaseUrl = await getApiBaseUrl();
 
   try {
-    const res = await fetch(
-      'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/ack',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...commonHeaders,
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const res = await fetch(`${apiBaseUrl}/v1/notification/in-app/ack`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
+      body: JSON.stringify(payload),
+    });
 
     const data = await res.json();
     console.log('✅ Acknowledgement response:', data);

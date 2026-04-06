@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OnAppOpen } from '../events/custom/CustomEvents';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+import { extractChannelSegment, getApiBaseUrl } from '../helpers/tenantContext';
 
 // import { OnPageOpen } from '../events/custom/CustomEvents';
 type UserDetails = {
@@ -43,37 +44,51 @@ export async function OnUserLogin(user_id: string) {
   const channel_id = await AsyncStorage.getItem('mehery_channel_id');
   console.log('channel id at custom:', channel_id);
 
-  const payload = {
-    device_id: device_id,
-    user_id: userID || user_id,
-    channel_id: channel_id,
-  };
-  console.log('📦 Payload of login:', payload);
   const commonHeaders = await buildCommonHeaders();
+  const apiBaseUrl = await getApiBaseUrl();
+  const loginUserId = userID || user_id;
+  const primaryChannelId = channel_id ?? '';
+
+  const linkDevice = async (channelIdValue: string) => {
+    const payload = {
+      device_id,
+      user_id: loginUserId,
+      channel_id: channelIdValue,
+    };
+    console.log('📦 Payload of login:', payload);
+    const response = await fetch(`${apiBaseUrl}/device/link`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
+      body: JSON.stringify(payload),
+    });
+    const text = await response.text();
+    return { response, text, payload };
+  };
 
   try {
-    const response = await fetch(
-      'https://demo.pushapp.co.in/pushapp/api/device/link',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...commonHeaders,
-        },
-        body: JSON.stringify(payload),
-      }
-    );
-    // const response = await fetch(
-    //   'https://demo.pushapp.co.in/pushapp/api/register/user',
-    //   {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify(payload),
-    //   }
-    // );
-
-    const text = await response.text();
+    let { response, text } = await linkDevice(primaryChannelId);
     console.log('Response text:', text);
+
+    const parsedChannelSegment = extractChannelSegment(primaryChannelId);
+    const shouldRetryWithParsedChannel =
+      !response.ok &&
+      response.status >= 500 &&
+      parsedChannelSegment &&
+      parsedChannelSegment !== primaryChannelId &&
+      /non-existent collection in transaction/i.test(text);
+
+    if (shouldRetryWithParsedChannel) {
+      console.warn(
+        `⚠️ /device/link failed for full identifier, retrying with parsed channel segment: ${parsedChannelSegment}`
+      );
+      const retryResult = await linkDevice(parsedChannelSegment);
+      response = retryResult.response;
+      text = retryResult.text;
+      console.log('Retry response text:', text);
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status} - ${text}`);
@@ -127,8 +142,9 @@ export async function OnUserLogOut(user_id: string) {
   // })
 
   const commonHeaders = await buildCommonHeaders();
+  const apiBaseUrl = await getApiBaseUrl();
 
-  fetch('https://demo.pushapp.co.in/pushapp/api/device/delink', {
+  fetch(`${apiBaseUrl}/device/delink`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

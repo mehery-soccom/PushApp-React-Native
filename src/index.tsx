@@ -48,6 +48,10 @@ import { PollOverlayProvider } from './components/PollOverlay';
 export { TooltipPollContainer } from './components/TooltipPollContainer';
 
 import { buildCommonHeaders } from './helpers/buildCommonHeaders';
+import {
+  getApiBaseUrl,
+  storeTenantFromIdentifier,
+} from './helpers/tenantContext';
 
 const { PushTokenManager } = NativeModules;
 // const pushEmitter = PushTokenManager
@@ -128,7 +132,8 @@ const sendDailyPing = async () => {
     console.log('📡 Sending silent daily ping:', payload);
     const commonHeaders = await buildCommonHeaders();
 
-    await fetch('https://demo.pushapp.co.in/pushapp/api/ping', {
+    const apiBaseUrl = await getApiBaseUrl();
+    await fetch(`${apiBaseUrl}/ping`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -259,7 +264,10 @@ export const initSdk = async (
     console.log(`🏷️ Identifier: ${identifier}`);
     console.log(`🧪 Sandbox Mode: ${sandbox}`);
 
-    // ✅ Extract tenant and channelId from "tenant#channelId"
+    const tenant = await storeTenantFromIdentifier(identifier);
+    console.log(`🏢 Resolved tenant: ${tenant}`);
+
+    // Keep raw identifier as channel_id for API compatibility.
     await AsyncStorage.setItem('mehery_channel_id', identifier);
     console.log(`💾 Saved Channel ID: ${identifier}`);
 

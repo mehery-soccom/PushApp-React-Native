@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+import { getApiBaseUrl } from '../helpers/tenantContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -109,19 +110,17 @@ export default function PipPoll({
       data: ctaId ? { ctaId } : {},
     };
     const commonHeaders = await buildCommonHeaders();
+    const apiBaseUrl = await getApiBaseUrl();
 
     try {
-      await fetch(
-        'https://demo.pushapp.co.in/pushapp/api/v1/notification/in-app/track',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...commonHeaders,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      await fetch(`${apiBaseUrl}/v1/notification/in-app/track`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...commonHeaders,
+        },
+        body: JSON.stringify(payload),
+      });
     } catch (error) {
       console.error('❌ Track API error:', error);
     }
@@ -215,13 +214,7 @@ export default function PipPoll({
   // Fullscreen / Maximized Mode
   if (maximized || fullscreen) {
     return (
-      <View
-        style={{
-          width,
-          height,
-          zIndex: 400,
-        }}
-      >
+      <View style={[styles.fullscreenContainer, { width, height }]}>
         <WebView
           source={{ html: htmlContent }}
           style={styles.web}
@@ -276,6 +269,7 @@ export default function PipPoll({
 }
 
 const styles = StyleSheet.create({
+  fullscreenContainer: { zIndex: 400 },
   web: { flex: 1 },
   pipContainer: {
     position: 'absolute',

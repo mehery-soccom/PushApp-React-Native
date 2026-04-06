@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+import { getApiBaseUrl } from '../helpers/tenantContext';
 import messaging from '@react-native-firebase/messaging';
 
 let deviceRegistrationInProgress = false;
@@ -104,17 +105,15 @@ export async function registerDeviceWithAPNS(token: string) {
     console.log('📡 Registering/updating device...', payload);
     const commonHeaders = await buildCommonHeaders();
 
-    const response = await fetch(
-      'https://demo.pushapp.co.in/pushapp/api/device/register',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...commonHeaders,
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const apiBaseUrl = await getApiBaseUrl();
+    const response = await fetch(`${apiBaseUrl}/device/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
+      body: JSON.stringify(payload),
+    });
 
     // const response = await fetch(
     //   'https://demo.pushapp.co.in/pushapp/api/register',

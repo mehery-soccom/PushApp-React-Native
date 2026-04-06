@@ -5,6 +5,7 @@ import PushNotification from 'react-native-push-notification';
 import { getDeviceId } from '../utils/device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+import { getApiBaseUrl } from '../helpers/tenantContext';
 
 import { NativeModules, Platform } from 'react-native';
 const { LiveActivityModule } = NativeModules;
@@ -84,17 +85,15 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
     console.log('📡 Registering device with payload:', payload);
     const commonHeaders = await buildCommonHeaders();
 
-    const response = await fetch(
-      'https://demo.pushapp.co.in/pushapp/api/device/register',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...commonHeaders,
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const apiBaseUrl = await getApiBaseUrl();
+    const response = await fetch(`${apiBaseUrl}/device/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
+      body: JSON.stringify(payload),
+    });
     // const response = await fetch(
     //   'https://demo.pushapp.co.in/pushapp/api/register',
     //   {
