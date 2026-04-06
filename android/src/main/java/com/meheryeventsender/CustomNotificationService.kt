@@ -15,6 +15,8 @@ import android.app.NotificationManager
 import android.graphics.drawable.GradientDrawable
 import com.meheryeventsender.R
 import android.view.View
+import android.util.Log
+import java.io.BufferedInputStream
 
 
 class CustomNotificationService(private val context: Context) {
@@ -22,6 +24,9 @@ class CustomNotificationService(private val context: Context) {
     companion object {
         const val ACTION_NEXT = "com.meheryeventsender.CAROUSEL_NEXT"
         const val ACTION_PREV = "com.meheryeventsender.CAROUSEL_PREV"
+        private const val TAG = "CustomNotificationSvc"
+        private const val CONNECT_TIMEOUT_MS = 15000
+        private const val READ_TIMEOUT_MS = 15000
     }
 
     // State caches
@@ -133,7 +138,10 @@ class CustomNotificationService(private val context: Context) {
             downloadImages(imageUrls) { bitmaps ->
 
                 val safeBitmaps = bitmaps.filterNotNull()
-                if (safeBitmaps.isEmpty()) return@downloadImages
+                if (safeBitmaps.isEmpty()) {
+                    Log.w(TAG, "No valid carousel bitmaps for notificationId=$notificationId")
+                    return@downloadImages
+                }
 
                 // Save state for carousel navigation
                 cachedBitmaps[notificationId] = safeBitmaps
@@ -319,15 +327,31 @@ class CustomNotificationService(private val context: Context) {
             val results = mutableListOf<Bitmap?>()
 
             for (urlString in urlList) {
-                val clean = if (urlString.startsWith("@")) urlString.substring(1) else urlString
+                val clean = sanitizeImageUrl(urlString)
+                var conn: HttpURLConnection? = null
                 try {
                     val url = URL(clean)
-                    val conn = url.openConnection() as HttpURLConnection
+                    conn = url.openConnection() as HttpURLConnection
                     conn.doInput = true
+                    conn.connectTimeout = CONNECT_TIMEOUT_MS
+                    conn.readTimeout = READ_TIMEOUT_MS
+                    conn.instanceFollowRedirects = true
                     conn.connect()
-                    results.add(BitmapFactory.decodeStream(conn.inputStream))
+                    val bitmap = conn.inputStream.use { input ->
+                        BufferedInputStream(input).use { buffered ->
+                            BitmapFactory.decodeStream(buffered)
+                        }
+                    }
+                    conn.disconnect()
+                    if (bitmap == null) {
+                        Log.w(TAG, "Bitmap decode failed for carousel image: $clean")
+                    }
+                    results.add(bitmap)
                 } catch (e: Exception) {
+                    Log.e(TAG, "Carousel image download failed for $clean", e)
                     results.add(null)
+                } finally {
+                    conn?.disconnect()
                 }
             }
 
@@ -339,16 +363,38 @@ class CustomNotificationService(private val context: Context) {
     fun downloadImage(urlString: String, onResult: (Bitmap?) -> Unit) {
         Thread {
             var bmp: Bitmap? = null
+            var conn: HttpURLConnection? = null
             try {
-                val url = URL(urlString)
-                val conn = url.openConnection() as HttpURLConnection
+                val cleanedUrl = sanitizeImageUrl(urlString)
+                val url = URL(cleanedUrl)
+                conn = url.openConnection() as HttpURLConnection
                 conn.doInput = true
+                conn.connectTimeout = CONNECT_TIMEOUT_MS
+                conn.readTimeout = READ_TIMEOUT_MS
+                conn.instanceFollowRedirects = true
                 conn.connect()
-                bmp = BitmapFactory.decodeStream(conn.inputStream)
-            } catch (_: Exception) {}
+                conn.inputStream.use { input ->
+                    BufferedInputStream(input).use { buffered ->
+                        bmp = BitmapFactory.decodeStream(buffered)
+                    }
+                }
+                conn.disconnect()
+                if (bmp == null) {
+                    Log.w(TAG, "Bitmap decode failed for $cleanedUrl")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Single image download failed for $urlString", e)
+            } finally {
+                conn?.disconnect()
+            }
 
             Handler(Looper.getMainLooper()).post { onResult(bmp) }
         }.start()
+    }
+
+    private fun sanitizeImageUrl(urlString: String): String {
+        val trimmed = urlString.trim()
+        return if (trimmed.startsWith("@")) trimmed.substring(1) else trimmed
     }
 
 

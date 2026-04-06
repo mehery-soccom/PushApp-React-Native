@@ -16,11 +16,6 @@
             </intent-filter>
         </service>
 
-        <!-- Custom Notification Service -->
-        <service
-            android:name=".CustomNotificationService"
-            android:exported="false" />
-
         <!-- Carousel Receiver (REQUIRED for next / prev buttons) -->
         <receiver
             android:name=".CarouselReceiver"

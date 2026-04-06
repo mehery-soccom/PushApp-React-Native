@@ -14,7 +14,6 @@ import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import androidx.core.app.NotificationCompat
-import org.json.JSONArray
 
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {
@@ -34,7 +33,10 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
 
                     handleLiveActivityNotification(remoteMessage.data)
                 }
-                else if (hasImages(remoteMessage.data)) {
+                else if (NotificationPayloadUtils.shouldUseBigPictureStyle(remoteMessage.data)) {
+                    handleBigPictureNotification(remoteMessage.data)
+                }
+                else if (NotificationPayloadUtils.hasAnyImage(remoteMessage.data)) {
                     // 🟣 RICH MEDIA NOTIFICATION
                     handleRichMediaNotification(remoteMessage.data)
                 
@@ -84,59 +86,6 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
         }
     }
 
-    private fun hasImages(data: Map<String, String>): Boolean {
-        if (!data["imageUrl"].isNullOrBlank()) return true
-        if (!data["imageUrls"].isNullOrBlank()) return true
-        if (!data["image_urls"].isNullOrBlank()) return true
-        if (!data["carousel_images"].isNullOrBlank()) return true
-
-        var index = 1
-        while (data.containsKey("image$index")) {
-            return true
-        }
-        return false
-    }
-    
-
-    private fun extractImageList(data: Map<String, String>): List<String> {
-        val list = mutableListOf<String>()
-    
-        // 1️⃣ imageUrls - JSON array
-        data["imageUrls"]?.let { json ->
-            try {
-                val arr = org.json.JSONArray(json)
-                for (i in 0 until arr.length()) list.add(arr.getString(i))
-                if (list.isNotEmpty()) return list
-            } catch (_: Exception) {}
-        }
-    
-        // 2️⃣ image_urls - JSON array
-        data["image_urls"]?.let { json ->
-            try {
-                val arr = org.json.JSONArray(json)
-                for (i in 0 until arr.length()) list.add(arr.getString(i))
-                if (list.isNotEmpty()) return list
-            } catch (_: Exception) {}
-        }
-    
-        // 3️⃣ carousel_images - JSON array
-        data["carousel_images"]?.let { json ->
-            try {
-                val arr = org.json.JSONArray(json)
-                for (i in 0 until arr.length()) list.add(arr.getString(i))
-                if (list.isNotEmpty()) return list
-            } catch (_: Exception) {}
-        }
-    
-        // 4️⃣ image1, image2, image3...
-        var index = 1
-        while (data.containsKey("image$index")) {
-            data["image$index"]?.let { list.add(it) }
-            index++
-        }
-        return list
-    }
-    
     private fun createUrlIntent(context: Context, url: String): PendingIntent {
         val intent = Intent(Intent.ACTION_VIEW).apply {
             data = android.net.Uri.parse(url)
@@ -169,7 +118,7 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
             val customService = CustomNotificationService(this)
     
             // Extract image list from FCM
-            val imageList = extractImageList(data)
+            val imageList = NotificationPayloadUtils.extractImageList(data)
     
             val notificationId =
                 (data["activity_id"] ?: "activity_${System.currentTimeMillis()}").hashCode()
@@ -188,7 +137,7 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
                 tapTextColor = data["message3FontColorHex"] ?: "#CCCCCC",
                 progressColor = data["progressColorHex"] ?: "#00FF00",
                 backgroundColor = data["backgroundColorHex"] ?: "#FFFFFF",
-                imageUrl = data["imageUrl"] ?: data["image_url"] ?: "",
+                imageUrl = NotificationPayloadUtils.resolveSingleImageUrl(data),
                 bg_color_gradient = data["bg_color_gradient"] ?: "",
                 bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
                 align = data["align"] ?: "",
@@ -225,7 +174,7 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
     
         val customService = CustomNotificationService(this)
     
-        val imageList = extractImageList(data)
+        val imageList = NotificationPayloadUtils.extractImageList(data)
     
         val builder = customService.createCustomNotification(
             channelId = channelId,
@@ -236,7 +185,7 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
             messageColor = data["messageColorHex"] ?: "#000000",
             tapTextColor = data["tapTextColorHex"] ?: "#666666",
             backgroundColor = data["backgroundColorHex"] ?: "#FFFFFF",
-            imageUrl = data["imageUrl"] ?: data["image_url"] ?: "",
+            imageUrl = NotificationPayloadUtils.resolveSingleImageUrl(data),
             bg_color_gradient = data["bg_color_gradient"] ?: "",
             bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
             align = data["align"] ?: "",
@@ -251,7 +200,50 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
     
         notificationManager.notify(notificationId, builder.build())
     }
-    
-    
-    
+
+    private fun handleBigPictureNotification(data: Map<String, String>) {
+        val notificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val channelId = "default_channel_id"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "Default Channel",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val title = data["title"] ?: "Notification"
+        val message = data["body"] ?: "You have a new message"
+        val imageUrl = NotificationPayloadUtils.resolveSingleImageUrl(data)
+        val notificationId =
+            (data["notification_id"] ?: System.currentTimeMillis().toString()).hashCode()
+
+        val builder = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+
+        if (imageUrl.isNotBlank()) {
+            val customService = CustomNotificationService(this)
+            customService.downloadImage(imageUrl) { bitmap ->
+                val finalBuilder = if (bitmap != null) {
+                    builder.setStyle(
+                        NotificationCompat.BigPictureStyle()
+                            .bigPicture(bitmap)
+                            .bigLargeIcon(null as android.graphics.Bitmap?)
+                    )
+                } else {
+                    builder
+                }
+                notificationManager.notify(notificationId, finalBuilder.build())
+            }
+        } else {
+            notificationManager.notify(notificationId, builder.build())
+        }
+    }
 }

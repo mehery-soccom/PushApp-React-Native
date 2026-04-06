@@ -72,6 +72,49 @@ sendCustomEvent('purchase_made', {
 The SDK auto-registers FCM token and handles push notifications.
 Ensure you have Firebase configured.
 
+### Android image notification notes
+
+- Use **data-only FCM payloads** for reliable custom rendering when app is backgrounded/killed.
+- Prefer HTTPS image URLs; HTTP can be blocked by Android network security.
+- If your app also declares another `FirebaseMessagingService`, ensure your Android manifest still includes `com.meheryeventsender.MyFirebaseMessagingService`.
+
+#### Supported Android image payload keys
+
+- Single image: `image`, `imageUrl`, `image_url`
+- Carousel list: `imageUrls`, `image_urls`, `carousel_images` (JSON arrays), or indexed `image1`, `image2`, ...
+
+#### Android payload examples
+
+Single-image (BigPicture-style eligible):
+
+```json
+{
+  "message": {
+    "token": "<device_token>",
+    "data": {
+      "title": "Order update",
+      "body": "Your package is out for delivery",
+      "imageUrl": "https://example.com/banner.jpg"
+    }
+  }
+}
+```
+
+Carousel/custom expanded:
+
+```json
+{
+  "message": {
+    "token": "<device_token>",
+    "data": {
+      "title": "Top picks for you",
+      "body": "Swipe images in expanded view",
+      "image_urls": "[\"https://example.com/a.jpg\",\"https://example.com/b.jpg\"]"
+    }
+  }
+}
+```
+
 ### iOS: 3-Button Notification Category
 
 To show a notification with **3 action buttons** on iOS, include the `category` field in your APNs payload. The SDK registers `THREE_BUTTON_CATEGORY` with actions: **Action 1**, **Action 2**, **Action 3**.
