@@ -3,7 +3,7 @@ import { View, StyleSheet, Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { hidePollOverlay } from './PollOverlay';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
-import { getApiBaseUrl } from '../helpers/getApiBaseUrl';
+import { getApiBaseUrl } from '../helpers/tenantContext';
 
 export default function RoadblockPoll({
   html,
@@ -57,10 +57,10 @@ export default function RoadblockPoll({
 
     console.log('📤 Sending track event:', payload);
     const commonHeaders = await buildCommonHeaders();
-    const baseUrl = await getApiBaseUrl();
+    const apiBaseUrl = await getApiBaseUrl();
 
     try {
-      const res = await fetch(`${baseUrl}/v1/notification/in-app/track`, {
+      const res = await fetch(`${apiBaseUrl}/v1/notification/in-app/track`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

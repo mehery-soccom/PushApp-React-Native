@@ -32,17 +32,6 @@ const randomExpiryTimestampMoreThan5Years = () => {
   return toSeconds(now + fiveYearsMs);
 };
 
-const randomDobTimestamp = () => {
-  const minAge = 18;
-  const maxAge = 45;
-  const age = Math.floor(Math.random() * (maxAge - minAge + 1)) + minAge;
-
-  const dob = new Date();
-  dob.setFullYear(dob.getFullYear() - age);
-
-  return toSeconds(dob.getTime());
-};
-
 const randomGender = () => {
   const genders = ['male', 'female'];
   return genders[Math.floor(Math.random() * genders.length)];
@@ -91,7 +80,6 @@ function HomePage({
       // 🔥 SEND RANDOM PROFILE UPDATE
       updateUserProfile({
         expiry_date: randomExpiryTimestampMoreThan5Years(),
-        dob: randomDobTimestamp(),
         gender: randomGender(),
       });
     } catch (error) {
@@ -162,7 +150,7 @@ export default function App() {
       await initDeviceMetadata();
 
       // 2️⃣ Initialize SDK
-      await initSdk(null, 'demo_1754408042569', true);
+      initSdk(null, 'demo_1754408042569', false);
       // 3️⃣ Log FCM Token
       try {
         await messaging().requestPermission();

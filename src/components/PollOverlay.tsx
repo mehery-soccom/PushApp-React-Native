@@ -63,7 +63,16 @@ export const PollOverlayProvider: React.FC = () => {
       setIsFloater(true);
       setModalVisible(true);
     } else if (pollType.includes('bottomsheet')) {
-      setBottomSheetContents([element]);
+      const originalOnClose = (element as any)?.props?.onClose;
+      const cloned = React.cloneElement(element as React.ReactElement<any>, {
+        onClose: () => {
+          if (typeof originalOnClose === 'function') {
+            originalOnClose();
+          }
+          setBottomSheetContents([]);
+        },
+      });
+      setBottomSheetContents([cloned]);
     } else {
       console.warn('Unknown poll type', pollType);
     }
@@ -124,6 +133,7 @@ export const PollOverlayProvider: React.FC = () => {
         <View
           key={index}
           style={[styles.bannerContainer, { zIndex: 10 + index }]}
+          pointerEvents="box-none"
         >
           {content}
         </View>
@@ -178,7 +188,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     width: '100%',
-    elevation: 3,
+    zIndex: 9999,
+    elevation: 9999,
   },
   pipContainer: {
     position: 'absolute',

@@ -7,12 +7,11 @@ import {
   StyleSheet,
   PanResponder,
   Animated,
-  Image,
   Linking,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
-import { getApiBaseUrl } from '../helpers/getApiBaseUrl';
+import { getApiBaseUrl } from '../helpers/tenantContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -110,10 +109,10 @@ export default function PipPoll({
       data: ctaId ? { ctaId } : {},
     };
     const commonHeaders = await buildCommonHeaders();
-    const baseUrl = await getApiBaseUrl();
+    const apiBaseUrl = await getApiBaseUrl();
 
     try {
-      await fetch(`${baseUrl}/v1/notification/in-app/track`, {
+      await fetch(`${apiBaseUrl}/v1/notification/in-app/track`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -214,13 +213,7 @@ export default function PipPoll({
   // Fullscreen / Maximized Mode
   if (maximized || fullscreen) {
     return (
-      <View
-        style={{
-          width,
-          height,
-          zIndex: 400,
-        }}
-      >
+      <View style={[styles.fullscreenContainer, { width, height }]}>
         <WebView
           source={{ html: htmlContent }}
           style={styles.web}
@@ -263,18 +256,17 @@ export default function PipPoll({
       <TouchableOpacity
         style={styles.maxBtnSmall}
         onPress={() => setMaximized(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Enter fullscreen"
       >
-        <Image
-          source={require('../../assets/fullscreen.png')} // 👈 your image file path
-          style={styles.maxBtnImage}
-          resizeMode="contain"
-        />
+        <Text style={styles.maxBtnGlyph}>⛶</Text>
       </TouchableOpacity>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  fullscreenContainer: { zIndex: 400 },
   web: { flex: 1 },
   pipContainer: {
     position: 'absolute',
@@ -301,8 +293,11 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   maxBtnText: { color: 'white', fontWeight: 'bold' },
-  maxBtnImage: {
-    width: 20,
-    height: 20,
+  maxBtnGlyph: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+    lineHeight: 18,
+    textAlign: 'center',
   },
 });

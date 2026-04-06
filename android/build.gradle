@@ -51,23 +51,13 @@ def supportsNamespace() {
 android {
   if (supportsNamespace()) {
     namespace "com.meheryeventsender"
+  }
 
-    sourceSets {
-      main {
-        manifest.srcFile "src/main/AndroidManifestNew.xml"
-        res.srcDirs = ['src/main/res'] // 👈 Add this line
-        main.java.srcDirs += 'src/main/java'
-
-
-      }
-    }
-  } else {
-    sourceSets {
-      main {
-        res.srcDirs = ['src/main/res']
-        java.srcDirs = ["src/main/java"]
-
-      }
+  sourceSets {
+    main {
+      manifest.srcFile "src/main/AndroidManifest.xml"
+      res.srcDirs = ['src/main/res']
+      java.srcDirs = ["src/main/java"]
     }
   }
 

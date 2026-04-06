@@ -1,15 +1,11 @@
 import messaging from '@react-native-firebase/messaging';
 import app from '@react-native-firebase/app';
-import { PermissionsAndroid } from 'react-native';
+import { Linking, PermissionsAndroid } from 'react-native';
 import PushNotification from 'react-native-push-notification';
 import { getDeviceId } from '../utils/device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
-import {
-  getApiBaseUrl,
-  getChannelId,
-  getTenant,
-} from '../helpers/getApiBaseUrl';
+import { getApiBaseUrl } from '../helpers/tenantContext';
 
 import { NativeModules, Platform } from 'react-native';
 const { LiveActivityModule } = NativeModules;
@@ -17,6 +13,9 @@ const { LiveActivityModule } = NativeModules;
 let deviceRegistrationInProgress = false;
 let lastApiCallTime: number | null = null;
 const API_CALL_COOLDOWN_MS = 5000; // 5s cooldown
+let foregroundUnsubscribe: null | (() => void) = null;
+const seenForegroundMessageIds = new Set<string>();
+const FOREGROUND_MESSAGE_CACHE_LIMIT = 50;
 
 console.log('💬 Firebase messaging:', messaging);
 console.log('📦 Firebase app exists:', app ? 'Yes' : 'No');
@@ -63,16 +62,11 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
       await AsyncStorage.setItem('device_id', finalDeviceId);
     }
 
-    const channel_id = await getChannelId();
-    const tenant_id = await getTenant();
-
     // Create state key to check for changes
     const currentState = JSON.stringify({
       token,
       deviceId: finalDeviceId,
       platform: Platform.OS,
-      channel_id,
-      tenant_id,
     });
 
     // 🔁 Skip if last registration is identical
@@ -81,6 +75,8 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
       deviceRegistrationInProgress = false;
       return;
     }
+
+    const channel_id = await AsyncStorage.getItem('mehery_channel_id');
 
     const payload = {
       device_id: finalDeviceId,
@@ -92,9 +88,8 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
     console.log('📡 Registering device with payload:', payload);
     const commonHeaders = await buildCommonHeaders();
 
-    const baseUrl = await getApiBaseUrl();
-
-    const response = await fetch(`${baseUrl}/register`, {
+    const apiBaseUrl = await getApiBaseUrl();
+    const response = await fetch(`${apiBaseUrl}/device/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -170,6 +165,53 @@ export function requestUserPermission(): void {
 const MAX_FCM_TOKEN_RETRIES = 4;
 const RETRY_DELAY_MS = 2000;
 
+function resolveSingleImageFromData(data: Record<string, any>): string | null {
+  const keys = ['image', 'imageUrl', 'image_url'];
+  for (const key of keys) {
+    const value = data?.[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+function resolveImageListFromData(data: Record<string, any>): string[] {
+  const listKeys = ['imageUrls', 'image_urls', 'carousel_images'];
+  for (const key of listKeys) {
+    const raw = data?.[key];
+    if (!raw) continue;
+    try {
+      const rawString = typeof raw === 'string' ? raw : JSON.stringify(raw);
+      const parsed = JSON.parse(rawString);
+      if (Array.isArray(parsed)) {
+        const normalized = parsed
+          .map((item) => (typeof item === 'string' ? item.trim() : ''))
+          .filter(Boolean);
+        if (normalized.length > 0) {
+          return normalized;
+        }
+      }
+    } catch (_err) {}
+  }
+
+  const indexed: string[] = [];
+  for (let i = 1; i <= 20; i++) {
+    const value = data?.[`image${i}`];
+    if (typeof value !== 'string') {
+      if (i === 1) continue;
+      break;
+    }
+    const trimmed = value.trim();
+    if (trimmed) indexed.push(trimmed);
+  }
+  return indexed;
+}
+
+function normalizedString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 function isRetryableFcmError(error: unknown): boolean {
   const msg = String(
     (error as { message?: string })?.message ?? error ?? ''
@@ -223,8 +265,27 @@ export async function getFcmToken(): Promise<string | null> {
  */
 export function configurePushNotifications(): void {
   PushNotification.configure({
-    onNotification: function (notification: any) {
+    onNotification: async function (notification: any) {
       console.log('🔔 LOCAL NOTIFICATION:', notification);
+      const action = notification?.action;
+      if (!action) return;
+
+      const actionMapRaw =
+        notification?.data?.__actionMap ||
+        notification?.userInfo?.__actionMap ||
+        notification?.__actionMap;
+      if (!actionMapRaw) return;
+
+      try {
+        const actionMap = JSON.parse(String(actionMapRaw));
+        const targetUrl = actionMap?.[action];
+        if (typeof targetUrl === 'string' && targetUrl.trim()) {
+          console.log(`🔗 Opening action URL for "${action}":`, targetUrl);
+          await Linking.openURL(targetUrl.trim());
+        }
+      } catch (err) {
+        console.warn('⚠️ Failed to handle notification action URL:', err);
+      }
     },
     popInitialNotification: true,
     requestPermissions: false,
@@ -277,8 +338,27 @@ export function configurePushNotifications(): void {
 // }
 
 export function setupForegroundNotificationListener(): () => void {
+  if (foregroundUnsubscribe) {
+    console.log('ℹ️ Foreground notification listener already active');
+    return foregroundUnsubscribe;
+  }
+
   const unsubscribe = messaging().onMessage((remoteMessage) => {
     console.log('📨 Foreground FCM message:', JSON.stringify(remoteMessage));
+    const messageId = remoteMessage.messageId || '';
+    if (messageId && seenForegroundMessageIds.has(messageId)) {
+      console.log('⏭️ Duplicate foreground message ignored:', messageId);
+      return;
+    }
+    if (messageId) {
+      seenForegroundMessageIds.add(messageId);
+      if (seenForegroundMessageIds.size > FOREGROUND_MESSAGE_CACHE_LIMIT) {
+        const oldest = seenForegroundMessageIds.values().next().value as
+          | string
+          | undefined;
+        if (oldest) seenForegroundMessageIds.delete(oldest);
+      }
+    }
 
     const data = remoteMessage.data || {};
 
@@ -291,27 +371,13 @@ export function setupForegroundNotificationListener(): () => void {
     const image =
       remoteMessage.notification?.android?.imageUrl ||
       remoteMessage.notification?.image ||
-      data.image ||
+      resolveSingleImageFromData(data) ||
       null;
 
     // 👇 Detect carousel payload
-    let carouselImages: string[] = [];
-
-    const carouselImagesRaw = data.image_urls || data.carousel_images;
-
-    if (carouselImagesRaw) {
-      try {
-        const rawString =
-          typeof carouselImagesRaw === 'string'
-            ? carouselImagesRaw
-            : JSON.stringify(carouselImagesRaw);
-
-        carouselImages = JSON.parse(rawString);
-
-        console.log('🖼️ Carousel images parsed:', carouselImages);
-      } catch (err) {
-        console.error('❌ Failed to parse carousel images:', err);
-      }
+    const carouselImages = resolveImageListFromData(data);
+    if (carouselImages.length > 0) {
+      console.log('🖼️ Carousel images parsed:', carouselImages);
     }
 
     // 👇 If carousel pushed → activate native module
@@ -340,10 +406,45 @@ export function setupForegroundNotificationListener(): () => void {
       vibrate: true,
     };
 
+    const actionPairs = [
+      {
+        title: normalizedString(data.title1),
+        url: normalizedString(data.url1),
+      },
+      {
+        title: normalizedString(data.title2),
+        url: normalizedString(data.url2),
+      },
+    ].filter((item) => item.title && item.url);
+
+    if (actionPairs.length > 0) {
+      const actionTitles = actionPairs.map((item) => item.title as string);
+      const actionMap = actionPairs.reduce(
+        (acc, item) => {
+          acc[item.title as string] = item.url as string;
+          return acc;
+        },
+        {} as Record<string, string>
+      );
+      const actionMapJson = JSON.stringify(actionMap);
+
+      localNotif.actions = actionTitles;
+      localNotif.invokeApp = true;
+      localNotif.__actionMap = actionMapJson;
+      localNotif.userInfo = {
+        ...(localNotif.userInfo || {}),
+        __actionMap: actionMapJson,
+      };
+      localNotif.data = {
+        ...(data as Record<string, string>),
+        __actionMap: actionMapJson,
+      };
+    }
+
     if (image) {
-      localNotif.bigPicture = image;
-      localNotif.largeIcon = image;
-      localNotif.bigLargeIcon = image;
+      // react-native-push-notification expects bigPictureUrl for Android big image style
+      localNotif.bigPictureUrl = image;
+      localNotif.picture = image;
       localNotif.largeIconUrl = image;
     }
 
@@ -354,7 +455,13 @@ export function setupForegroundNotificationListener(): () => void {
     }
   });
 
-  return unsubscribe;
+  foregroundUnsubscribe = () => {
+    unsubscribe();
+    foregroundUnsubscribe = null;
+    seenForegroundMessageIds.clear();
+  };
+
+  return foregroundUnsubscribe;
 }
 
 // Fb.ts or Fb.js

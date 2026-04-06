@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OnAppOpen } from '../events/custom/CustomEvents';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
-import { getApiBaseUrl, getChannelId } from '../helpers/getApiBaseUrl';
+import { extractChannelSegment, getApiBaseUrl } from '../helpers/tenantContext';
 
 // import { OnPageOpen } from '../events/custom/CustomEvents';
 type UserDetails = {
@@ -41,20 +41,22 @@ export async function OnUserLogin(user_id: string) {
     return;
   }
 
-  const channel_id = await getChannelId();
-  console.log('channel id at login:', channel_id);
+  const channel_id = await AsyncStorage.getItem('mehery_channel_id');
+  console.log('channel id at custom:', channel_id);
 
-  const payload = {
-    device_id: device_id,
-    user_id: userID || user_id,
-    channel_id: channel_id,
-  };
-  console.log('📦 Payload of login:', payload);
   const commonHeaders = await buildCommonHeaders();
-  const baseUrl = await getApiBaseUrl();
+  const apiBaseUrl = await getApiBaseUrl();
+  const loginUserId = userID || user_id;
+  const primaryChannelId = channel_id ?? '';
 
-  try {
-    const response = await fetch(`${baseUrl}/register/user`, {
+  const linkDevice = async (channelIdValue: string) => {
+    const payload = {
+      device_id,
+      user_id: loginUserId,
+      channel_id: channelIdValue,
+    };
+    console.log('📦 Payload of login:', payload);
+    const response = await fetch(`${apiBaseUrl}/device/link`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -62,9 +64,31 @@ export async function OnUserLogin(user_id: string) {
       },
       body: JSON.stringify(payload),
     });
-
     const text = await response.text();
+    return { response, text, payload };
+  };
+
+  try {
+    let { response, text } = await linkDevice(primaryChannelId);
     console.log('Response text:', text);
+
+    const parsedChannelSegment = extractChannelSegment(primaryChannelId);
+    const shouldRetryWithParsedChannel =
+      !response.ok &&
+      response.status >= 500 &&
+      parsedChannelSegment &&
+      parsedChannelSegment !== primaryChannelId &&
+      /non-existent collection in transaction/i.test(text);
+
+    if (shouldRetryWithParsedChannel) {
+      console.warn(
+        `⚠️ /device/link failed for full identifier, retrying with parsed channel segment: ${parsedChannelSegment}`
+      );
+      const retryResult = await linkDevice(parsedChannelSegment);
+      response = retryResult.response;
+      text = retryResult.text;
+      console.log('Retry response text:', text);
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status} - ${text}`);
@@ -84,12 +108,17 @@ export async function OnUserLogin(user_id: string) {
 }
 
 export async function OnUserLogOut(user_id: string) {
-  console.log('userid from frontend:', user_id);
+  console.log('userid from fornt end:', user_id);
+  // if (!user_id) {
+  //   console.warn('❌ user_id is missing. Skipping device registration.');
+  //   return;
+  // }
   const userID = await AsyncStorage.getItem('user_id');
+
   const device_id = await AsyncStorage.getItem('device_id');
 
-  const channel_id = await getChannelId();
-  console.log('channel id at logout:', channel_id);
+  const channel_id = await AsyncStorage.getItem('mehery_channel_id');
+  console.log('channel id at custom:', channel_id);
 
   if (!device_id) {
     console.warn('❌ Device ID not available.');
@@ -113,9 +142,9 @@ export async function OnUserLogOut(user_id: string) {
   // })
 
   const commonHeaders = await buildCommonHeaders();
-  const baseUrl = await getApiBaseUrl();
+  const apiBaseUrl = await getApiBaseUrl();
 
-  fetch(`${baseUrl}/register/logout`, {
+  fetch(`${apiBaseUrl}/device/delink`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

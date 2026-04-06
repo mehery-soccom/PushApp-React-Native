@@ -1,18 +1,19 @@
+// sdk/index.tsx (add at the top or create a separate ws.ts file)
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getSocketUrl } from '../helpers/getApiBaseUrl';
+import { getWsHostUrl } from '../helpers/tenantContext';
 
 let socket: WebSocket | null = null;
 
 export const connectToServer = async () => {
   const userID = await AsyncStorage.getItem('user_id');
   const device_id = await AsyncStorage.getItem('device_id');
-  const socketUrl = await getSocketUrl();
 
   try {
-    socket = new WebSocket(socketUrl);
+    const wsUrl = await getWsHostUrl();
+    socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
-      console.log(`✅ WebSocket connected to ${socketUrl}`);
+      console.log(`✅ WebSocket connected to ${wsUrl}`);
       socket?.send(
         JSON.stringify({ type: 'auth', userId: `${userID}_${device_id}` })
       );

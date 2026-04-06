@@ -10,7 +10,7 @@ import {
 import { WebView } from 'react-native-webview';
 import Video from 'react-native-video';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
-import { getApiBaseUrl } from '../helpers/getApiBaseUrl';
+import { getApiBaseUrl } from '../helpers/tenantContext';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -96,10 +96,10 @@ export default function Floater({
       data: ctaId ? { ctaId } : {},
     };
     const commonHeaders = await buildCommonHeaders();
-    const baseUrl = await getApiBaseUrl();
+    const apiBaseUrl = await getApiBaseUrl();
 
     try {
-      await fetch(`${baseUrl}/v1/notification/in-app/track`, {
+      await fetch(`${apiBaseUrl}/v1/notification/in-app/track`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

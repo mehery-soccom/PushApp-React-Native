@@ -39,11 +39,12 @@ object LiveActivityUtils {
                 tapTextColor = data["message3FontColorHex"] ?: "#CCCCCC",
                 progressColor = data["progressColorHex"] ?: "#00FF00",
                 backgroundColor = data["backgroundColorHex"] ?: "#FFFFFF",
-                imageUrl = data["imageUrl"] ?: "",
+                imageUrl = NotificationPayloadUtils.resolveSingleImageUrl(data),
                 bg_color_gradient = data["bg_color_gradient"] ?: "",
                 bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
                 align = data["align"] ?: "",
-                notificationId = notificationId
+                notificationId = notificationId,
+                imageUrls = NotificationPayloadUtils.extractImageList(data)
             )
 
             Log.d("LiveActivityUtils", "Notifying with ID: $notificationId")
@@ -51,6 +52,54 @@ object LiveActivityUtils {
 
         } catch (e: Exception) {
             Log.e("LiveActivityUtils", "Live activity error: ${e.message}", e)
+        }
+    }
+
+    fun handleCarouselNotification(context: Context, data: Map<String, String>) {
+        try {
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            val channelId = "rich_media_channel"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    channelId,
+                    "Rich Media Notifications",
+                    NotificationManager.IMPORTANCE_HIGH
+                )
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            val imageList = NotificationPayloadUtils.extractImageList(data)
+            if (imageList.isEmpty()) return
+
+            val customService = CustomNotificationService(context)
+            val notificationId =
+                (data["notification_id"] ?: "carousel_${System.currentTimeMillis()}").hashCode()
+
+            val builder = customService.createCustomNotification(
+                channelId = channelId,
+                title = data["title"] ?: "Notification",
+                message = data["message"] ?: (data["body"] ?: ""),
+                tapText = data["tapText"] ?: "",
+                titleColor = data["titleColorHex"] ?: "#000000",
+                messageColor = data["messageColorHex"] ?: "#000000",
+                tapTextColor = data["tapTextColorHex"] ?: "#666666",
+                progressColor = data["progressColorHex"] ?: "#00FF00",
+                backgroundColor = data["backgroundColorHex"] ?: "#FFFFFF",
+                imageUrl = NotificationPayloadUtils.resolveSingleImageUrl(data),
+                bg_color_gradient = data["bg_color_gradient"] ?: "",
+                bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
+                align = data["align"] ?: "",
+                notificationId = notificationId,
+                imageUrls = imageList,
+                showProgress = false,
+                isRichMedia = true
+            )
+
+            notificationManager.notify(notificationId, builder.build())
+        } catch (e: Exception) {
+            Log.e("LiveActivityUtils", "Carousel notification error: ${e.message}", e)
         }
     }
 }

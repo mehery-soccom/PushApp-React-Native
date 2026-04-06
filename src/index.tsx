@@ -36,10 +36,11 @@ import {
   configurePushNotifications,
   setupForegroundNotificationListener,
 } from './firebase/Fb';
+// import { triggerLiveActivity } from './native/LiveActivity';
 import { connectToServer } from './socket/WebSock';
 import { getDeviceId as fetchDeviceId } from './utils/device';
+// import { registerDeviceWithFCM } from './utils/registerDevice';
 import { registerDeviceWithAPNS } from './firebase/IosAPNS';
-import { getApiBaseUrl, setInMemIdentifiers } from './helpers/getApiBaseUrl';
 // import { showPollOverlay, hidePollOverlay } from './components/PollOverlay';
 // 🛡 Safe NativeEventEmitter setup
 import { PollOverlayProvider } from './components/PollOverlay';
@@ -47,6 +48,10 @@ import { PollOverlayProvider } from './components/PollOverlay';
 export { TooltipPollContainer } from './components/TooltipPollContainer';
 
 import { buildCommonHeaders } from './helpers/buildCommonHeaders';
+import {
+  getApiBaseUrl,
+  storeTenantFromIdentifier,
+} from './helpers/tenantContext';
 
 const { PushTokenManager } = NativeModules;
 // const pushEmitter = PushTokenManager
@@ -126,9 +131,9 @@ const sendDailyPing = async () => {
 
     console.log('📡 Sending silent daily ping:', payload);
     const commonHeaders = await buildCommonHeaders();
-    const baseUrl = await getApiBaseUrl();
 
-    await fetch(`${baseUrl}/ping`, {
+    const apiBaseUrl = await getApiBaseUrl();
+    await fetch(`${apiBaseUrl}/ping`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -259,22 +264,12 @@ export const initSdk = async (
     console.log(`🏷️ Identifier: ${identifier}`);
     console.log(`🧪 Sandbox Mode: ${sandbox}`);
 
-    // ✅ Extract tenant from prefix (e.g., "zpl26_..." or "zpl26#...")
-    const parts = (identifier || '').replace('#', '_').split('_');
-    const finalTenant = (parts.length > 1 ? parts[0] : 'demo') || 'demo';
+    const tenant = await storeTenantFromIdentifier(identifier);
+    console.log(`🏢 Resolved tenant: ${tenant}`);
 
-    // ✅ SHIELD: We keep the ORIGINAL identifier as the channel_id
-    // This ensures that the server still finds the channel by its full name
-    const finalChannelId = identifier;
-
-    // ✅ SHIELD: Update in-memory cache IMMEDIATELY (prevents race condition in sub-calls)
-    setInMemIdentifiers(finalTenant, finalChannelId);
-
-    await AsyncStorage.setItem('mehery_tenant_id', finalTenant);
-    await AsyncStorage.setItem('mehery_channel_id', finalChannelId);
-    console.log(
-      `💾 Saved Tenant ID: ${finalTenant}, Channel ID: ${finalChannelId}`
-    );
+    // Keep raw identifier as channel_id for API compatibility.
+    await AsyncStorage.setItem('mehery_channel_id', identifier);
+    console.log(`💾 Saved Channel ID: ${identifier}`);
 
     // ✅ Fetch or create device ID
     fetchDeviceId();
