@@ -7,7 +7,6 @@ import {
   StyleSheet,
   PanResponder,
   Animated,
-  Image,
   Linking,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
@@ -257,12 +256,10 @@ export default function PipPoll({
       <TouchableOpacity
         style={styles.maxBtnSmall}
         onPress={() => setMaximized(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Enter fullscreen"
       >
-        <Image
-          source={require('../../assets/fullscreen.png')} // 👈 your image file path
-          style={styles.maxBtnImage}
-          resizeMode="contain"
-        />
+        <Text style={styles.maxBtnGlyph}>⛶</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -296,8 +293,11 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   maxBtnText: { color: 'white', fontWeight: 'bold' },
-  maxBtnImage: {
-    width: 20,
-    height: 20,
+  maxBtnGlyph: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+    lineHeight: 18,
+    textAlign: 'center',
   },
 });
