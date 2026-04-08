@@ -3,6 +3,7 @@ package com.meheryeventsender
 import org.json.JSONArray
 
 object NotificationPayloadUtils {
+    const val MAX_CAROUSEL_IMAGES = 4
     private val singleImageKeys = listOf("image", "imageUrl", "image_url")
     private val listImageKeys = listOf("imageUrls", "image_urls", "carousel_images")
     private val customTemplateKeys = listOf(
@@ -54,6 +55,10 @@ object NotificationPayloadUtils {
         if (resolveSingleImageUrl(data).isNotEmpty()) return true
         if (extractImageList(data).isNotEmpty()) return true
         return false
+    }
+
+    fun extractLimitedImageList(data: Map<String, String>): List<String> {
+        return extractImageList(data).take(MAX_CAROUSEL_IMAGES)
     }
 
     fun shouldUseBigPictureStyle(data: Map<String, String>): Boolean {

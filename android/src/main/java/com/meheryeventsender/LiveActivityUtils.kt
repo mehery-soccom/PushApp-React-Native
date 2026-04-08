@@ -44,7 +44,7 @@ object LiveActivityUtils {
                 bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
                 align = data["align"] ?: "",
                 notificationId = notificationId,
-                imageUrls = NotificationPayloadUtils.extractImageList(data)
+                imageUrls = NotificationPayloadUtils.extractLimitedImageList(data)
             )
 
             Log.d("LiveActivityUtils", "Notifying with ID: $notificationId")
@@ -70,7 +70,7 @@ object LiveActivityUtils {
                 notificationManager.createNotificationChannel(channel)
             }
 
-            val imageList = NotificationPayloadUtils.extractImageList(data)
+            val imageList = NotificationPayloadUtils.extractLimitedImageList(data)
             if (imageList.isEmpty()) return
 
             val customService = CustomNotificationService(context)

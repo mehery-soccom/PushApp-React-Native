@@ -118,7 +118,7 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
             val customService = CustomNotificationService(this)
     
             // Extract image list from FCM
-            val imageList = NotificationPayloadUtils.extractImageList(data)
+            val imageList = NotificationPayloadUtils.extractLimitedImageList(data)
     
             val notificationId =
                 (data["activity_id"] ?: "activity_${System.currentTimeMillis()}").hashCode()
@@ -174,7 +174,7 @@ override fun onMessageReceived(remoteMessage: RemoteMessage) {
     
         val customService = CustomNotificationService(this)
     
-        val imageList = NotificationPayloadUtils.extractImageList(data)
+        val imageList = NotificationPayloadUtils.extractLimitedImageList(data)
     
         val builder = customService.createCustomNotification(
             channelId = channelId,

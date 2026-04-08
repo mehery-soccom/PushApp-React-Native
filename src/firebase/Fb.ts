@@ -164,6 +164,7 @@ export function requestUserPermission(): void {
 
 const MAX_FCM_TOKEN_RETRIES = 4;
 const RETRY_DELAY_MS = 2000;
+const MAX_CAROUSEL_IMAGES = 4;
 
 function resolveSingleImageFromData(data: Record<string, any>): string | null {
   const keys = ['image', 'imageUrl', 'image_url'];
@@ -375,7 +376,10 @@ export function setupForegroundNotificationListener(): () => void {
       null;
 
     // 👇 Detect carousel payload
-    const carouselImages = resolveImageListFromData(data);
+    const carouselImages = resolveImageListFromData(data).slice(
+      0,
+      MAX_CAROUSEL_IMAGES
+    );
     if (carouselImages.length > 0) {
       console.log('🖼️ Carousel images parsed:', carouselImages);
     }
