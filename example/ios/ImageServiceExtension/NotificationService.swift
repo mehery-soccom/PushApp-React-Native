@@ -62,36 +62,7 @@ class NotificationService: UNNotificationServiceExtension {
         content: UNMutableNotificationContent,
         contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
-        var imageUrls: [String] = []
-
-        // image_url / image_urls: string or array
-        if let single = userInfo["image_url"] as? String {
-            imageUrls = [single]
-        } else if let multiple = userInfo["image_url"] as? [String] {
-            imageUrls = multiple
-        } else if let single = userInfo["image_urls"] as? String {
-            if let parsed = try? JSONSerialization.jsonObject(with: Data(single.utf8)) as? [String] {
-                imageUrls = parsed
-            } else { imageUrls = [single] }
-        } else if let multiple = userInfo["image_urls"] as? [String] {
-            imageUrls = multiple
-        }
-
-        // fallback: images
-        if imageUrls.isEmpty,
-           let images = userInfo["images"] as? [String] {
-            imageUrls = images
-        }
-        //fix for media-url
-        if imageUrls.isEmpty {
-            if let mediaSingle = userInfo["media-url"] as? String {
-                print("🎞️ [NSE] media-url (string):", mediaSingle)
-                imageUrls = [mediaSingle]
-            } else if let mediaMultiple = userInfo["media-url"] as? [String] {
-                print("🎞️ [NSE] media-url (array):", mediaMultiple)
-                imageUrls = mediaMultiple
-            }
-        }
+        var imageUrls = extractImageUrls(from: userInfo)
 
         // 🔥 sanitize dashboard garbage ("", "   ")
         imageUrls = imageUrls
@@ -127,6 +98,70 @@ class NotificationService: UNNotificationServiceExtension {
                 completion: contentHandler
             )
         }
+    }
+
+    private func extractImageUrls(from userInfo: [AnyHashable: Any]) -> [String] {
+        var imageUrls: [String] = []
+
+        // Prefer explicit lists first for carousel templates
+        for key in ["image_urls", "imageUrls", "carousel_images", "images", "media-url"] {
+            if let values = parseStringList(userInfo[key]), !values.isEmpty {
+                imageUrls = values
+                break
+            }
+        }
+
+        // Fallback to single image aliases (Android + iOS)
+        if imageUrls.isEmpty {
+            for key in ["image_url", "imageUrl", "image", "media-url"] {
+                if let value = parseSingleString(userInfo[key]), !value.isEmpty {
+                    imageUrls = [value]
+                    break
+                }
+            }
+        }
+
+        // Indexed fallback used by Android payloads (image1, image2, ...)
+        if imageUrls.isEmpty {
+            var index = 1
+            while true {
+                let key = "image\(index)"
+                guard userInfo.keys.contains(where: { "\($0)" == key }) else { break }
+                if let value = parseSingleString(userInfo[key]), !value.isEmpty {
+                    imageUrls.append(value)
+                }
+                index += 1
+            }
+        }
+
+        return imageUrls
+    }
+
+    private func parseSingleString(_ value: Any?) -> String? {
+        if let str = value as? String {
+            return str.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let str = value as? NSString {
+            return str.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return nil
+    }
+
+    private func parseStringList(_ value: Any?) -> [String]? {
+        if let arr = value as? [String] {
+            return arr
+        }
+        if let arr = value as? [Any] {
+            return arr.compactMap { parseSingleString($0) }
+        }
+        if let str = parseSingleString(value), !str.isEmpty {
+            if let data = str.data(using: .utf8),
+               let parsed = try? JSONSerialization.jsonObject(with: data) as? [Any] {
+                return parsed.compactMap { parseSingleString($0) }
+            }
+            return [str]
+        }
+        return nil
     }
 
     // ---------------------------------------------------------

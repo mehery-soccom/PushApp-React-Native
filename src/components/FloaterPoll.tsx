@@ -1,11 +1,11 @@
 import { useRef, useEffect } from 'react';
 import {
-  View,
   StyleSheet,
   Dimensions,
   Animated,
   PanResponder,
   Linking,
+  Pressable,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import Video from 'react-native-video';
@@ -18,20 +18,24 @@ interface FloaterProps {
   html?: string;
   videoUrl?: string;
   position?: 'top' | 'center' | 'bottom';
+  horizontalAlign?: 'left' | 'center' | 'right';
   width?: number;
   height?: number;
   messageId?: string;
   filterId?: string;
+  onClose?: () => void;
 }
 
 export default function Floater({
   html,
   videoUrl,
   position = 'bottom',
+  horizontalAlign = 'center',
   width = 130,
   height = 130,
   messageId,
   filterId,
+  onClose,
 }: FloaterProps) {
   // ✅ Compute initial position based on alignment
   const initialTop =
@@ -41,7 +45,12 @@ export default function Floater({
         ? (screenHeight - height) / 2
         : screenHeight - height - 80;
 
-  const initialLeft = (screenWidth - width) / 2;
+  const initialLeft =
+    horizontalAlign === 'left'
+      ? 12
+      : horizontalAlign === 'right'
+        ? screenWidth - width - 12
+        : (screenWidth - width) / 2;
 
   const pan = useRef(
     new Animated.ValueXY({ x: initialLeft, y: initialTop })
@@ -51,6 +60,8 @@ export default function Floater({
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2,
       onPanResponderMove: (_, gesture) => {
         const newX = positionRef.current.x + gesture.dx;
         const newY = positionRef.current.y + gesture.dy;
@@ -197,8 +208,13 @@ export default function Floater({
     }
   };
 
+  const handleOverlayClose = () => {
+    sendTrackEvent('dismissed').catch(() => {});
+    onClose?.();
+  };
+
   return (
-    <View style={styles.overlay}>
+    <Pressable style={styles.overlay} onPress={handleOverlayClose}>
       <Animated.View
         style={[
           styles.container,
@@ -208,6 +224,7 @@ export default function Floater({
             transform: [{ translateX: pan.x }, { translateY: pan.y }],
           },
         ]}
+        onStartShouldSetResponder={() => true}
         {...panResponder.panHandlers}
       >
         {videoUrl ? (
@@ -236,7 +253,7 @@ export default function Floater({
           />
         )}
       </Animated.View>
-    </View>
+    </Pressable>
   );
 }
 

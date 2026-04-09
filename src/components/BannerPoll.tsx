@@ -1,10 +1,23 @@
 import { useRef } from 'react';
-import { View, StyleSheet, Linking, Platform, Dimensions } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  Linking,
+  Platform,
+  Dimensions,
+  TouchableOpacity,
+  Text,
+} from 'react-native';
 import { WebView } from 'react-native-webview';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
 
-export default function BannerPoll({ html, messageId, filterId }: any) {
+export default function BannerPoll({
+  html,
+  messageId,
+  filterId,
+  onClose,
+}: any) {
   const webViewRef = useRef<WebView>(null);
   /** Monotonic per touch; HTML fallback runs only if no CTA handled for this seq. */
   const tapSeqRef = useRef(0);
@@ -626,6 +639,15 @@ export default function BannerPoll({ html, messageId, filterId }: any) {
         bannerWidthRef.current = e.nativeEvent.layout.width;
       }}
     >
+      <TouchableOpacity
+        style={styles.closeBtn}
+        onPress={() => {
+          fireAndForgetTrack('dismissed');
+          onClose?.();
+        }}
+      >
+        <Text style={styles.closeText}>✕</Text>
+      </TouchableOpacity>
       <WebView
         ref={webViewRef}
         source={{ html: cleanHtml }}
@@ -766,6 +788,7 @@ export default function BannerPoll({ html, messageId, filterId }: any) {
               markCtaHandledForCurrentTouch();
               console.log('🚪 Banner dismissed');
               fireAndForgetTrack('dismissed');
+              onClose?.();
             } else {
               fireAndForgetTrack('unknown');
             }
@@ -784,7 +807,7 @@ export default function BannerPoll({ html, messageId, filterId }: any) {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 40,
+    top: 60,
     width: '92%',
     alignSelf: 'center',
     minHeight: 100,
@@ -802,5 +825,23 @@ const styles = StyleSheet.create({
   webview: {
     flex: 1,
     backgroundColor: 'transparent',
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 10001,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 16,
   },
 });

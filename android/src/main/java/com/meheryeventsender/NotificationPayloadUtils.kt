@@ -5,7 +5,7 @@ import org.json.JSONArray
 object NotificationPayloadUtils {
     const val MAX_CAROUSEL_IMAGES = 4
     private val singleImageKeys = listOf("image", "imageUrl", "image_url")
-    private val listImageKeys = listOf("imageUrls", "image_urls", "carousel_images")
+    private val listImageKeys = listOf("imageUrls", "image_urls", "carousel_images", "images")
     private val customTemplateKeys = listOf(
         "tapText",
         "titleColorHex",
@@ -85,7 +85,10 @@ object NotificationPayloadUtils {
             }
             out
         } catch (_: Exception) {
-            emptyList()
+            input
+                .split(",")
+                .map { it.trim().trim('"', '\'') }
+                .filter { it.isNotEmpty() }
         }
     }
 }

@@ -28,6 +28,10 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
     private var carouselTrailingConstraint: NSLayoutConstraint?
     private var carouselTopConstraint: NSLayoutConstraint?
 
+    private let styledTitleKeys = ["name", "template_name", "styled_name", "styled_title", "title"]
+    private let styledBodyKeys = ["message", "styled_message", "styled_body", "body", "description"]
+    private let styledLogoKeys = ["styled_image", "styledImage", "logo_url", "logoUrl", "logo", "icon", "icon_url", "iconUrl"]
+
     // ---------------------------------------------------------
     // MARK: - viewDidLoad
     // ---------------------------------------------------------
@@ -102,9 +106,18 @@ private var isCarouselEnabled: Bool {
     // ---------------------------------------------------------
     func didReceive(_ notification: UNNotification) {
     self.notification = notification
+    let userInfo = notification.request.content.userInfo
 
-    titleLabel.text = notification.request.content.title
-    textLabel.text = notification.request.content.body
+    titleLabel.text = preferredText(
+        keys: styledTitleKeys,
+        userInfo: userInfo,
+        fallback: notification.request.content.title
+    )
+    textLabel.text = preferredText(
+        keys: styledBodyKeys,
+        userInfo: userInfo,
+        fallback: notification.request.content.body
+    )
 
     // ---------------------------------------------------------
     // ✅ 1. LOAD LOGO FROM ATTACHMENT (if exists)
@@ -120,8 +133,21 @@ private var isCarouselEnabled: Bool {
 
 // (B) Fallback to local asset
 if logoImageView.image == nil {
-    logoImageView.image = UIImage(named: "logo")
-    print("🔵 Fallback local logo loaded:", UIImage(named: "logo") != nil)
+    if let styledLogoUrl = preferredUrl(keys: styledLogoKeys, userInfo: userInfo) {
+        URLSession.shared.dataTask(with: styledLogoUrl) { [weak self] data, _, _ in
+            guard let self = self,
+                  let data = data,
+                  let image = UIImage(data: data) else { return }
+            DispatchQueue.main.async {
+                self.logoImageView.image = image
+                self.logoImageView.contentMode = .scaleAspectFit
+                self.logoImageView.backgroundColor = .clear
+            }
+        }.resume()
+    } else {
+        logoImageView.image = UIImage(named: "logo")
+        print("🔵 Fallback local logo loaded:", UIImage(named: "logo") != nil)
+    }
     
     // (C) Final Fallback to system icon
     if logoImageView.image == nil {
@@ -133,7 +159,7 @@ if logoImageView.image == nil {
     }
 }
     // Hide body label if empty
-    let isBodyEmpty = notification.request.content.body
+    let isBodyEmpty = (textLabel.text ?? "")
         .trimmingCharacters(in: .whitespacesAndNewlines)
         .isEmpty
     textLabel.isHidden = isBodyEmpty
@@ -229,8 +255,9 @@ if logoImageView.image == nil {
         
         for (index, img) in images.enumerated() {
             let iv = UIImageView(image: img)
-            iv.contentMode = .scaleAspectFill
+            iv.contentMode = .scaleAspectFit
             iv.clipsToBounds = true
+            iv.backgroundColor = UIColor(white: 0.08, alpha: 1.0)
             iv.translatesAutoresizingMaskIntoConstraints = false
             carouselScrollView.addSubview(iv)
             carouselImageViews.append(iv)
@@ -256,6 +283,39 @@ if logoImageView.image == nil {
         carouselScrollView.contentInset = UIEdgeInsets(top: 0, left: inset, bottom: 0, right: inset)
         carouselScrollView.contentSize = CGSize(width: totalWidth, height: carouselView.bounds.height > 0 ? carouselView.bounds.height : w * 0.7)
         scrollToPage(currentIndex, animated: false)
+    }
+
+    private func preferredText(
+        keys: [String],
+        userInfo: [AnyHashable: Any],
+        fallback: String
+    ) -> String {
+        for key in keys {
+            if let value = stringValue(for: key, userInfo: userInfo), !value.isEmpty {
+                return value
+            }
+        }
+        return fallback
+    }
+
+    private func preferredUrl(keys: [String], userInfo: [AnyHashable: Any]) -> URL? {
+        for key in keys {
+            guard let value = stringValue(for: key, userInfo: userInfo), !value.isEmpty else { continue }
+            if let url = URL(string: value) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    private func stringValue(for key: String, userInfo: [AnyHashable: Any]) -> String? {
+        if let value = userInfo[key] as? String {
+            return value.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let value = userInfo[key] as? NSString {
+            return value.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return nil
     }
 
     private func scrollToPage(_ index: Int, animated: Bool) {
@@ -429,33 +489,68 @@ if logoImageView.image == nil {
     private func urlForAction(_ actionId: String, userInfo: [AnyHashable: Any]) -> URL? {
         if actionId == UNNotificationDefaultActionIdentifier || actionId == UNNotificationDismissActionIdentifier { return nil }
         func str(_ key: String) -> String? { (userInfo[key] as? String) ?? (userInfo[key] as? NSString) as String? }
+        func validUrl(_ raw: String?) -> URL? {
+            guard let raw else { return nil }
+            let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleaned.isEmpty else { return nil }
+            guard let url = URL(string: cleaned),
+                  let scheme = url.scheme?.lowercased(),
+                  ["http", "https"].contains(scheme) || cleaned.contains("://") else {
+                return nil
+            }
+            return url
+        }
+        func actionIndex(_ id: String) -> Int? {
+            if id == "PUSHAPP_ACTION_1" || id == "PUSHAPP_OPT_IN" || id == "PUSHAPP_YES" { return 0 }
+            if id == "PUSHAPP_ACTION_2" || id.hasSuffix("_MID") { return 1 }
+            if id == "PUSHAPP_ACTION_3" || id == "PUSHAPP_NOT_INTERESTED" || id == "PUSHAPP_NO" { return 2 }
+            if let number = Int(id.split(separator: "_").last ?? "") {
+                return max(0, number - 1)
+            }
+            return nil
+        }
 
         if let urlsRaw = userInfo["action_urls"] {
             var urls: [String: String]?
             if let dict = urlsRaw as? [String: String] { urls = dict }
             else if let s = urlsRaw as? String, let data = s.data(using: .utf8),
                     let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] { urls = dict }
-            if let urls = urls, let urlString = urls[actionId], let url = URL(string: urlString) { return url }
+            if let urls = urls, let url = validUrl(urls[actionId]) { return url }
         }
-        if actionId == "PUSHAPP_OPT_IN", let urlString = str("url_opt_in"), let url = URL(string: urlString) { return url }
-        if actionId == "PUSHAPP_NOT_INTERESTED", let urlString = str("url_not_interested"), let url = URL(string: urlString) { return url }
-        if actionId == "PUSHAPP_YES", let urlString = str("url_yes") ?? str("url_opt_in"), let url = URL(string: urlString) { return url }
-        if actionId == "PUSHAPP_NO", let urlString = str("url_no") ?? str("url_not_interested"), let url = URL(string: urlString) { return url }
+        if actionId == "PUSHAPP_OPT_IN", let url = validUrl(str("url_opt_in")) { return url }
+        if actionId == "PUSHAPP_NOT_INTERESTED", let url = validUrl(str("url_not_interested")) { return url }
+        if actionId == "PUSHAPP_YES", let url = validUrl(str("url_yes") ?? str("url_opt_in")) { return url }
+        if actionId == "PUSHAPP_NO", let url = validUrl(str("url_no") ?? str("url_not_interested")) { return url }
+        if actionId.hasSuffix("_MID"),
+           let url = validUrl(str("url_mid") ?? str("url_maybe") ?? str("url_action_2")) { return url }
         if let buttonsRaw = userInfo["cta_buttons"] {
             var buttons: [[String: Any]]?
             if let arr = buttonsRaw as? [[String: Any]] { buttons = arr }
             else if let s = buttonsRaw as? String, let data = s.data(using: .utf8),
                     let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] { buttons = arr }
             if let buttons = buttons {
+                if let index = actionIndex(actionId), buttons.indices.contains(index) {
+                    let button = buttons[index]
+                    if let url = validUrl((button["url"] as? String) ?? ((button["url"] as? NSString) as String?)) {
+                        return url
+                    }
+                }
                 for btn in buttons {
                     if (btn["id"] as? String) == actionId,
-                       let urlString = (btn["url"] as? String) ?? (btn["url"] as? NSString) as String?,
-                       let url = URL(string: urlString) { return url }
+                       let url = validUrl((btn["url"] as? String) ?? ((btn["url"] as? NSString) as String?)) { return url }
                 }
             }
         }
+        let actionSpecificKeys = [
+            "url_\(actionId.lowercased())",
+            "cta_url_\(actionId.lowercased())",
+            "url_action_1", "url_action_2", "url_action_3"
+        ]
+        for key in actionSpecificKeys {
+            if let url = validUrl(str(key)) { return url }
+        }
         for key in ["cta_url", "url", "link", "click_action"] {
-            if let urlString = str(key), let url = URL(string: urlString) { return url }
+            if let url = validUrl(str(key)) { return url }
         }
         return nil
     }

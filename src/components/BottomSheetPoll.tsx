@@ -29,6 +29,34 @@ export default function BottomSheetPoll({
   filterId,
 }: BottomSheetPollProps) {
   const translateY = useRef(new Animated.Value(height)).current;
+  const boldFixStyles = `
+    <style>
+      strong, b { font-weight: 700 !important; }
+      [style*="font-weight:bold"], [style*="font-weight: bold"] { font-weight: 700 !important; }
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+        -webkit-text-size-adjust: 100% !important;
+      }
+      * { box-sizing: border-box; }
+      img, video, iframe, table, canvas, svg {
+        max-width: 100% !important;
+        height: auto !important;
+      }
+    </style>
+  `;
+  const viewportMeta = `
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+    />
+  `;
+  const htmlWithBoldFix = /<\/head>/i.test(html)
+    ? html.replace(/<\/head>/i, `${viewportMeta}${boldFixStyles}</head>`)
+    : `${viewportMeta}${boldFixStyles}${html}`;
 
   useEffect(() => {
     Animated.timing(translateY, {
@@ -210,9 +238,10 @@ export default function BottomSheetPoll({
       </TouchableOpacity>
       <WebView
         originWhitelist={['*']}
-        source={{ html }}
+        source={{ html: htmlWithBoldFix }}
         style={styles.webview}
         injectedJavaScript={injectedJS}
+        injectedJavaScriptBeforeContentLoaded="true;"
         javaScriptEnabled
         domStorageEnabled
         allowFileAccess
@@ -220,6 +249,11 @@ export default function BottomSheetPoll({
         allowsFullscreenVideo
         mediaPlaybackRequiresUserAction={false}
         mixedContentMode="always"
+        bounces={false}
+        overScrollMode="never"
+        setSupportMultipleWindows={false}
+        scalesPageToFit={false}
+        scrollEnabled={false}
         onMessage={onMessage}
       />
     </Animated.View>
@@ -228,26 +262,31 @@ export default function BottomSheetPoll({
 
 const styles = StyleSheet.create({
   sheet: {
-    height: height * 0.5,
+    height: height * 0.56,
     width: '100%',
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    alignSelf: 'center',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
     overflow: 'hidden',
     elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
   },
   closeBtn: {
     position: 'absolute',
-    top: 10,
-    right: 15,
-    zIndex: 10,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    top: 8,
+    right: 14,
+    zIndex: 1000,
+    backgroundColor: 'rgba(17,24,39,0.08)',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  closeText: { fontSize: 16, color: '#333', fontWeight: 'bold' },
+  closeText: { fontSize: 15, color: 'white', fontWeight: '700' },
   webview: { flex: 1, backgroundColor: 'transparent' },
 });

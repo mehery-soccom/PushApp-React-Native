@@ -10,6 +10,55 @@ import Floater from '../../components/FloaterPoll';
 import { buildCommonHeaders } from '../../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../../helpers/tenantContext';
 
+function htmlToPlainText(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function resolveTemplateValue(
+  context: Record<string, any>,
+  path: string
+): string {
+  const keys = path
+    .split('.')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  let current: any = context;
+  for (const key of keys) {
+    if (current == null || typeof current !== 'object') return '';
+    current = current[key];
+  }
+  if (current == null) return '';
+  return String(current);
+}
+
+function interpolateTemplateString(
+  value: unknown,
+  context: Record<string, any>
+): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_match, rawKey) => {
+    const key = String(rawKey || '').trim();
+    if (!key) return '';
+    const directValue = resolveTemplateValue(context, key);
+    if (directValue) return directValue;
+    if (key.startsWith('data.')) {
+      return resolveTemplateValue(context, key.slice(5));
+    }
+    return '';
+  });
+}
+
 // 📌 Sends a custom event, then triggers the poll fetchi
 export async function sendCustomEvent(event_name: string, event_data: object) {
   const user_id = await AsyncStorage.getItem('user_id');
@@ -215,6 +264,7 @@ export async function sendPollEvent() {
         const code = poll?.template?.style?.code ?? '';
         const style = poll?.template?.style ?? {};
         const event = poll?.event ?? {};
+        const templateModelData = poll?.template?.model?.data ?? {};
         const filter_id = poll?.filterId ?? '';
         const message_id = poll?.messageId ?? '';
 
@@ -241,14 +291,29 @@ export async function sendPollEvent() {
           });
           // setTimeout(() => {}, 2000);
         } else if (event?.event_data?.compare && code.includes('tooltip')) {
+          const interpolationContext = {
+            ...templateModelData,
+            ...(event?.event_data ?? {}),
+            ...(poll?.event_data ?? {}),
+          };
+          const rawTooltipTitle =
+            htmlToPlainText(style?.richline_1) || style?.line_1 || '';
+          const tooltipTitle = interpolateTemplateString(
+            rawTooltipTitle,
+            interpolationContext
+          );
+          const tooltipBody = interpolateTemplateString(
+            style?.line_2 || '',
+            interpolationContext
+          );
           const tooltipData = {
             compare: event.event_data.compare,
             html: style?.html,
             width: style?.width || 70,
             align: style?.align || 'center',
             bgColor: style?.bg_color || '',
-            line1: style?.line_1 || '',
-            line2: style?.line_2 || '',
+            line1: tooltipTitle,
+            line2: tooltipBody,
             line1Icon: style?.line1_icon || '',
             line1IconPosition: style?.line1_icon_position || 'prepend',
             line1Color: style?.line1_font_color || '#000000',
@@ -276,7 +341,27 @@ export async function sendPollEvent() {
             messageId: message_id,
           });
         } else if (code.includes('floater')) {
-          showPollOverlay(<Floater {...commonProps} />);
+          const verticalAlign = String(style?.vertical_align ?? 'flex-end');
+          const horizontalAlign = String(style?.horizontal_align ?? 'center');
+          const floaterPosition =
+            verticalAlign === 'flex-start'
+              ? 'top'
+              : verticalAlign === 'center'
+                ? 'center'
+                : 'bottom';
+          const floaterHorizontalAlign =
+            horizontalAlign === 'flex-start'
+              ? 'left'
+              : horizontalAlign === 'flex-end'
+                ? 'right'
+                : 'center';
+          showPollOverlay(
+            <Floater
+              {...commonProps}
+              position={floaterPosition}
+              horizontalAlign={floaterHorizontalAlign}
+            />
+          );
         } else {
           if (code.includes('banner')) {
             showPollOverlay(<BannerPoll {...commonProps} />);

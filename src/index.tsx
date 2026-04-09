@@ -35,6 +35,7 @@ import {
   getFcmToken,
   configurePushNotifications,
   setupForegroundNotificationListener,
+  setupNotificationOpenTracking,
 } from './firebase/Fb';
 // import { triggerLiveActivity } from './native/LiveActivity';
 import { connectToServer } from './socket/WebSock';
@@ -88,6 +89,60 @@ export const iosChecker = () => {
 };
 
 let notificationListenerAdded = false;
+const seenIosPushTrackEvents = new Set<string>();
+const IOS_PUSH_TRACK_CACHE_LIMIT = 100;
+
+type IosPushTrackEvent = 'opened' | 'cta';
+
+const normalizePayloadString = (value: unknown): string =>
+  typeof value === 'string' ? value.trim() : '';
+
+const trackIosPushEvent = async (
+  event: IosPushTrackEvent,
+  payload: Record<string, unknown>,
+  ctaId?: string
+) => {
+  const messageId = normalizePayloadString(
+    payload.messageId || payload.message_id
+  );
+  const filterId = normalizePayloadString(
+    payload.filterId || payload.filter_id
+  );
+  const notificationId = normalizePayloadString(payload.notification_id);
+
+  const dedupeKey = [event, messageId, filterId, ctaId || '', notificationId]
+    .join(':')
+    .toLowerCase();
+  if (seenIosPushTrackEvents.has(dedupeKey)) return;
+  seenIosPushTrackEvents.add(dedupeKey);
+  if (seenIosPushTrackEvents.size > IOS_PUSH_TRACK_CACHE_LIMIT) {
+    const oldest = seenIosPushTrackEvents.values().next().value as
+      | string
+      | undefined;
+    if (oldest) seenIosPushTrackEvents.delete(oldest);
+  }
+
+  const body: Record<string, unknown> = { event };
+  if (messageId) body.messageId = messageId;
+  if (filterId) body.filterId = filterId;
+  if (notificationId) body.notificationId = notificationId;
+  if (ctaId) body.data = { ctaId };
+
+  try {
+    const commonHeaders = await buildCommonHeaders();
+    const apiBaseUrl = await getApiBaseUrl();
+    await fetch(`${apiBaseUrl}/v1/notification/push/track`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    console.log('⚠️ iOS push track failed (non-blocking):', err);
+  }
+};
 
 /* -------------------------------------------------------------------------- */
 /*                    SILENT NOTIFICATION DAILY LOGIC                           */
@@ -187,7 +242,20 @@ export const addNotificationDebugListener = () => {
   emitter.addListener('PushNotificationEvent', async (payload) => {
     console.log('📦 Push payload received:', payload);
 
-    if (payload?.type !== 'silent_daily_ping') return;
+    if (payload?.type !== 'silent_daily_ping') {
+      const actionId = normalizePayloadString(payload?.actionIdentifier);
+      const isDefaultTap =
+        actionId === 'com.apple.UNNotificationDefaultActionIdentifier';
+      const isDismiss =
+        actionId === 'com.apple.UNNotificationDismissActionIdentifier';
+
+      if (actionId && !isDefaultTap && !isDismiss) {
+        await trackIosPushEvent('cta', payload, actionId);
+      } else if (!actionId || isDefaultTap) {
+        await trackIosPushEvent('opened', payload);
+      }
+      return;
+    }
 
     // ⏰ Ensure it's after 12 noon
     if (!isAfterNoon()) {
@@ -300,6 +368,7 @@ export const initSdk = async (
       await requestUserPermission();
       configurePushNotifications();
       setupForegroundNotificationListener();
+      setupNotificationOpenTracking();
 
       // triggerLiveActivity({
       //   message1: 'Welcome!',

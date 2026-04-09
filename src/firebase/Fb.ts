@@ -14,6 +14,8 @@ let deviceRegistrationInProgress = false;
 let lastApiCallTime: number | null = null;
 const API_CALL_COOLDOWN_MS = 5000; // 5s cooldown
 let foregroundUnsubscribe: null | (() => void) = null;
+let openTrackingUnsubscribe: null | (() => void) = null;
+let backgroundHandlerRegistered = false;
 const seenForegroundMessageIds = new Set<string>();
 const FOREGROUND_MESSAGE_CACHE_LIMIT = 50;
 
@@ -213,6 +215,75 @@ function normalizedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function shouldUseNativeStyledPath(data: Record<string, any>): boolean {
+  const hasLiveTriplet =
+    normalizedString(data.message1) &&
+    normalizedString(data.message2) &&
+    normalizedString(data.message3);
+  if (hasLiveTriplet) return true;
+  const styleKeys = [
+    'tapText',
+    'titleColorHex',
+    'messageColorHex',
+    'tapTextColorHex',
+    'backgroundColorHex',
+    'bg_color_gradient',
+    'bg_color_gradient_dir',
+    'align',
+    'progressPercent',
+    'progressColorHex',
+  ];
+  return styleKeys.some((k) => normalizedString(data[k]));
+}
+
+function getPushTrackBaseUrl(data: Record<string, any>): string {
+  const explicit = normalizedString(data.track_base_url);
+  if (explicit) return explicit;
+  const apiBase = normalizedString(data.api_base_url);
+  if (apiBase) return apiBase;
+  return '';
+}
+
+async function trackPushEvent(
+  eventType: 'received' | 'opened' | 'cta',
+  data: Record<string, any>,
+  ctaId?: string
+): Promise<void> {
+  const baseUrl = getPushTrackBaseUrl(data);
+  if (!baseUrl) return;
+
+  const payload: Record<string, any> = {
+    event: eventType,
+  };
+  const messageId = normalizedString(data.messageId || data.message_id);
+  const filterId = normalizedString(data.filterId || data.filter_id);
+  const notificationId = normalizedString(data.notification_id);
+  if (messageId) payload.messageId = messageId;
+  if (filterId) payload.filterId = filterId;
+  if (notificationId) payload.notificationId = notificationId;
+  if (ctaId) payload.data = { ctaId };
+
+  try {
+    const endpoint = `${baseUrl.replace(/\/$/, '')}/v1/notification/push/track`;
+    await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    console.log('[PushTrack] non-blocking track failed:', eventType, err);
+  }
+}
+
+function ensureBackgroundMessageHandlerRegistered(): void {
+  if (backgroundHandlerRegistered) return;
+  backgroundHandlerRegistered = true;
+  messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+    const data = remoteMessage?.data || {};
+    await trackPushEvent('received', data);
+  });
+}
+
 function isRetryableFcmError(error: unknown): boolean {
   const msg = String(
     (error as { message?: string })?.message ?? error ?? ''
@@ -265,9 +336,15 @@ export async function getFcmToken(): Promise<string | null> {
  * Configure push notifications
  */
 export function configurePushNotifications(): void {
+  ensureBackgroundMessageHandlerRegistered();
+
   PushNotification.configure({
     onNotification: async function (notification: any) {
       console.log('🔔 LOCAL NOTIFICATION:', notification);
+      const notificationData = (notification?.data ||
+        notification?.userInfo ||
+        {}) as Record<string, any>;
+      await trackPushEvent('opened', notificationData);
       const action = notification?.action;
       if (!action) return;
 
@@ -280,6 +357,7 @@ export function configurePushNotifications(): void {
       try {
         const actionMap = JSON.parse(String(actionMapRaw));
         const targetUrl = actionMap?.[action];
+        await trackPushEvent('cta', notificationData, String(action));
         if (typeof targetUrl === 'string' && targetUrl.trim()) {
           console.log(`🔗 Opening action URL for "${action}":`, targetUrl);
           await Linking.openURL(targetUrl.trim());
@@ -362,6 +440,7 @@ export function setupForegroundNotificationListener(): () => void {
     }
 
     const data = remoteMessage.data || {};
+    trackPushEvent('received', data).catch(() => undefined);
 
     const title =
       remoteMessage.notification?.title || data.title || 'Notification';
@@ -395,6 +474,16 @@ export function setupForegroundNotificationListener(): () => void {
         });
         return; // skip normal notification
       }
+    }
+
+    if (
+      Platform.OS === 'android' &&
+      shouldUseNativeStyledPath(data) &&
+      LiveActivityModule?.triggerLiveActivity
+    ) {
+      // Styled/live templates are rendered natively to avoid foreground duplicates.
+      LiveActivityModule.triggerLiveActivity(data);
+      return;
     }
 
     // ===== Normal Notification Flow =====
@@ -453,10 +542,6 @@ export function setupForegroundNotificationListener(): () => void {
     }
 
     PushNotification.localNotification(localNotif);
-
-    if (Platform.OS === 'android' && LiveActivityModule?.triggerLiveActivity) {
-      LiveActivityModule.triggerLiveActivity(data);
-    }
   });
 
   foregroundUnsubscribe = () => {
@@ -466,6 +551,31 @@ export function setupForegroundNotificationListener(): () => void {
   };
 
   return foregroundUnsubscribe;
+}
+
+export function setupNotificationOpenTracking(): () => void {
+  if (openTrackingUnsubscribe) return openTrackingUnsubscribe;
+
+  const unsubscribe = messaging().onNotificationOpenedApp((remoteMessage) => {
+    const data = remoteMessage?.data || {};
+    trackPushEvent('opened', data).catch(() => undefined);
+  });
+
+  messaging()
+    .getInitialNotification()
+    .then((remoteMessage) => {
+      if (remoteMessage?.data) {
+        trackPushEvent('opened', remoteMessage.data).catch(() => undefined);
+      }
+    })
+    .catch(() => undefined);
+
+  openTrackingUnsubscribe = () => {
+    unsubscribe();
+    openTrackingUnsubscribe = null;
+  };
+
+  return openTrackingUnsubscribe;
 }
 
 // Fb.ts or Fb.js

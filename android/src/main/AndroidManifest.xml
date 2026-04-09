@@ -25,6 +25,9 @@
                 <action android:name="com.meheryeventsender.CAROUSEL_PREV" />
             </intent-filter>
         </receiver>
+        <receiver
+            android:name=".NotificationActionReceiver"
+            android:exported="false" />
 
     </application>
 

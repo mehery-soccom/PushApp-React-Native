@@ -27,15 +27,14 @@ class CustomNotificationService(private val context: Context) {
         private const val TAG = "CustomNotificationSvc"
         private const val CONNECT_TIMEOUT_MS = 15000
         private const val READ_TIMEOUT_MS = 15000
+        // Shared process-level cache so CarouselReceiver can access state.
+        private val carouselIndexes = mutableMapOf<Int, Int>()
+        private val cachedBitmaps = mutableMapOf<Int, List<Bitmap?>>()
+        private val cachedTitles = mutableMapOf<Int, String>()
+        private val cachedMessages = mutableMapOf<Int, String>()
+        private val cachedTapTexts = mutableMapOf<Int, String>()
+        private val cachedChannels = mutableMapOf<Int, String>()
     }
-
-    // State caches
-    private val carouselIndexes = mutableMapOf<Int, Int>()
-    private val cachedBitmaps = mutableMapOf<Int, List<Bitmap?>>()
-    private val cachedTitles = mutableMapOf<Int, String>()
-    private val cachedMessages = mutableMapOf<Int, String>()
-    private val cachedTapTexts = mutableMapOf<Int, String>()
-    private val cachedChannels = mutableMapOf<Int, String>()
 
 
     // ========================================================================================
@@ -127,9 +126,9 @@ class CustomNotificationService(private val context: Context) {
             .setCustomBigContentView(customView)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setOngoing(true)
+            .setOngoing(false)
             .setContentIntent(pendingIntent)
-            .setAutoCancel(false)
+            .setAutoCancel(true)
 
         // ------------------------------------------------------------------------------------
         // MULTI-IMAGE (CAROUSEL MODE)

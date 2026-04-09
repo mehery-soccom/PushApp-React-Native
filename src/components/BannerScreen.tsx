@@ -36,14 +36,18 @@ export const BannerScreen: React.FC = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading)
-    return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
-  if (!bannerData)
-    return (
-      <Text style={{ textAlign: 'center', marginTop: 50 }}>
-        No Banner Found
-      </Text>
-    );
+  if (loading) return <ActivityIndicator size="large" style={styles.loader} />;
+  if (!bannerData) return <Text style={styles.emptyText}>No Banner Found</Text>;
 
   return <CustomBanner {...bannerData} />;
+};
+
+const styles = {
+  loader: {
+    marginTop: 50,
+  },
+  emptyText: {
+    textAlign: 'center' as const,
+    marginTop: 50,
+  },
 };

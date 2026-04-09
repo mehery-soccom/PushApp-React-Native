@@ -159,21 +159,44 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
       (userInfo[key] as? String) ?? (userInfo[key] as? NSString) as String?
     }
 
+    func validUrl(_ raw: String?) -> URL? {
+      guard let raw else { return nil }
+      let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !cleaned.isEmpty else { return nil }
+      guard let url = URL(string: cleaned),
+            let scheme = url.scheme?.lowercased(),
+            ["http", "https"].contains(scheme) || cleaned.contains("://") else {
+        return nil
+      }
+      return url
+    }
+
+    func actionIndex(_ id: String) -> Int? {
+      if id == "PUSHAPP_ACTION_1" || id == "PUSHAPP_OPT_IN" || id == "PUSHAPP_YES" { return 0 }
+      if id == "PUSHAPP_ACTION_2" || id.hasSuffix("_MID") { return 1 }
+      if id == "PUSHAPP_ACTION_3" || id == "PUSHAPP_NOT_INTERESTED" || id == "PUSHAPP_NO" { return 2 }
+      if let number = Int(id.split(separator: "_").last ?? "") {
+        return max(0, number - 1)
+      }
+      return nil
+    }
+
     // 1. action_urls - dict or JSON string (FCM sends as string)
     if let urlsRaw = userInfo["action_urls"] {
       var urls: [String: String]?
       if let dict = urlsRaw as? [String: String] { urls = dict }
       else if let s = urlsRaw as? String, let data = s.data(using: .utf8),
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] { urls = dict }
-      if let urls = urls, let urlString = urls[actionId], let url = URL(string: urlString) { return url }
+      if let urls = urls, let url = validUrl(urls[actionId]) { return url }
     }
 
     // 2. Category-specific keys
-    if actionId == "PUSHAPP_OPT_IN", let urlString = str("url_opt_in"), let url = URL(string: urlString) { return url }
-    if actionId == "PUSHAPP_NOT_INTERESTED", let urlString = str("url_not_interested"), let url = URL(string: urlString) { return url }
-    if actionId == "PUSHAPP_YES", let urlString = str("url_yes") ?? str("url_opt_in"), let url = URL(string: urlString) { return url }
-    if actionId == "PUSHAPP_NO", let urlString = str("url_no") ?? str("url_not_interested"), let url = URL(string: urlString) { return url }
-    if actionId.hasSuffix("_MID"), let urlString = str("url_mid") ?? str("url_maybe") ?? str("url_action_3"), let url = URL(string: urlString) { return url }
+    if actionId == "PUSHAPP_OPT_IN", let url = validUrl(str("url_opt_in")) { return url }
+    if actionId == "PUSHAPP_NOT_INTERESTED", let url = validUrl(str("url_not_interested")) { return url }
+    if actionId == "PUSHAPP_YES", let url = validUrl(str("url_yes") ?? str("url_opt_in")) { return url }
+    if actionId == "PUSHAPP_NO", let url = validUrl(str("url_no") ?? str("url_not_interested")) { return url }
+    if actionId.hasSuffix("_MID"),
+       let url = validUrl(str("url_mid") ?? str("url_maybe") ?? str("url_action_2")) { return url }
 
     // 3. cta_buttons - array or JSON string
     if let buttonsRaw = userInfo["cta_buttons"] {
@@ -182,17 +205,32 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
       else if let s = buttonsRaw as? String, let data = s.data(using: .utf8),
               let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] { buttons = arr }
       if let buttons = buttons {
+        if let index = actionIndex(actionId), buttons.indices.contains(index) {
+          let button = buttons[index]
+          if let url = validUrl((button["url"] as? String) ?? ((button["url"] as? NSString) as String?)) {
+            return url
+          }
+        }
         for btn in buttons {
           if (btn["id"] as? String) == actionId,
-             let urlString = (btn["url"] as? String) ?? (btn["url"] as? NSString) as String?,
-             let url = URL(string: urlString) { return url }
+             let url = validUrl((btn["url"] as? String) ?? ((btn["url"] as? NSString) as String?)) { return url }
         }
       }
     }
 
-    // 4. Fallback: single cta_url, url, link, click_action
+    // 4. Action-specific fallback keys frequently used in templates
+    let actionSpecificKeys = [
+      "url_\(actionId.lowercased())",
+      "cta_url_\(actionId.lowercased())",
+      "url_action_1", "url_action_2", "url_action_3"
+    ]
+    for key in actionSpecificKeys {
+      if let url = validUrl(str(key)) { return url }
+    }
+
+    // 5. Last-resort fallback when payload has only one deep link
     for key in ["cta_url", "url", "link", "click_action"] {
-      if let urlString = str(key), let url = URL(string: urlString) { return url }
+      if let url = validUrl(str(key)) { return url }
     }
     return nil
   }

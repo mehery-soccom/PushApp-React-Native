@@ -8,6 +8,7 @@ import {
   PanResponder,
   Animated,
   Linking,
+  Platform,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
@@ -21,6 +22,7 @@ interface PipPollProps {
   alignment?: string; // "top-left", "center-right", etc
   messageId?: string;
   filterId?: string;
+  onClose?: () => void;
 }
 
 export default function PipPoll({
@@ -29,6 +31,7 @@ export default function PipPoll({
   alignment,
   messageId,
   filterId,
+  onClose,
 }: PipPollProps) {
   const [maximized, setMaximized] = useState(false);
   const pan = useRef(new Animated.ValueXY()).current;
@@ -37,23 +40,25 @@ export default function PipPoll({
   const getInitPos = useCallback((): { x: number; y: number } => {
     const w = width / 3;
     const h = height / 4;
+    const topInset = Platform.OS === 'ios' ? 52 : 10;
+    const edgePadding = 10;
     let x: number, y: number;
 
     if (alignment) {
       const [vertical, horizontal] = alignment.split('-');
 
-      if (vertical === 'top') y = 10;
+      if (vertical === 'top') y = topInset;
       else if (vertical === 'center') y = (height - h) / 2;
-      else if (vertical === 'bottom') y = height - h - 10;
-      else y = height - h - 10;
+      else if (vertical === 'bottom') y = height - h - edgePadding;
+      else y = height - h - edgePadding;
 
-      if (horizontal === 'left') x = 10;
+      if (horizontal === 'left') x = edgePadding;
       else if (horizontal === 'center') x = (width - w) / 2;
-      else if (horizontal === 'right') x = width - w - 10;
-      else x = 10;
+      else if (horizontal === 'right') x = width - w - edgePadding;
+      else x = edgePadding;
     } else {
-      x = 10;
-      y = height - h - 10;
+      x = edgePadding;
+      y = height - h - edgePadding;
     }
 
     return { x, y };
@@ -227,7 +232,10 @@ export default function PipPoll({
         />
         <TouchableOpacity
           style={styles.maxBtn}
-          onPress={() => setMaximized(false)}
+          onPress={() => {
+            sendTrackEvent('dismissed').catch(() => {});
+            onClose?.();
+          }}
         >
           <Text style={styles.maxBtnText}>X</Text>
         </TouchableOpacity>
@@ -278,7 +286,7 @@ const styles = StyleSheet.create({
   },
   maxBtn: {
     position: 'absolute',
-    top: 50,
+    top: Platform.OS === 'ios' ? 58 : 20,
     right: 20,
     backgroundColor: 'black',
     padding: 12,

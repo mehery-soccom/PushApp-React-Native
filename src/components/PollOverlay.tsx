@@ -6,6 +6,7 @@ import {
   Text,
   StyleSheet,
   Dimensions,
+  SafeAreaView,
 } from 'react-native';
 import { triggerNextPoll } from '../events/custom/CustomEvents';
 
@@ -58,8 +59,11 @@ export const PollOverlayProvider: React.FC = () => {
 
       setPipContents([cloned]);
     } else if (pollType.includes('floater')) {
+      const cloned = React.cloneElement(element as React.ReactElement<any>, {
+        onClose: hideOverlayFn,
+      });
       // ✅ Floater UI — fullscreen without cross button
-      setModalContent(element);
+      setModalContent(cloned);
       setIsFloater(true);
       setModalVisible(true);
     } else if (pollType.includes('bottomsheet')) {
@@ -130,13 +134,13 @@ export const PollOverlayProvider: React.FC = () => {
 
       {/* Banner */}
       {bannerContents.map((content, index) => (
-        <View
+        <SafeAreaView
           key={index}
           style={[styles.bannerContainer, { zIndex: 10 + index }]}
           pointerEvents="box-none"
         >
           {content}
-        </View>
+        </SafeAreaView>
       ))}
       {/* PIP */}
       {pipContents.map((content, index) => {
