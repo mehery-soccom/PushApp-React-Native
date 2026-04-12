@@ -103,11 +103,20 @@ class NotificationService: UNNotificationServiceExtension {
     private func extractImageUrls(from userInfo: [AnyHashable: Any]) -> [String] {
         var imageUrls: [String] = []
 
+        // FCM iOS payloads often carry image under fcm_options.image.
+        if let fcmOptions = userInfo["fcm_options"] as? [AnyHashable: Any],
+           let nestedImage = parseSingleString(fcmOptions["image"]),
+           !nestedImage.isEmpty {
+            imageUrls = [nestedImage]
+        }
+
         // Prefer explicit lists first for carousel templates
-        for key in ["image_urls", "imageUrls", "carousel_images", "images", "media-url"] {
-            if let values = parseStringList(userInfo[key]), !values.isEmpty {
-                imageUrls = values
-                break
+        if imageUrls.isEmpty {
+            for key in ["image_urls", "imageUrls", "carousel_images", "images", "media-url"] {
+                if let values = parseStringList(userInfo[key]), !values.isEmpty {
+                    imageUrls = values
+                    break
+                }
             }
         }
 

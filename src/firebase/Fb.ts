@@ -487,6 +487,11 @@ export function setupForegroundNotificationListener(): () => void {
     }
 
     // ===== Normal Notification Flow =====
+    if (Platform.OS === 'android') {
+      console.log(
+        '📲 Showing Android foreground JS local notification (plain payload path).'
+      );
+    }
     console.log('📲 Displaying local notification:', title, message, image);
 
     const localNotif: any = {

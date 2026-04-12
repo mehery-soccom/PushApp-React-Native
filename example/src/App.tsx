@@ -192,12 +192,12 @@ export default function App() {
 
   return (
     <>
-      <PollOverlayProvider />
       {currentPage === 'login' ? (
         <LoginPage onLogin={handleLogin} />
       ) : (
         <HomePage userId={userId} />
       )}
+      <PollOverlayProvider />
     </>
   );
 }

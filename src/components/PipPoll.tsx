@@ -274,7 +274,13 @@ export default function PipPoll({
 }
 
 const styles = StyleSheet.create({
-  fullscreenContainer: { zIndex: 400 },
+  fullscreenContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    zIndex: 10000,
+    elevation: 10000,
+  },
   web: { flex: 1 },
   pipContainer: {
     position: 'absolute',

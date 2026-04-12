@@ -25,7 +25,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
         if (targetUrl.isNotBlank()) {
             try {
-                val openIntent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
+                val normalizedUrl = normalizeTargetUrl(targetUrl)
+                val openIntent = Intent(Intent.ACTION_VIEW, Uri.parse(normalizedUrl)).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
                 context.startActivity(openIntent)
@@ -66,7 +67,11 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 if (messageId.isNotBlank()) payload.put("messageId", messageId)
                 if (filterId.isNotBlank()) payload.put("filterId", filterId)
                 if (notificationId.isNotBlank()) payload.put("notificationId", notificationId)
-                if (ctaId.isNotBlank()) payload.put("ctaId", ctaId)
+                if (ctaId.isNotBlank()) {
+                    // Keep both shapes for backend compatibility.
+                    payload.put("ctaId", ctaId)
+                    payload.put("data", JSONObject().put("ctaId", ctaId))
+                }
 
                 conn.outputStream.use { os ->
                     os.write(payload.toString().toByteArray(Charsets.UTF_8))
@@ -89,5 +94,13 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val EXTRA_FILTER_ID = "extra_filter_id"
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
         const val EXTRA_CTA_ID = "extra_cta_id"
+    }
+
+    private fun normalizeTargetUrl(raw: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return trimmed
+        val parsed = Uri.parse(trimmed)
+        // Preserve any explicit scheme (https, http, intent, market, custom deep links, etc).
+        return if (!parsed.scheme.isNullOrBlank()) trimmed else "https://$trimmed"
     }
 }

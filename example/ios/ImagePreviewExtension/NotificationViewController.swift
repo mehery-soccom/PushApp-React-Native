@@ -183,15 +183,12 @@ if logoImageView.image == nil {
             // Skip the logo (identifier == "logo")
             if attachment.identifier == "logo" { continue }
 
-            let ext = attachment.url.pathExtension.lowercased()
-            if ["png", "jpg", "jpeg"].contains(ext) {
-                _ = attachment.url.startAccessingSecurityScopedResource()
-                if let data = try? Data(contentsOf: attachment.url),
-                   let img = UIImage(data: data) {
-                    loadedImages.append(img)
-                }
-                attachment.url.stopAccessingSecurityScopedResource()
+            _ = attachment.url.startAccessingSecurityScopedResource()
+            if let data = try? Data(contentsOf: attachment.url),
+               let img = UIImage(data: data) {
+                loadedImages.append(img)
             }
+            attachment.url.stopAccessingSecurityScopedResource()
         }
         
         DispatchQueue.main.async {
@@ -377,7 +374,7 @@ if logoImageView.image == nil {
             carouselScrollView.topAnchor.constraint(equalTo: carouselView.topAnchor),
             carouselScrollView.bottomAnchor.constraint(equalTo: carouselView.bottomAnchor),
 
-            pageControl.bottomAnchor.constraint(equalTo: carouselView.bottomAnchor, constant: -8),
+            pageControl.bottomAnchor.constraint(equalTo: carouselView.bottomAnchor, constant: -4),
             pageControl.centerXAnchor.constraint(equalTo: carouselView.centerXAnchor)
         ])
     }
