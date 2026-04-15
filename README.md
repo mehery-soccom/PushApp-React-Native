@@ -1,234 +1,163 @@
-````md
 # react-native-mehery-event-sender
 
-A lightweight React Native SDK to support push notifications, custom in-app messages (popup, banner, PiP), event tracking, in-app polls, and session handling for your apps.
+React Native SDK for push notifications, in-app notifications, polls, and event tracking.
+
+## What your app must add (quick checklist)
+
+Your example/consumer app must include all of the following:
+
+- Firebase config files:
+  - Android: `android/app/google-services.json`
+  - iOS: `ios/GoogleService-Info.plist`
+- Google Services Gradle plugins on Android (`com.google.gms.google-services`)
+- `@react-native-firebase/app` + `@react-native-firebase/messaging`
+- `@react-native-async-storage/async-storage`
+- `react-native-push-notification`
+- SDK initialization in app startup (`initSdk`)
+- `PollOverlayProvider` mounted once at app root
+- iOS background mode for remote notifications (`remote-notification` in `Info.plist`)
 
 ## Installation
 
 ```sh
 npm install react-native-mehery-event-sender
+npm install @react-native-firebase/app @react-native-firebase/messaging
+npm install @react-native-async-storage/async-storage react-native-push-notification
 ```
-````
 
-## 🚀 Initialization
+Then for iOS:
 
-Initialize the SDK in your App.tsx
+```sh
+cd ios && pod install
+```
 
-```js
+## Step-by-step setup for example app
+
+### 1) Add Firebase files
+
+- Place `google-services.json` in `android/app/`
+- Place `GoogleService-Info.plist` in your iOS app target
+
+### 2) Android Gradle setup
+
+In `android/build.gradle`, add:
+
+```gradle
+buildscript {
+  dependencies {
+    classpath 'com.google.gms:google-services:4.3.15'
+  }
+}
+```
+
+In `android/app/build.gradle`, add:
+
+```gradle
+apply plugin: 'com.google.gms.google-services'
+```
+
+### 3) Android manifest permissions
+
+Make sure your app has notification/network permissions in `AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.WAKE_LOCK" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+```
+
+### 4) iOS capabilities
+
+In your iOS `Info.plist`, include:
+
+```xml
+<key>UIBackgroundModes</key>
+<array>
+  <string>remote-notification</string>
+</array>
+```
+
+Also enable Push Notifications capability in Xcode for your app target.
+
+### 5) Initialize SDK in app startup
+
+```tsx
+import { useEffect } from 'react';
 import { initSdk } from 'react-native-mehery-event-sender';
 
-// ...
-
-initSdk(
-  (context = this),
-  (identifier = 'demo_1754408042569'),
-  (sandbox = true)
-);
+useEffect(() => {
+  // identifier format: "<tenant>_<channel>"
+  initSdk(null, 'demo_1754408042569', false);
+}, []);
 ```
 
-### Login the user
+### 6) Mount poll overlay once at root
 
-```js
-import { OnUserLogin } from 'react-native-mehery-event-sender';
+```tsx
+import { PollOverlayProvider } from 'react-native-mehery-event-sender';
 
-// ...
-
-OnUserLogin('user_id');
+export default function App() {
+  return (
+    <>
+      {/* your app routes/screens */}
+      <PollOverlayProvider />
+    </>
+  );
+}
 ```
 
-### Initialize Page Open Event
+### 7) Link user and page/session events
 
-```js
-import { OnPageOpen } from 'react-native-mehery-event-sender';
+```tsx
+import {
+  OnUserLogin,
+  OnPageOpen,
+  OnAppOpen,
+  sendCustomEvent,
+} from 'react-native-mehery-event-sender';
 
-// ...
-
-OnPageOpen('page_name');
+OnUserLogin('user_123');
+OnAppOpen();
+OnPageOpen('home');
+sendCustomEvent('login_clicked', { source: 'welcome_screen' });
 ```
 
----
+### 8) (Optional) Render in-app poll placeholders
 
-## 🎯 Event Tracking
-
-To track user actions or custom events:
-
-```js
-import { sendCustomEvent } from 'react-native-mehery-event-sender';
-// Send a simple event
-sendCustomEvent('login_clicked', { userId: '12345' });
-
-// Send an event with multiple properties
-sendCustomEvent('purchase_made', {
-  itemId: '987',
-  amount: 299,
-  currency: 'USD',
-});
+```tsx
+import {
+  InlinePollContainer,
+  TooltipPollContainer,
+} from 'react-native-mehery-event-sender';
 ```
 
----
+Use:
 
-## 🔔 Notification Handling
+- `InlinePollContainer` where inline poll cards should render.
+- `TooltipPollContainer` around UI elements that should receive tooltip polls.
 
-The SDK auto-registers FCM token and handles push notifications.
-Ensure you have Firebase configured.
+## Notification payload notes
 
-### Android image notification notes
-
-- Use **data-only FCM payloads** for reliable custom rendering when app is backgrounded/killed.
-- Prefer HTTPS image URLs; HTTP can be blocked by Android network security.
-- If your app also declares another `FirebaseMessagingService`, ensure your Android manifest still includes `com.meheryeventsender.MyFirebaseMessagingService`.
-
-#### Supported Android image payload keys
+### Android image keys
 
 - Single image: `image`, `imageUrl`, `image_url`
-- Carousel list: `imageUrls`, `image_urls`, `carousel_images` (JSON arrays), or indexed `image1`, `image2`, ...
+- Carousel: `imageUrls`, `image_urls`, `carousel_images`, or `image1`, `image2`, ...
 
-#### Android payload examples
+### iOS action category example
 
-Single-image (BigPicture-style eligible):
+To show 3 action buttons, send category `THREE_BUTTON_CATEGORY` in APNs payload.
+Action IDs received in JS/native tap handling are:
 
-```json
-{
-  "message": {
-    "token": "<device_token>",
-    "data": {
-      "title": "Order update",
-      "body": "Your package is out for delivery",
-      "imageUrl": "https://example.com/banner.jpg"
-    }
-  }
-}
-```
+- `PUSHAPP_ACTION_1`
+- `PUSHAPP_ACTION_2`
+- `PUSHAPP_ACTION_3`
 
-Carousel/custom expanded:
+## ProGuard
 
-```json
-{
-  "message": {
-    "token": "<device_token>",
-    "data": {
-      "title": "Top picks for you",
-      "body": "Swipe images in expanded view",
-      "image_urls": "[\"https://example.com/a.jpg\",\"https://example.com/b.jpg\"]"
-    }
-  }
-}
-```
-
-### iOS: 3-Button Notification Category
-
-To show a notification with **3 action buttons** on iOS, include the `category` field in your APNs payload. The SDK registers `THREE_BUTTON_CATEGORY` with actions: **Action 1**, **Action 2**, **Action 3**.
-
-**FCM payload example** (server-side):
-
-```json
-{
-  "message": {
-    "token": "<device_token>",
-    "notification": { "title": "Title", "body": "Body" },
-    "apns": {
-      "payload": {
-        "aps": {
-          "category": "THREE_BUTTON_CATEGORY"
-        }
-      }
-    }
-  }
-}
-```
-
-Action IDs sent to JS on tap: `PUSHAPP_ACTION_1`, `PUSHAPP_ACTION_2`, `PUSHAPP_ACTION_3`.
-
----
-
-## 🧩 In-App Polls (Inline & Tooltip)
-
-The SDK supports inline polls (banners/cards inside screen layout) and tooltip-style polls that attach to UI elements.
-These require **no UI logic** from your side — they automatically render when triggered.
-
-### 📌 Inline Poll Container
-
-Render polls inline within your layout:
-
-```tsx
-import { InlinePollContainer } from 'react-native-mehery-event-sender';
-
-export default function ExampleScreen() {
-  return (
-    <View style={{ marginTop: 20 }}>
-      <InlinePollContainer placeholderId="home_banner" />
-      <Text>Welcome to the Home Screen</Text>
-    </View>
-  );
-}
-```
-
-### 📌 Tooltip Poll Container
-
-Attach polls to any UI element (icon, button, floating element):
-
-```tsx
-import { TooltipPollContainer } from 'react-native-mehery-event-sender';
-
-export default function ExampleScreen() {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <TooltipPollContainer placeholderId="floating_tooltip">
-        <View
-          style={{
-            width: 40,
-            height: 40,
-            backgroundColor: 'blue',
-            borderRadius: 20,
-          }}
-        />
-      </TooltipPollContainer>
-    </View>
-  );
-}
-```
-
----
-
-## 📣 In-App Notifications
-
-The SDK handles:
-
-- Full-screen popup
-- Banner with inline dismiss
-- PiP floating widget with expand-to-popup
-
-No integration required — rendered automatically when triggered.
-
----
-
-## 📄 ProGuard
-
-```
+```pro
 -keep class com.mehery.pushapp.** { *; }
 ```
 
----
+## Support
 
-## 🏷️ Versions
-
-Latest Version: **0.0.10** hosted on npm.
-
----
-
-## 💬 Support
-
-Raise issues or feature requests in **GitHub Issues**.
-
-```
-
----
-
-If you want, I can also generate:
-
-✅ A cleaned-up npm-optimized README
-✅ A version with images/screenshots
-✅ A version with API docs & TypeScript definitions
-
-Just tell me!
-```
+Raise issues or feature requests in [GitHub Issues](https://github.com/mehery-soccom/PushApp-React-Native/issues).
