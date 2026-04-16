@@ -144,10 +144,14 @@ OnPageOpen('home');
 **d) Custom event**
 
 ```tsx
-// Call for user actions you want to track with extra metadata
+// Call for user actions you want to track with extra metadata.
+// You can send any custom keys that match your analytics/business needs.
 sendCustomEvent('login_clicked', {
   source: 'welcome_screen',
   method: 'google',
+  campaign_id: 'spring_launch_2026', // custom key
+  button_variant: 'primary', // custom key
+  plan_type: 'trial', // custom key
 });
 ```
 
