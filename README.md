@@ -113,7 +113,6 @@ import {
   OnUserLogin,
   OnUserLogOut,
   OnPageOpen,
-  OnAppOpen,
   sendCustomEvent,
 } from 'react-native-mehery-event-sender';
 ```
@@ -127,21 +126,14 @@ Call each event where it best matches the user journey:
 await OnUserLogin('user_123');
 ```
 
-**b) App open event**
-
-```tsx
-// Call when app becomes active (for example, app launch or foreground resume)
-OnAppOpen();
-```
-
-**c) Page open event**
+**b) Page open event**
 
 ```tsx
 // Call when a screen/page is shown (use your route/screen name)
 OnPageOpen('home');
 ```
 
-**d) Custom event**
+**c) Custom event**
 
 ```tsx
 // Call for user actions you want to track with extra metadata.
@@ -155,7 +147,7 @@ sendCustomEvent('login_clicked', {
 });
 ```
 
-**e) User logout event**
+**d) User logout event**
 
 ```tsx
 // Call before/after clearing local auth state when user signs out
@@ -175,6 +167,18 @@ Use:
 
 - `InlinePollContainer` where inline poll cards should render.
 - `TooltipPollContainer` around UI elements that should receive tooltip polls.
+
+### Example app: iOS notification extensions (reference)
+
+The `example/ios` project ships with native targets you can use as a starting point when wiring push, rich notifications, and Live Activities. Copy or adapt the Swift, plists, and assets into your own app; **branding and UI design are yours**—these paths only show where the hooks and data live.
+
+| Area | Path |
+| --- | --- |
+| Rich notification UI (content extension) | `example/ios/ImagePreviewExtension/NotificationViewController.swift` (and `MainInterface.storyboard`, `Assets.xcassets` in the same folder) |
+| Modify notification content before display (service extension) | `example/ios/ImageServiceExtension/NotificationService.swift` |
+| Live Activity / delivery-style widget data and UI | `example/ios/DeliveryActivity/` (Swift sources, `Info.plist`, `Assets.xcassets`) |
+
+Mirror the same targets and capabilities in Xcode on your app if you are not using the example workspace directly.
 
 ## Notification payload notes
 
