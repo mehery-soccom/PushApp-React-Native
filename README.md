@@ -111,15 +111,51 @@ export default function App() {
 ```tsx
 import {
   OnUserLogin,
+  OnUserLogOut,
   OnPageOpen,
   OnAppOpen,
   sendCustomEvent,
 } from 'react-native-mehery-event-sender';
+```
 
-OnUserLogin('user_123');
+Call each event where it best matches the user journey:
+
+**a) User login event**
+
+```tsx
+// Call after successful sign-in/signup to map this device/session to your user ID
+await OnUserLogin('user_123');
+```
+
+**b) App open event**
+
+```tsx
+// Call when app becomes active (for example, app launch or foreground resume)
 OnAppOpen();
+```
+
+**c) Page open event**
+
+```tsx
+// Call when a screen/page is shown (use your route/screen name)
 OnPageOpen('home');
-sendCustomEvent('login_clicked', { source: 'welcome_screen' });
+```
+
+**d) Custom event**
+
+```tsx
+// Call for user actions you want to track with extra metadata
+sendCustomEvent('login_clicked', {
+  source: 'welcome_screen',
+  method: 'google',
+});
+```
+
+**e) User logout event**
+
+```tsx
+// Call before/after clearing local auth state when user signs out
+await OnUserLogOut('user_123');
 ```
 
 ### 8) (Optional) Render in-app poll placeholders
