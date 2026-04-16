@@ -114,6 +114,7 @@ import {
   OnUserLogOut,
   OnPageOpen,
   sendCustomEvent,
+  updateUserProfile,
 } from 'react-native-mehery-event-sender';
 ```
 
@@ -126,14 +127,26 @@ Call each event where it best matches the user journey:
 await OnUserLogin('user_123');
 ```
 
-**b) Page open event**
+**b) Profile update**
+
+```tsx
+// Call after login when you have customer fields or cohorts to sync.
+// Uses `user_id` and channel from storage (set by init + login), PUTs `/v1/customer/profile`.
+// The SDK only performs this network update once per install (later calls are skipped).
+await updateUserProfile(
+  { name: 'Jane Doe', email: 'jane@example.com', city: 'Mumbai' },
+  { segment: 'trial', plan: 'free' }
+);
+```
+
+**c) Page open event**
 
 ```tsx
 // Call when a screen/page is shown (use your route/screen name)
 OnPageOpen('home');
 ```
 
-**c) Custom event**
+**d) Custom event**
 
 ```tsx
 // Call for user actions you want to track with extra metadata.
@@ -147,7 +160,7 @@ sendCustomEvent('login_clicked', {
 });
 ```
 
-**d) User logout event**
+**e) User logout event**
 
 ```tsx
 // Call before/after clearing local auth state when user signs out
