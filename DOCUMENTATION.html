@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mehery Event Sender - SDK Documentation</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #3730a3;
+            --accent: #8b5cf6;
+            --bg-page: #f9fafb;
+            --bg-card: #ffffff;
+            --text-main: #1f2937;
+            --text-light: #6b7280;
+            --border: #e5e7eb;
+            --code-bg: #1e293b;
+            --code-text: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            color: var(--text-main);
+            background-color: var(--bg-page);
+            margin: 0;
+            padding: 40px 20px;
+        }
+
+        .document-container {
+            max-width: 850px;
+            margin: 0 auto;
+            background: var(--bg-card);
+            padding: 80px 60px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            border-radius: 12px;
+            position: relative;
+        }
+
+        /* Print formatting */
+        @media print {
+            body { background: white; padding: 0; }
+            .document-container { box-shadow: none; padding: 40px; }
+            .no-print { display: none; }
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 60px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 40px;
+        }
+
+        .logo {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin: 0;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-light);
+            margin-top: 10px;
+            font-weight: 500;
+        }
+
+        h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.75rem;
+            color: var(--primary-dark);
+            margin-top: 40px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h3 {
+            font-size: 1.25rem;
+            color: var(--text-main);
+            margin-top: 30px;
+            font-weight: 700;
+        }
+
+        p, li {
+            font-size: 1rem;
+            color: var(--text-main);
+        }
+
+        .badge-row {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .badge {
+            background: #eee;
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-card {
+            padding: 20px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #fdfdff;
+        }
+
+        .feature-card strong {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--primary);
+        }
+
+        .alert {
+            padding: 24px;
+            border-radius: 12px;
+            margin: 30px 0;
+            border-left: 6px solid;
+            background: #fff;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+        }
+
+        .alert-important {
+            border-left-color: var(--primary);
+            background-color: #f5f3ff;
+        }
+
+        .alert-title {
+            font-weight: 800;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+            letter-spacing: 0.05em;
+            color: var(--primary-dark);
+        }
+
+        code {
+            font-family: 'Fira Code', monospace;
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #ef4444;
+        }
+
+        pre {
+            background: var(--code-bg);
+            color: var(--code-text);
+            padding: 24px;
+            border-radius: 12px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        th {
+            background: var(--primary);
+            color: white;
+            text-align: left;
+            padding: 12px 16px;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tr:last-child td { border-bottom: none; }
+        tr:nth-child(even) { background: #f9fafb; }
+
+        .checkmark-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .checkmark-list li {
+            padding-left: 30px;
+            position: relative;
+            margin-bottom: 12px;
+        }
+
+        .checkmark-list li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: var(--success);
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        footer {
+            margin-top: 80px;
+            text-align: center;
+            padding-top: 40px;
+            border-top: 1px solid var(--border);
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        .btn-print {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--primary);
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+            z-index: 100;
+        }
+
+        .btn-print:hover { background: var(--primary-dark); }
+    </style>
+</head>
+<body>
+
+    <button class="btn-print no-print" onclick="window.print()">Export to PDF</button>
+
+    <div class="document-container">
+        <header>
+            <img src="./assets/mehery_sdk_logo.png" alt="Logo" class="logo">
+            <h1>Mehery Event Sender</h1>
+            <p class="subtitle">Premium SDK for Notifications & Polls</p>
+            <div class="badge-row">
+                <span class="badge">v1.2.0</span>
+                <span class="badge">React Native</span>
+                <span class="badge">Premium Support</span>
+            </div>
+        </header>
+
+        <section>
+            <h2>🚀 Overview</h2>
+            <p>The <strong>Mehery Event Sender SDK</strong> provides a comprehensive suite of tools to engage your users through smart notifications and interactive polls. Optimized for performance and high engagement.</p>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <strong>🔔 Rich Push</strong>
+                    <p>Support for images, carousels, and custom action buttons.</p>
+                </div>
+                <div class="feature-card">
+                    <strong>📊 Smart Polls</strong>
+                    <p>Real-time feedback with inline and overlay poll delivery.</p>
+                </div>
+                <div class="feature-card">
+                    <strong>🎯 Precise Tracking</strong>
+                    <p>Capture every user interaction with high fidelity.</p>
+                </div>
+                <div class="feature-card">
+                    <strong>👤 User Lifecycle</strong>
+                    <p>Manage profiles, segments, and auth transitions easily.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>📋 Prerequisites</h2>
+            <div class="alert alert-important">
+                <div class="alert-title">Critical Checklist</div>
+                <p>Your app will not receive notifications if these foundations are missing:</p>
+            </div>
+            <ul class="checkmark-list">
+                <li><strong>Firebase Configuration</strong>: Correct placement of <code>google-services.json</code> and <code>GoogleService-Info.plist</code>.</li>
+                <li><strong>Gradle Integration</strong>: Google Services plugin enabled in both build files.</li>
+                <li><strong>Dependencies</strong>: Firebase Messaging and Async Storage must be installed.</li>
+                <li><strong>Permissions</strong>: <code>POST_NOTIFICATIONS</code> and <code>INTERNET</code> permissions granted.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>🛠 Installation</h2>
+            <pre><code># Install core library
+npm install react-native-mehery-event-sender
+
+# Install peer dependencies
+npm install @react-native-firebase/app @react-native-firebase/messaging
+npm install @react-native-async-storage/async-storage react-native-push-notification</code></pre>
+            <p>For iOS projects:</p>
+            <pre><code>cd ios && pod install</code></pre>
+        </section>
+
+        <section>
+            <h2>⚙️ Configuration</h2>
+            <h3>Android Setup</h3>
+            <p>Update <code>android/build.gradle</code>:</p>
+            <pre><code>buildscript {
+  dependencies {
+    classpath 'com.google.gms:google-services:4.3.15'
+  }
+}</code></pre>
+
+            <h3>iOS Capabilities</h3>
+            <p>Enable <strong>Push Notifications</strong> and <strong>Background Modes</strong> in Xcode, then update <code>Info.plist</code>:</p>
+            <pre><code>&lt;key&gt;UIBackgroundModes&lt;/key&gt;
+&lt;array&gt;
+  &lt;string&gt;remote-notification&lt;/string&gt;
+&lt;/array&gt;</code></pre>
+        </section>
+
+        <section>
+            <h2>📖 Basic Usage</h2>
+            <h3>SDK Initialization</h3>
+            <pre><code>import { initSdk } from 'react-native-mehery-event-sender';
+
+useEffect(() => {
+  initSdk(null, 'your_tenant_id', false);
+}, []);</code></pre>
+
+            <h3>Mounting Polls</h3>
+            <p>Ensure the <code>PollOverlayProvider</code> is mounted at your app root:</p>
+            <pre><code>import { PollOverlayProvider } from 'react-native-mehery-event-sender';
+
+export default function App() {
+  return (
+    <>
+      <MainLayout />
+      <PollOverlayProvider />
+    </>
+  );
+}</code></pre>
+        </section>
+
+        <section>
+            <h2>🔍 Event Tracking</h2>
+            <p>The SDK allows capturing rich behavioral data:</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>OnUserLogin(id)</code></td>
+                        <td>Links the device to a specific user identity.</td>
+                    </tr>
+                    <tr>
+                        <td><code>updateUserProfile(data)</code></td>
+                        <td>Syncs user metadata for segmentation.</td>
+                    </tr>
+                    <tr>
+                        <td><code>OnPageOpen(name)</code></td>
+                        <td>Tracks screen navigation and analytics.</td>
+                    </tr>
+                    <tr>
+                        <td><code>sendCustomEvent(tag, meta)</code></td>
+                        <td>Sends business-specific custom interaction data.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section>
+            <h2>📝 Technical Specifications</h2>
+            <h3>Android Notification Keys</h3>
+            <ul>
+                <li><strong>Single Image:</strong> <code>image</code>, <code>imageUrl</code></li>
+                <li><strong>Carousel:</strong> <code>imageUrls</code>, <code>carousel_images</code></li>
+            </ul>
+
+            <h3>iOS Categories</h3>
+            <p>Use <code>THREE_BUTTON_CATEGORY</code> to enable interactive response buttons.</p>
+        </section>
+
+        <footer>
+            <p>Documentation generated for internal use. Confidential & Proprietary.</p>
+            <p>Made with ❤️ for the React Native Community</p>
+        </footer>
+    </div>
+
+</body>
+</html>
