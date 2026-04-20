@@ -8,6 +8,7 @@ import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
 
 import { NativeModules, Platform } from 'react-native';
+
 const { LiveActivityModule } = NativeModules;
 
 let deviceRegistrationInProgress = false;
@@ -213,6 +214,79 @@ function resolveImageListFromData(data: Record<string, any>): string[] {
 
 function normalizedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+type ForegroundCtaPair = { title: string; url: string };
+
+function parseCtaButtonsJson(raw: unknown): ForegroundCtaPair[] {
+  if (raw == null) return [];
+  let text = '';
+  if (typeof raw === 'string') {
+    text = raw.trim();
+  } else {
+    try {
+      text = JSON.stringify(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    const arr: unknown[] = Array.isArray(parsed)
+      ? parsed
+      : parsed &&
+          typeof parsed === 'object' &&
+          Array.isArray((parsed as { buttons?: unknown }).buttons)
+        ? ((parsed as { buttons: unknown[] }).buttons as unknown[])
+        : parsed &&
+            typeof parsed === 'object' &&
+            Array.isArray((parsed as { items?: unknown }).items)
+          ? ((parsed as { items: unknown[] }).items as unknown[])
+          : [];
+    const labelKeys = ['title', 'label', 'text', 'name', 'buttonTitle'];
+    const urlKeys = [
+      'url',
+      'link',
+      'href',
+      'deepLink',
+      'deeplink',
+      'targetUrl',
+    ];
+    const out: ForegroundCtaPair[] = [];
+    for (const item of arr) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as Record<string, unknown>;
+      const title = labelKeys
+        .map((k) => normalizedString(o[k]))
+        .find((s) => s.length > 0);
+      const url = urlKeys
+        .map((k) => normalizedString(o[k]))
+        .find((s) => s.length > 0);
+      if (title && url) out.push({ title, url });
+      if (out.length >= 3) break;
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+function extractForegroundCtaPairs(
+  data: Record<string, any>
+): ForegroundCtaPair[] {
+  const fromButtons = parseCtaButtonsJson(data.cta_buttons);
+  if (fromButtons.length > 0) return fromButtons;
+  const pairs: ForegroundCtaPair[] = [];
+  const add = (titleKey: string, urlKey: string) => {
+    const title = normalizedString(data[titleKey]);
+    const url = normalizedString(data[urlKey]);
+    if (title && url) pairs.push({ title, url });
+  };
+  add('title1', 'url1');
+  add('title2', 'url2');
+  add('title3', 'url3');
+  return pairs;
 }
 
 function shouldUseNativeStyledPath(data: Record<string, any>): boolean {
@@ -454,7 +528,6 @@ export function setupForegroundNotificationListener(): () => void {
       resolveSingleImageFromData(data) ||
       null;
 
-    // 👇 Detect carousel payload
     const carouselImages = resolveImageListFromData(data).slice(
       0,
       MAX_CAROUSEL_IMAGES
@@ -463,7 +536,6 @@ export function setupForegroundNotificationListener(): () => void {
       console.log('🖼️ Carousel images parsed:', carouselImages);
     }
 
-    // 👇 If carousel pushed → activate native module
     if (carouselImages.length > 0) {
       console.log('🚀 Triggering Carousel Live Activity...');
       if (Platform.OS === 'android' && LiveActivityModule?.triggerCarousel) {
@@ -472,7 +544,7 @@ export function setupForegroundNotificationListener(): () => void {
           message,
           images: carouselImages,
         });
-        return; // skip normal notification
+        return;
       }
     }
 
@@ -481,12 +553,10 @@ export function setupForegroundNotificationListener(): () => void {
       shouldUseNativeStyledPath(data) &&
       LiveActivityModule?.triggerLiveActivity
     ) {
-      // Styled/live templates are rendered natively to avoid foreground duplicates.
       LiveActivityModule.triggerLiveActivity(data);
       return;
     }
 
-    // ===== Normal Notification Flow =====
     if (Platform.OS === 'android') {
       console.log(
         '📲 Showing Android foreground JS local notification (plain payload path).'
@@ -504,16 +574,7 @@ export function setupForegroundNotificationListener(): () => void {
       vibrate: true,
     };
 
-    const actionPairs = [
-      {
-        title: normalizedString(data.title1),
-        url: normalizedString(data.url1),
-      },
-      {
-        title: normalizedString(data.title2),
-        url: normalizedString(data.url2),
-      },
-    ].filter((item) => item.title && item.url);
+    const actionPairs = extractForegroundCtaPairs(data);
 
     if (actionPairs.length > 0) {
       const actionTitles = actionPairs.map((item) => item.title as string);
@@ -540,7 +601,7 @@ export function setupForegroundNotificationListener(): () => void {
     }
 
     if (image) {
-      // react-native-push-notification expects bigPictureUrl for Android big image style
+      // react-native-push-notification big-picture style
       localNotif.bigPictureUrl = image;
       localNotif.picture = image;
       localNotif.largeIconUrl = image;

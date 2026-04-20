@@ -34,6 +34,8 @@ class CustomNotificationService(private val context: Context) {
         private val cachedMessages = mutableMapOf<Int, String>()
         private val cachedTapTexts = mutableMapOf<Int, String>()
         private val cachedChannels = mutableMapOf<Int, String>()
+        /** FCM data map for re-attaching CTA actions after carousel [updateCarouselView] rebuilds the notification. */
+        private val carouselCtaPayload = mutableMapOf<Int, Map<String, String>>()
     }
 
 
@@ -58,10 +60,14 @@ class CustomNotificationService(private val context: Context) {
     imageUrls: List<String> = emptyList(),
     showProgress: Boolean = false,
     progress: Int = 0,
-    isRichMedia: Boolean = false
+    isRichMedia: Boolean = false,
+    ctaData: Map<String, String>? = null
 
 ): NotificationCompat.Builder {
 
+        if (imageUrls.isNotEmpty() && ctaData != null) {
+            carouselCtaPayload[notificationId] = ctaData
+        }
 
     val layoutRes = if (isRichMedia) {
         R.layout.rich_media_notification_layout
@@ -261,9 +267,12 @@ class CustomNotificationService(private val context: Context) {
         rv.setOnClickPendingIntent(R.id.btnNext, nextIntent)
         rv.setOnClickPendingIntent(R.id.btnPrev, prevIntent)
 
-        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-        val contentIntent = PendingIntent.getActivity(
-            context, 0, launchIntent,
+        val contentIntent = carouselCtaPayload[notificationId]?.let { payload ->
+            NotificationCtaUtils.buildOpenPendingIntent(context, payload)
+        } ?: PendingIntent.getActivity(
+            context,
+            0,
+            context.packageManager.getLaunchIntentForPackage(context.packageName),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -275,6 +284,10 @@ class CustomNotificationService(private val context: Context) {
             .setContentIntent(contentIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+
+        carouselCtaPayload[notificationId]?.let { payload ->
+            NotificationCtaUtils.appendCtaActions(context, builder, payload)
+        }
 
         val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         mgr.notify(notificationId, builder.build())

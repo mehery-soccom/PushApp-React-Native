@@ -22,31 +22,11 @@ class NotificationService: UNNotificationServiceExtension {
 
         let userInfo = request.content.userInfo
 
-        // ---------------------------------------------------------
-        // LOGO (process first)
-        // ---------------------------------------------------------
-        if let logoUrlString = userInfo["logo"] as? String,
-           let logoUrl = URL(string: logoUrlString) {
-
-            downloadTempFile(url: logoUrl) { tempUrl in
-                if let tempUrl = tempUrl,
-                   let attachment = try? UNNotificationAttachment(
-                       identifier: "logo",
-                       url: tempUrl
-                   ) {
-                    content.attachments.insert(attachment, at: 0)
-                }
-
-                self.processImages(
-                    userInfo: userInfo,
-                    content: content,
-                    contentHandler: contentHandler
-                )
-            }
-            return
-        }
-
-        // No logo
+        // Do not add `logo` as a UNNotificationAttachment. iOS uses the first
+        // attachment as the large "hero" media slot; a small logo (or one that
+        // does not decode well for that surface) renders as a tall black/empty
+        // band above the real image. ImagePreviewExtension already reads `logo`
+        // from userInfo / bundled assets and skips an attachment with id "logo".
         processImages(
             userInfo: userInfo,
             content: content,

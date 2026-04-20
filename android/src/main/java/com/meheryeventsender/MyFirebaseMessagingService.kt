@@ -3,11 +3,11 @@ package com.meheryeventsender
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.app.PendingIntent
-import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
@@ -35,6 +35,14 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         if (data.isEmpty()) return
         Log.d(TAG, "Message data payload: $data")
 
+        // Foreground: RN Firebase delivers to JS `onMessage`, which shows the notification.
+        // Posting here too caused duplicates. When only RN runs (no native delivery), skipping
+        // here alone would show nothing — so JS must remain the foreground path on Android.
+        if (isAppInForeground()) {
+            Log.d(TAG, "App in foreground; skip native notify (handled in JS)")
+            return
+        }
+
         try {
             if (data.containsKey("message1") && data.containsKey("message2") && data.containsKey("message3")) {
                 handleLiveActivityNotification(data)
@@ -50,60 +58,9 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         }
     }
 
-    private fun getTrackBaseUrl(data: Map<String, String>): String {
-        val explicit = data["track_base_url"]?.trim().orEmpty()
-        if (explicit.isNotEmpty()) return explicit
-        val apiBase = data["api_base_url"]?.trim().orEmpty()
-        return apiBase
-    }
-
-    private fun buildActionReceiverIntent(
-        data: Map<String, String>,
-        eventName: String,
-        targetUrl: String? = null,
-        ctaId: String? = null
-    ): Intent {
-        return Intent(this, NotificationActionReceiver::class.java).apply {
-            putExtra(NotificationActionReceiver.EXTRA_ACTION_TYPE, eventName)
-            putExtra(NotificationActionReceiver.EXTRA_TARGET_URL, targetUrl.orEmpty())
-            putExtra(NotificationActionReceiver.EXTRA_TRACK_BASE_URL, getTrackBaseUrl(data))
-            putExtra(NotificationActionReceiver.EXTRA_MESSAGE_ID, data["messageId"].orEmpty())
-            putExtra(NotificationActionReceiver.EXTRA_FILTER_ID, data["filterId"].orEmpty())
-            putExtra(
-                NotificationActionReceiver.EXTRA_NOTIFICATION_ID,
-                data["notification_id"].orEmpty()
-            )
-            putExtra(NotificationActionReceiver.EXTRA_CTA_ID, ctaId.orEmpty())
-        }
-    }
-
-    private fun createUrlIntent(data: Map<String, String>, title: String, url: String): PendingIntent {
-        val intent = buildActionReceiverIntent(
-            data = data,
-            eventName = "cta",
-            targetUrl = url,
-            ctaId = title
-        )
-        return PendingIntent.getBroadcast(
-            this,
-            (title + url).hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    }
-
-    private fun buildOpenIntent(data: Map<String, String>): PendingIntent {
-        val intent = buildActionReceiverIntent(
-            data = data,
-            eventName = "opened",
-            targetUrl = null,
-            ctaId = null
-        )
-        return PendingIntent.getBroadcast(
-            this,
-            ("open_" + (data["notification_id"] ?: System.currentTimeMillis().toString())).hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    private fun isAppInForeground(): Boolean {
+        return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(
+            Lifecycle.State.STARTED
         )
     }
 
@@ -125,38 +82,26 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             .setContentText(message)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(buildOpenIntent(data))
+            .setContentIntent(NotificationCtaUtils.buildOpenPendingIntent(this, data))
 
-        appendCtaActions(builder, data)
+        NotificationCtaUtils.appendCtaActions(this, builder, data)
 
         notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
-    }
-
-    private fun appendCtaActions(builder: NotificationCompat.Builder, data: Map<String, String>) {
-        val title1 = data["title1"]
-        val url1 = data["url1"]
-        val title2 = data["title2"]
-        val url2 = data["url2"]
-        if (!title1.isNullOrBlank() && !url1.isNullOrBlank()) {
-            builder.addAction(0, title1, createUrlIntent(data, title1, url1))
-        }
-        if (!title2.isNullOrBlank() && !url2.isNullOrBlank()) {
-            builder.addAction(0, title2, createUrlIntent(data, title2, url2))
-        }
     }
 
     private fun decorateWithOpenTrackingIntent(
         builder: NotificationCompat.Builder,
         data: Map<String, String>
     ) {
-        builder.setContentIntent(buildOpenIntent(data))
+        builder.setContentIntent(NotificationCtaUtils.buildOpenPendingIntent(this, data))
     }
 
     private fun sendReceivedTracking(data: Map<String, String>) {
-        val trackBase = getTrackBaseUrl(data)
+        val trackBase = NotificationCtaUtils.trackBaseUrl(data)
         if (trackBase.isBlank()) return
-        val intent = buildActionReceiverIntent(
-            data = data,
+        val intent = NotificationCtaUtils.intentForPushTrackEvent(
+            this,
+            data,
             eventName = "received",
             targetUrl = null,
             ctaId = null
@@ -209,11 +154,12 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 notificationId = notificationId,
                 imageUrls = imageList,
                 showProgress = showProgress,
-                progress = progressInt
+                progress = progressInt,
+                ctaData = data
             )
 
             decorateWithOpenTrackingIntent(notification, data)
-            appendCtaActions(notification, data)
+            NotificationCtaUtils.appendCtaActions(this, notification, data)
             notificationManager.notify(notificationId, notification.build())
             sendReceivedTracking(data)
         } catch (e: Exception) {
@@ -261,11 +207,12 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             showProgress = false, // ✅ IMPORTANT
             isRichMedia = true,   // ✅ KEY LINE
             progressColor = data["progressColorHex"] ?: "#00FF00",
+            ctaData = data
 
 
         )
         decorateWithOpenTrackingIntent(builder, data)
-        appendCtaActions(builder, data)
+        NotificationCtaUtils.appendCtaActions(this, builder, data)
         notificationManager.notify(notificationId, builder.build())
         sendReceivedTracking(data)
     }
@@ -297,7 +244,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
         decorateWithOpenTrackingIntent(builder, data)
-        appendCtaActions(builder, data)
+        NotificationCtaUtils.appendCtaActions(this, builder, data)
 
         if (imageUrl.isNotBlank()) {
             val customService = CustomNotificationService(this)

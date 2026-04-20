@@ -60,6 +60,20 @@ function LoginPage({ onLogin }: { onLogin: (id: string) => void }) {
         onChangeText={setUserId}
       />
       <Button title="Submit" onPress={handleSubmit} />
+<<<<<<< HEAD
+=======
+      <View style={{ height: 20 }} />
+      <Button
+        title="Send Custom Event"
+        onPress={() => {
+          console.log('Button clicked');
+          sendCustomEvent('Before Login', {
+            source: 'login_page',
+            category: 'onboarding',
+          });
+        }}
+      />
+>>>>>>> 4f08224 (feat: bug fixes)
     </View>
   );
 }
@@ -92,6 +106,21 @@ function HomePage({
       <InlinePollContainer placeholderId="login_banner" />
 
       <Text style={styles.txt}>User ID: {userId}</Text>
+      <View style={styles.customEventButtons}>
+        <Button
+          title="Button 1"
+          onPress={() => {
+            sendCustomEvent('button 1 clicked', { screen: 'home' });
+          }}
+        />
+        <View style={styles.customEventButtonSpacer} />
+        <Button
+          title="Button 2"
+          onPress={() => {
+            sendCustomEvent('button 2 clicked', { screen: 'home' });
+          }}
+        />
+      </View>
       {/* <Button title="Logout" onPress={onLogout} /> */}
       <View style={styles.ve}>
         <TooltipPollContainer placeholderId="center">
@@ -229,4 +258,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
   },
+  customEventButtons: {
+    marginTop: 16,
+    width: '100%',
+    maxWidth: 320,
+    alignSelf: 'center',
+  },
+  customEventButtonSpacer: { height: 12 },
 });

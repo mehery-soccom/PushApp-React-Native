@@ -44,7 +44,8 @@ object LiveActivityUtils {
                 bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
                 align = data["align"] ?: "",
                 notificationId = notificationId,
-                imageUrls = NotificationPayloadUtils.extractLimitedImageList(data)
+                imageUrls = NotificationPayloadUtils.extractLimitedImageList(data),
+                ctaData = data
             )
 
             Log.d("LiveActivityUtils", "Notifying with ID: $notificationId")
@@ -94,7 +95,8 @@ object LiveActivityUtils {
                 notificationId = notificationId,
                 imageUrls = imageList,
                 showProgress = false,
-                isRichMedia = true
+                isRichMedia = true,
+                ctaData = data
             )
 
             notificationManager.notify(notificationId, builder.build())
