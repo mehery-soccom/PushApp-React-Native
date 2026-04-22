@@ -81,6 +81,12 @@ Also enable Push Notifications capability in Xcode for your app target.
 
 ### 5) Initialize SDK in app startup
 
+The third argument selects which **pushapp** host the SDK uses for API and WebSocket calls (`{tenant}.pushapp.…`):
+
+- `false` — production: `pushapp.ai`
+- `true` — sandbox: `pushapp.xyz` (default)
+- `'development'` — development: `pushapp.in`
+
 ```tsx
 import { useEffect } from 'react';
 import { initSdk } from 'react-native-mehery-event-sender';
@@ -88,6 +94,8 @@ import { initSdk } from 'react-native-mehery-event-sender';
 useEffect(() => {
   // identifier format: "<tenant>_<channel>"
   initSdk(null, 'demo_1754408042569', false);
+  // initSdk(null, 'demo_1754408042569', true);       // sandbox
+  // initSdk(null, 'demo_1754408042569', 'development');
 }, []);
 ```
 

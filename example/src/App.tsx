@@ -16,6 +16,8 @@ import {
   OnPageOpen,
   OnAppOpen,
   updateUserProfile,
+  sendCustomEvent,
+  type SdkInitEnvironmentParam,
 } from 'react-native-mehery-event-sender';
 import { PollOverlayProvider } from 'react-native-mehery-event-sender';
 import { InlinePollContainer } from 'react-native-mehery-event-sender';
@@ -60,20 +62,6 @@ function LoginPage({ onLogin }: { onLogin: (id: string) => void }) {
         onChangeText={setUserId}
       />
       <Button title="Submit" onPress={handleSubmit} />
-<<<<<<< HEAD
-=======
-      <View style={{ height: 20 }} />
-      <Button
-        title="Send Custom Event"
-        onPress={() => {
-          console.log('Button clicked');
-          sendCustomEvent('Before Login', {
-            source: 'login_page',
-            category: 'onboarding',
-          });
-        }}
-      />
->>>>>>> 4f08224 (feat: bug fixes)
     </View>
   );
 }
@@ -178,8 +166,11 @@ export default function App() {
       // 1️⃣ Inject device metadata FIRST
       await initDeviceMetadata();
 
-      // 2️⃣ Initialize SDK
-      initSdk(null, 'demo_1754408042569', false);
+      // 2️⃣ Initialize SDK (3rd arg: false=pushapp.ai, true=pushapp.xyz, 'development'=pushapp.in)
+
+      let environment: SdkInitEnvironmentParam = 'development';
+      await initSdk(null, 'demo_1754408042569', environment);
+      console.log('SDK initialized with environment:', environment);
       // 3️⃣ Log FCM Token
       try {
         await messaging().requestPermission();

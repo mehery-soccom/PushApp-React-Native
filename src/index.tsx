@@ -4,6 +4,7 @@ export { BannerScreen } from './components/BannerScreen';
 export { CustomBanner } from './components/CustomBanner';
 export { getDeviceId } from './utils/device';
 export { setDeviceMetadata } from './utils/deviceMetadata';
+export type { SdkInitEnvironmentParam } from './helpers/tenantContext';
 
 export {
   logUserDetails,
@@ -51,7 +52,9 @@ export { TooltipPollContainer } from './components/TooltipPollContainer';
 import { buildCommonHeaders } from './helpers/buildCommonHeaders';
 import {
   getApiBaseUrl,
+  storePushAppHostFromInitParam,
   storeTenantFromIdentifier,
+  type SdkInitEnvironmentParam,
 } from './helpers/tenantContext';
 
 const { PushTokenManager } = NativeModules;
@@ -324,16 +327,24 @@ let sdkMounted = false;
 export const initSdk = async (
   context: any,
   identifier: string,
-  sandbox: boolean = true
+  environment: SdkInitEnvironmentParam = true
 ) => {
   try {
     console.log('🧩 Initializing Mehery SDK...');
     console.log(context ? 'Received' : 'Not provided');
     console.log(`🏷️ Identifier: ${identifier}`);
-    console.log(`🧪 Sandbox Mode: ${sandbox}`);
+    if (environment === 'development') {
+      console.log('🌐 Environment: development (pushapp.in)');
+    } else {
+      console.log(
+        `🧪 ${environment ? 'Sandbox (pushapp.xyz)' : 'Production (pushapp.ai)'}`
+      );
+    }
 
     const tenant = await storeTenantFromIdentifier(identifier);
     console.log(`🏢 Resolved tenant: ${tenant}`);
+
+    await storePushAppHostFromInitParam(environment);
 
     // Keep raw identifier as channel_id for API compatibility.
     await AsyncStorage.setItem('mehery_channel_id', identifier);
@@ -349,7 +360,7 @@ export const initSdk = async (
     }
 
     // ✅ Connect to the socket server
-    connectToServer();
+    await connectToServer();
 
     // ✅ Mount overlay component only once
     if (!sdkMounted) {
@@ -385,7 +396,7 @@ export const initSdk = async (
       //   bg_color_gradient_dir: '',
       //   align: 'center',
       //   activity_id: 'demo_activity_001',
-      //   theme: sandbox ? 'light' : 'dark',
+      //   theme: environment ? 'light' : 'dark',
       // });
 
       await getFcmToken();

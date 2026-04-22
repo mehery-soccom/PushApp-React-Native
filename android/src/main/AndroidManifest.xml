@@ -7,6 +7,14 @@
 
     <application>
 
+        <!--
+          react-native-push-notification does not ship this in its merged manifest.
+          Without it, notification action buttons never fire (taps appear to do nothing).
+        -->
+        <receiver
+            android:name="com.dieam.reactnativepushnotification.modules.RNPushNotificationActions"
+            android:exported="false" />
+
         <!-- Firebase Messaging Service -->
         <service
             android:name=".MyFirebaseMessagingService"
@@ -28,6 +36,13 @@
         <receiver
             android:name=".NotificationActionReceiver"
             android:exported="false" />
+
+        <!-- CTA URL opens: activity PendingIntent (required for Android 12+ trampoline rules). -->
+        <activity
+            android:name=".NotificationCtaUrlActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.NoDisplay" />
 
     </application>
 

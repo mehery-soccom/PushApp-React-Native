@@ -48,6 +48,9 @@ object LiveActivityUtils {
                 ctaData = data
             )
 
+            notification.setContentIntent(NotificationCtaUtils.buildOpenPendingIntent(context, data))
+            NotificationCtaUtils.appendCtaActions(context, notification, data)
+
             Log.d("LiveActivityUtils", "Notifying with ID: $notificationId")
             notificationManager.notify(notificationId, notification.build())
 
@@ -98,6 +101,9 @@ object LiveActivityUtils {
                 isRichMedia = true,
                 ctaData = data
             )
+
+            builder.setContentIntent(NotificationCtaUtils.buildOpenPendingIntent(context, data))
+            NotificationCtaUtils.appendCtaActions(context, builder, data)
 
             notificationManager.notify(notificationId, builder.build())
         } catch (e: Exception) {

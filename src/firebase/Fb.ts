@@ -9,6 +9,14 @@ import { getApiBaseUrl } from '../helpers/tenantContext';
 
 import { NativeModules, Platform } from 'react-native';
 
+const pushCtaLog = (msg: string, extra?: unknown) => {
+  if (extra !== undefined) {
+    console.log(`[PushNotifCTA] ${msg}`, extra);
+  } else {
+    console.log(`[PushNotifCTA] ${msg}`);
+  }
+};
+
 const { LiveActivityModule } = NativeModules;
 
 let deviceRegistrationInProgress = false;
@@ -252,6 +260,9 @@ function parseCtaButtonsJson(raw: unknown): ForegroundCtaPair[] {
       'deepLink',
       'deeplink',
       'targetUrl',
+      'target_url',
+      'action_url',
+      'cta_url',
     ];
     const out: ForegroundCtaPair[] = [];
     for (const item of arr) {
@@ -263,7 +274,12 @@ function parseCtaButtonsJson(raw: unknown): ForegroundCtaPair[] {
       const url = urlKeys
         .map((k) => normalizedString(o[k]))
         .find((s) => s.length > 0);
-      if (title && url) out.push({ title, url });
+      if (url) {
+        const label =
+          title ||
+          (out.length === 0 ? 'Open' : out.length === 1 ? 'View' : 'More');
+        out.push({ title: label, url });
+      }
       if (out.length >= 3) break;
     }
     return out;
@@ -278,15 +294,96 @@ function extractForegroundCtaPairs(
   const fromButtons = parseCtaButtonsJson(data.cta_buttons);
   if (fromButtons.length > 0) return fromButtons;
   const pairs: ForegroundCtaPair[] = [];
-  const add = (titleKey: string, urlKey: string) => {
-    const title = normalizedString(data[titleKey]);
+  const add = (titleKey: string, urlKey: string, defaultTitle: string) => {
     const url = normalizedString(data[urlKey]);
-    if (title && url) pairs.push({ title, url });
+    if (!url) return;
+    const title = normalizedString(data[titleKey]) || defaultTitle;
+    pairs.push({ title, url });
   };
-  add('title1', 'url1');
-  add('title2', 'url2');
-  add('title3', 'url3');
+  add('title1', 'url1', 'Open');
+  add('title2', 'url2', 'View');
+  add('title3', 'url3', 'More');
+  add('button1_title', 'button1_url', 'Open');
+  add('button2_title', 'button2_url', 'View');
+  add('button3_title', 'button3_url', 'More');
+  add('cta1_title', 'cta1_url', 'Open');
+  add('cta2_title', 'cta2_url', 'View');
+  add('cta3_title', 'cta3_url', 'More');
   return pairs;
+}
+
+/**
+ * For foreground local notifications: map both visible labels (Save, Submit) and
+ * server action ids (PUSHAPP_SAVE, …) to the same url so taps resolve even if the
+ * OS passes the action id string instead of the label.
+ */
+function buildForegroundActionUrlMap(
+  data: Record<string, any>
+): Record<string, string> {
+  const pairs = extractForegroundCtaPairs(data);
+  const map: Record<string, string> = {};
+  for (const p of pairs) {
+    if (p.title && p.url) map[p.title] = p.url;
+  }
+  const idKeys: Array<'action1' | 'action2' | 'action3'> = [
+    'action1',
+    'action2',
+    'action3',
+  ];
+  for (let i = 0; i < pairs.length && i < idKeys.length; i++) {
+    const pair = pairs[i];
+    const key = idKeys[i];
+    if (!pair || !key) continue;
+    const id = normalizedString(data[key]);
+    if (id) map[id] = pair.url;
+  }
+  return map;
+}
+
+function resolveForegroundCtaUrl(
+  actionRaw: string,
+  data: Record<string, any>,
+  actionMap: Record<string, string>
+): string | undefined {
+  const action = String(actionRaw).trim();
+  if (!action) return undefined;
+  const mapped = actionMap[action];
+  if (typeof mapped === 'string' && mapped.trim()) return mapped.trim();
+
+  const a1 = normalizedString(data.action1);
+  const a2 = normalizedString(data.action2);
+  const a3 = normalizedString(data.action3);
+  if (action === a1) {
+    const u = normalizedString(data.url1);
+    if (u) return u;
+  }
+  if (action === a2) {
+    const u = normalizedString(data.url2);
+    if (u) return u;
+  }
+  if (action === a3) {
+    const u = normalizedString(data.url3);
+    if (u) return u;
+  }
+
+  const t1 = normalizedString(data.title1);
+  const t2 = normalizedString(data.title2);
+  if (action === t1) {
+    const u = normalizedString(data.url1);
+    if (u) return u;
+  }
+  if (action === t2) {
+    const u = normalizedString(data.url2);
+    if (u) return u;
+  }
+
+  if ((action === '0' || action === 'ACTION_0') && normalizedString(data.url1)) {
+    return normalizedString(data.url1);
+  }
+  if ((action === '1' || action === 'ACTION_1') && normalizedString(data.url2)) {
+    return normalizedString(data.url2);
+  }
+  return undefined;
 }
 
 function shouldUseNativeStyledPath(data: Record<string, any>): boolean {
@@ -407,39 +504,143 @@ export async function getFcmToken(): Promise<string | null> {
 }
 
 /**
+ * Handles local notification open + Android notification action button taps.
+ *
+ * On Android, `react-native-push-notification` delivers **action button** taps through the
+ * `onAction` callback when `invokeApp` is false. If `invokeApp` is true (old default here),
+ * the native module only re-launches the app and **never** forwards `action` / `__actionMap` to JS,
+ * so Yes/No style buttons appear to do nothing.
+ */
+async function handlePushNotificationInteraction(raw: any) {
+  const log = pushCtaLog;
+
+  try {
+  log('--- interaction start ---', {
+    platform: Platform.OS,
+    rawKeys: raw && typeof raw === 'object' ? Object.keys(raw) : typeof raw,
+  });
+
+  let notification = raw;
+  if (Platform.OS === 'android' && notification?.data != null) {
+    if (typeof notification.data === 'string') {
+      try {
+        notification = {
+          ...notification,
+          data: JSON.parse(notification.data),
+        };
+        log('parsed notification.data from JSON string');
+      } catch (e) {
+        log('failed to JSON.parse notification.data, keeping string', e);
+      }
+    }
+  }
+
+  log('full notification object', JSON.stringify(notification, null, 2));
+
+  const notificationData = (notification?.data ||
+    notification?.userInfo ||
+    {}) as Record<string, any>;
+
+  try {
+    log('track opened (non-fatal if it fails)');
+    await trackPushEvent('opened', notificationData);
+  } catch (e) {
+    log('trackPushEvent(opened) error', e);
+  }
+
+  const action = notification?.action;
+  log('resolved action field', {
+    action,
+    userInteraction: notification?.userInteraction,
+    foreground: notification?.foreground,
+  });
+
+  if (!action) {
+    log('no action on payload — likely body tap, not a CTA button; stop here');
+    return;
+  }
+
+  const actionMapRaw =
+    notification?.data?.__actionMap ||
+    notification?.userInfo?.__actionMap ||
+    notification?.__actionMap;
+  log('__actionMap raw', actionMapRaw ?? '(none)');
+
+  let actionMap: Record<string, string> =
+    buildForegroundActionUrlMap(notificationData);
+  log('actionMap from url1/title1/action1…', actionMap);
+
+  if (actionMapRaw) {
+    try {
+      const parsed = JSON.parse(String(actionMapRaw)) as Record<string, string>;
+      if (parsed && typeof parsed === 'object') {
+        actionMap = { ...actionMap, ...parsed };
+        log('actionMap after merge with __actionMap', actionMap);
+      }
+    } catch (e) {
+      log('JSON.parse(__actionMap) failed', e);
+    }
+  }
+
+  try {
+    const targetUrl = resolveForegroundCtaUrl(
+      String(action),
+      notificationData,
+      actionMap
+    );
+    log('resolveForegroundCtaUrl result', {
+      action: String(action),
+      targetUrl: targetUrl ?? '(null)',
+    });
+
+    try {
+      await trackPushEvent('cta', notificationData, String(action));
+      log('trackPushEvent(cta) finished');
+    } catch (e) {
+      log('trackPushEvent(cta) error (continuing to try open URL)', e);
+    }
+
+    if (targetUrl) {
+      log('calling Linking.openURL', targetUrl);
+      try {
+        const opened = await Linking.openURL(targetUrl);
+        log('Linking.openURL returned', opened);
+      } catch (e) {
+        log('Linking.openURL threw', e);
+      }
+    } else {
+      log('no targetUrl — dump url/title/action fields from data', {
+        url1: notificationData.url1,
+        url2: notificationData.url2,
+        title1: notificationData.title1,
+        title2: notificationData.title2,
+        action1: notificationData.action1,
+        action2: notificationData.action2,
+        actionMapKeys: Object.keys(actionMap),
+      });
+    }
+  } catch (err) {
+    log('handlePushNotificationInteraction CTA block failed', err);
+  }
+
+  log('--- interaction end ---');
+  } catch (fatal) {
+    log('handlePushNotificationInteraction fatal (outer catch)', fatal);
+  }
+}
+
+/**
  * Configure push notifications
  */
 export function configurePushNotifications(): void {
   ensureBackgroundMessageHandlerRegistered();
 
   PushNotification.configure({
-    onNotification: async function (notification: any) {
-      console.log('🔔 LOCAL NOTIFICATION:', notification);
-      const notificationData = (notification?.data ||
-        notification?.userInfo ||
-        {}) as Record<string, any>;
-      await trackPushEvent('opened', notificationData);
-      const action = notification?.action;
-      if (!action) return;
-
-      const actionMapRaw =
-        notification?.data?.__actionMap ||
-        notification?.userInfo?.__actionMap ||
-        notification?.__actionMap;
-      if (!actionMapRaw) return;
-
-      try {
-        const actionMap = JSON.parse(String(actionMapRaw));
-        const targetUrl = actionMap?.[action];
-        await trackPushEvent('cta', notificationData, String(action));
-        if (typeof targetUrl === 'string' && targetUrl.trim()) {
-          console.log(`🔗 Opening action URL for "${action}":`, targetUrl);
-          await Linking.openURL(targetUrl.trim());
-        }
-      } catch (err) {
-        console.warn('⚠️ Failed to handle notification action URL:', err);
-      }
-    },
+    onNotification: handlePushNotificationInteraction,
+    // Android: action buttons use `notificationActionReceived` → must set `onAction`
+    // and use `invokeApp: false` on the local notification when actions exist.
+    onAction:
+      Platform.OS === 'android' ? handlePushNotificationInteraction : undefined,
     popInitialNotification: true,
     requestPermissions: false,
   });
@@ -578,17 +779,12 @@ export function setupForegroundNotificationListener(): () => void {
 
     if (actionPairs.length > 0) {
       const actionTitles = actionPairs.map((item) => item.title as string);
-      const actionMap = actionPairs.reduce(
-        (acc, item) => {
-          acc[item.title as string] = item.url as string;
-          return acc;
-        },
-        {} as Record<string, string>
-      );
+      const actionMap = buildForegroundActionUrlMap(data);
       const actionMapJson = JSON.stringify(actionMap);
 
       localNotif.actions = actionTitles;
-      localNotif.invokeApp = true;
+      // Android: see `handlePushNotificationInteraction` — `invokeApp: true` prevents action delivery to JS.
+      localNotif.invokeApp = Platform.OS === 'android' ? false : true;
       localNotif.__actionMap = actionMapJson;
       localNotif.userInfo = {
         ...(localNotif.userInfo || {}),
@@ -598,6 +794,16 @@ export function setupForegroundNotificationListener(): () => void {
         ...(data as Record<string, string>),
         __actionMap: actionMapJson,
       };
+      try {
+        pushCtaLog('foreground local notification with CTAs', {
+          invokeApp: localNotif.invokeApp,
+          actions: actionTitles,
+          pairs: actionPairs.map((p) => ({ title: p.title, url: p.url })),
+          actionMapJson,
+        });
+      } catch (e) {
+        pushCtaLog('log foreground CTA payload failed', e);
+      }
     }
 
     if (image) {
