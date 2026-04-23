@@ -148,15 +148,96 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     completionHandler()
   }
 
+  /// Flatten `userInfo` plus optional nested `data` (string JSON or dict) so CTAs match Android / `Fb.ts`.
+  private func mergedNotificationFields(_ userInfo: [AnyHashable: Any]) -> [String: Any] {
+    var merged: [String: Any] = [:]
+    for (k, v) in userInfo {
+      merged[String(describing: k)] = v
+    }
+    if let dataDict = userInfo["data"] as? [AnyHashable: Any] {
+      for (k, v) in dataDict {
+        merged[String(describing: k)] = v
+      }
+    } else if let dataStr = userInfo["data"] as? String,
+              let d = dataStr.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+      for (k, v) in obj { merged[k] = v }
+    }
+    return merged
+  }
+
+  private func stringFromAny(_ value: Any?) -> String? {
+    guard let value else { return nil }
+    if let s = value as? String { return s }
+    if let s = value as? NSString { return s as String }
+    if let n = value as? NSNumber { return n.stringValue }
+    return nil
+  }
+
+  /// Same URL keys as `parseCtaButtonsJson` in `Fb.ts`.
+  private func urlStringFromButtonDict(_ button: [String: Any]) -> String? {
+    let urlKeys = [
+      "url", "link", "href", "deepLink", "deeplink",
+      "targetUrl", "target_url", "action_url", "cta_url"
+    ]
+    for key in urlKeys {
+      if let s = stringFromAny(button[key])?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty {
+        return s
+      }
+    }
+    return nil
+  }
+
+  private func parseCtaButtonsArray(_ raw: Any?) -> [[String: Any]]? {
+    guard let raw else { return nil }
+    if let arr = raw as? [[String: Any]] { return arr }
+    if let arr = raw as? [Any] {
+      return arr.compactMap { item -> [String: Any]? in
+        if let d = item as? [String: Any] { return d }
+        if let d = item as? [AnyHashable: Any] {
+          var out: [String: Any] = [:]
+          for (k, v) in d {
+            out[String(describing: k)] = v
+          }
+          return out
+        }
+        return nil
+      }
+    }
+    if let s = raw as? String, let data = s.data(using: .utf8),
+       let json = try? JSONSerialization.jsonObject(with: data) {
+      return parseCtaButtonsArray(json)
+    }
+    return nil
+  }
+
+  private func parseActionUrlsMap(_ raw: Any?) -> [String: String]? {
+    guard let raw else { return nil }
+    if let dict = raw as? [String: String] { return dict }
+    if let dict = raw as? [String: Any] {
+      var out: [String: String] = [:]
+      for (k, v) in dict {
+        if let s = stringFromAny(v) { out[k] = s }
+      }
+      return out
+    }
+    if let s = raw as? String, let data = s.data(using: .utf8),
+       let obj = try? JSONSerialization.jsonObject(with: data) {
+      return parseActionUrlsMap(obj)
+    }
+    return nil
+  }
+
   private func urlForAction(_ actionId: String, userInfo: [AnyHashable: Any]) -> URL? {
     // Skip default/dismiss actions
     if actionId == UNNotificationDefaultActionIdentifier || actionId == UNNotificationDismissActionIdentifier {
       return nil
     }
 
-    // Helper to extract string from userInfo (FCM sends all data as strings)
+    let merged = mergedNotificationFields(userInfo)
+
     func str(_ key: String) -> String? {
-      (userInfo[key] as? String) ?? (userInfo[key] as? NSString) as String?
+      stringFromAny(merged[key])
     }
 
     func validUrl(_ raw: String?) -> URL? {
@@ -181,13 +262,23 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
       return nil
     }
 
-    // 1. action_urls - dict or JSON string (FCM sends as string)
-    if let urlsRaw = userInfo["action_urls"] {
-      var urls: [String: String]?
-      if let dict = urlsRaw as? [String: String] { urls = dict }
-      else if let s = urlsRaw as? String, let data = s.data(using: .utf8),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] { urls = dict }
-      if let urls = urls, let url = validUrl(urls[actionId]) { return url }
+    // 0. __actionMap — same idea as foreground local notifications in `Fb.ts`
+    if let mapObj = merged["__actionMap"] {
+      if let map = mapObj as? [String: Any], let url = validUrl(stringFromAny(map[actionId])) {
+        return url
+      }
+      if let mapStr = stringFromAny(mapObj),
+         let data = mapStr.data(using: .utf8),
+         let map = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+         let url = validUrl(stringFromAny(map[actionId])) {
+        return url
+      }
+    }
+
+    // 1. action_urls - dict or JSON string (values may be non-String after JSONSerialization)
+    if let urls = parseActionUrlsMap(merged["action_urls"]),
+       let url = validUrl(urls[actionId]) {
+      return url
     }
 
     // 2. Category-specific keys
@@ -198,22 +289,27 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     if actionId.hasSuffix("_MID"),
        let url = validUrl(str("url_mid") ?? str("url_maybe") ?? str("url_action_2")) { return url }
 
-    // 3. cta_buttons - array or JSON string
-    if let buttonsRaw = userInfo["cta_buttons"] {
-      var buttons: [[String: Any]]?
-      if let arr = buttonsRaw as? [[String: Any]] { buttons = arr }
-      else if let s = buttonsRaw as? String, let data = s.data(using: .utf8),
-              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] { buttons = arr }
-      if let buttons = buttons {
-        if let index = actionIndex(actionId), buttons.indices.contains(index) {
-          let button = buttons[index]
-          if let url = validUrl((button["url"] as? String) ?? ((button["url"] as? NSString) as String?)) {
-            return url
-          }
-        }
-        for btn in buttons {
-          if (btn["id"] as? String) == actionId,
-             let url = validUrl((btn["url"] as? String) ?? ((btn["url"] as? NSString) as String?)) { return url }
+    // 3. cta_buttons — match `Fb.ts` url key variants (link, href, …), not only `url`
+    if let buttons = parseCtaButtonsArray(merged["cta_buttons"]) {
+      if let index = actionIndex(actionId), buttons.indices.contains(index) {
+        if let s = urlStringFromButtonDict(buttons[index]), let url = validUrl(s) { return url }
+      }
+      for btn in buttons {
+        let bid = stringFromAny(btn["id"])
+        if bid == actionId, let s = urlStringFromButtonDict(btn), let url = validUrl(s) { return url }
+      }
+    }
+
+    // 3b. Indexed url1/url2… (templates used with `resolveForegroundCtaUrl` on JS)
+    if let index = actionIndex(actionId) {
+      let keysByIndex = [
+        ["url1", "cta1_url", "button1_url"],
+        ["url2", "cta2_url", "button2_url"],
+        ["url3", "cta3_url", "button3_url"]
+      ]
+      if keysByIndex.indices.contains(index) {
+        for key in keysByIndex[index] {
+          if let url = validUrl(str(key)) { return url }
         }
       }
     }

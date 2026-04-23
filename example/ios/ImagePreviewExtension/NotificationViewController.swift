@@ -27,6 +27,7 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
     private var carouselLeadingConstraint: NSLayoutConstraint?
     private var carouselTrailingConstraint: NSLayoutConstraint?
     private var carouselTopConstraint: NSLayoutConstraint?
+    private var carouselHeightConstraint: NSLayoutConstraint?
 
     private let styledTitleKeys = ["name", "template_name", "styled_name", "styled_title", "title"]
     private let styledBodyKeys = ["message", "styled_message", "styled_body", "body", "description"]
@@ -73,26 +74,30 @@ override func viewDidLayoutSubviews() {
         buildCarouselScrollContent()
     }
 
-    let hPadding: CGFloat = isCarouselEnabled ? 16 : 0
-    let spacingAboveCarousel: CGFloat = images.isEmpty ? 0 : (hPadding > 0 ? 16 : 20)
-    let carouselAspect: CGFloat = 0.7
-    let carouselWidth = view.bounds.width - hPadding * 2
-    let carouselHeight: CGFloat = images.isEmpty ? 0 : (carouselWidth * carouselAspect)
-    let logoHeight = logoImageView.bounds.height
-    let titleHeight = titleLabel.intrinsicContentSize.height
-    let titleBlockHeight = max(logoHeight, titleHeight) + 10
-    let bodyHeight = textLabel.isHidden ? 0 : textLabel.intrinsicContentSize.height + 6
-    let pageControlHeight: CGFloat = 0 // overlapped with carousel
-    let totalHeight =
-        16 // top padding
-        + titleBlockHeight
-        + bodyHeight
-        + spacingAboveCarousel
-        + carouselHeight
-        + pageControlHeight
-        + 16 // bottom padding
+    view.layoutIfNeeded()
 
-    preferredContentSize = CGSize(width: view.bounds.width, height: totalHeight)
+    let width = max(view.bounds.width, 1)
+    let height: CGFloat
+    if !images.isEmpty, carouselView.superview != nil, carouselView.bounds.width > 0 {
+        // Use the real laid-out bottom edge; round down to avoid a sub-pixel strip below the media.
+        let carouselBottomInView = containerView.convert(
+            CGPoint(x: 0, y: carouselView.frame.maxY),
+            to: view
+        ).y
+        height = max(floor(carouselBottomInView * UIScreen.main.scale) / UIScreen.main.scale, 1)
+    } else {
+        let headerBottom = max(
+            logoImageView.frame.maxY,
+            textLabel.isHidden ? titleLabel.frame.maxY : textLabel.frame.maxY
+        )
+        let headerBottomInView = containerView.convert(
+            CGPoint(x: 0, y: headerBottom),
+            to: view
+        ).y
+        height = max(headerBottomInView + 12, 1)
+    }
+
+    preferredContentSize = CGSize(width: width, height: height)
 }
 
 
@@ -211,6 +216,8 @@ if logoImageView.image == nil {
                 self.carouselTrailingConstraint?.constant = -hPadding
                 self.carouselTopConstraint?.constant = hPadding > 0 ? 16 : 20
 
+                self.updateCarouselHeightConstraintForLoadedImages()
+
                 if self.isCarouselEnabled {
                     self.startAutoScroll()
                     self.carouselView.isUserInteractionEnabled = true
@@ -223,9 +230,10 @@ if logoImageView.image == nil {
                 self.view.setNeedsLayout()
                 self.view.layoutIfNeeded()
             } else {
+                self.carouselHeightConstraint = nil
                 self.carouselView.removeFromSuperview()
                 self.pageControl.removeFromSuperview()
-                
+
                 // Layout again to shrink height correctly
                 self.view.setNeedsLayout()
                 self.view.layoutIfNeeded()
@@ -233,6 +241,28 @@ if logoImageView.image == nil {
         }
     }
 }
+
+    /// Replaces the fixed 0.7 height with the image aspect ratio so `scaleAspectFit` does not
+    /// letterbox (dark band) above/below the photo inside the carousel.
+    private func updateCarouselHeightConstraintForLoadedImages() {
+        guard !images.isEmpty, carouselView.superview != nil else { return }
+
+        let ratio: CGFloat
+        if images.count == 1 {
+            let img = images[0]
+            let iw = max(img.size.width, 1)
+            ratio = min(max(img.size.height / iw, 0.28), 1.3)
+        } else {
+            let maxR = images.map { $0.size.height / max($0.size.width, 1) }.max() ?? 0.7
+            ratio = min(max(maxR, 0.34), 0.95)
+        }
+
+        carouselHeightConstraint?.isActive = false
+        let next = carouselView.heightAnchor.constraint(equalTo: carouselView.widthAnchor, multiplier: ratio)
+        next.priority = .required
+        next.isActive = true
+        carouselHeightConstraint = next
+    }
 
     // ---------------------------------------------------------
     // MARK: - Build Carousel Scroll (partial peek)
@@ -365,9 +395,12 @@ if logoImageView.image == nil {
         carouselTrailingConstraint = trailing
         carouselTopConstraint = top
         
+        let heightC = carouselView.heightAnchor.constraint(equalTo: carouselView.widthAnchor, multiplier: 0.7)
+        carouselHeightConstraint = heightC
+
         NSLayoutConstraint.activate([
             leading, trailing, top,
-            carouselView.heightAnchor.constraint(equalTo: carouselView.widthAnchor, multiplier: 0.7),
+            heightC,
 
             carouselScrollView.leadingAnchor.constraint(equalTo: carouselView.leadingAnchor),
             carouselScrollView.trailingAnchor.constraint(equalTo: carouselView.trailingAnchor),
@@ -483,9 +516,91 @@ if logoImageView.image == nil {
         }
     }
 
+    private func mergedNotificationFields(_ userInfo: [AnyHashable: Any]) -> [String: Any] {
+        var merged: [String: Any] = [:]
+        for (k, v) in userInfo {
+            merged[String(describing: k)] = v
+        }
+        if let dataDict = userInfo["data"] as? [AnyHashable: Any] {
+            for (k, v) in dataDict {
+                merged[String(describing: k)] = v
+            }
+        } else if let dataStr = userInfo["data"] as? String,
+                  let d = dataStr.data(using: .utf8),
+                  let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+            for (k, v) in obj { merged[k] = v }
+        }
+        return merged
+    }
+
+    private func stringFromAny(_ value: Any?) -> String? {
+        guard let value else { return nil }
+        if let s = value as? String { return s }
+        if let s = value as? NSString { return s as String }
+        if let n = value as? NSNumber { return n.stringValue }
+        return nil
+    }
+
+    private func urlStringFromButtonDict(_ button: [String: Any]) -> String? {
+        let urlKeys = [
+            "url", "link", "href", "deepLink", "deeplink",
+            "targetUrl", "target_url", "action_url", "cta_url"
+        ]
+        for key in urlKeys {
+            if let s = stringFromAny(button[key])?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty {
+                return s
+            }
+        }
+        return nil
+    }
+
+    private func parseCtaButtonsArray(_ raw: Any?) -> [[String: Any]]? {
+        guard let raw else { return nil }
+        if let arr = raw as? [[String: Any]] { return arr }
+        if let arr = raw as? [Any] {
+            return arr.compactMap { item -> [String: Any]? in
+                if let d = item as? [String: Any] { return d }
+                if let d = item as? [AnyHashable: Any] {
+                    var out: [String: Any] = [:]
+                    for (k, v) in d {
+                        out[String(describing: k)] = v
+                    }
+                    return out
+                }
+                return nil
+            }
+        }
+        if let s = raw as? String, let data = s.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) {
+            return parseCtaButtonsArray(json)
+        }
+        return nil
+    }
+
+    private func parseActionUrlsMap(_ raw: Any?) -> [String: String]? {
+        guard let raw else { return nil }
+        if let dict = raw as? [String: String] { return dict }
+        if let dict = raw as? [String: Any] {
+            var out: [String: String] = [:]
+            for (k, v) in dict {
+                if let s = stringFromAny(v) { out[k] = s }
+            }
+            return out
+        }
+        if let s = raw as? String, let data = s.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data) {
+            return parseActionUrlsMap(obj)
+        }
+        return nil
+    }
+
     private func urlForAction(_ actionId: String, userInfo: [AnyHashable: Any]) -> URL? {
         if actionId == UNNotificationDefaultActionIdentifier || actionId == UNNotificationDismissActionIdentifier { return nil }
-        func str(_ key: String) -> String? { (userInfo[key] as? String) ?? (userInfo[key] as? NSString) as String? }
+
+        let merged = mergedNotificationFields(userInfo)
+
+        func str(_ key: String) -> String? { stringFromAny(merged[key]) }
+
         func validUrl(_ raw: String?) -> URL? {
             guard let raw else { return nil }
             let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -507,12 +622,16 @@ if logoImageView.image == nil {
             return nil
         }
 
-        if let urlsRaw = userInfo["action_urls"] {
-            var urls: [String: String]?
-            if let dict = urlsRaw as? [String: String] { urls = dict }
-            else if let s = urlsRaw as? String, let data = s.data(using: .utf8),
-                    let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] { urls = dict }
-            if let urls = urls, let url = validUrl(urls[actionId]) { return url }
+        if let mapStr = stringFromAny(merged["__actionMap"]),
+           let data = mapStr.data(using: .utf8),
+           let map = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let url = validUrl(stringFromAny(map[actionId])) {
+            return url
+        }
+
+        if let urls = parseActionUrlsMap(merged["action_urls"]),
+           let url = validUrl(urls[actionId]) {
+            return url
         }
         if actionId == "PUSHAPP_OPT_IN", let url = validUrl(str("url_opt_in")) { return url }
         if actionId == "PUSHAPP_NOT_INTERESTED", let url = validUrl(str("url_not_interested")) { return url }
@@ -520,21 +639,24 @@ if logoImageView.image == nil {
         if actionId == "PUSHAPP_NO", let url = validUrl(str("url_no") ?? str("url_not_interested")) { return url }
         if actionId.hasSuffix("_MID"),
            let url = validUrl(str("url_mid") ?? str("url_maybe") ?? str("url_action_2")) { return url }
-        if let buttonsRaw = userInfo["cta_buttons"] {
-            var buttons: [[String: Any]]?
-            if let arr = buttonsRaw as? [[String: Any]] { buttons = arr }
-            else if let s = buttonsRaw as? String, let data = s.data(using: .utf8),
-                    let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] { buttons = arr }
-            if let buttons = buttons {
-                if let index = actionIndex(actionId), buttons.indices.contains(index) {
-                    let button = buttons[index]
-                    if let url = validUrl((button["url"] as? String) ?? ((button["url"] as? NSString) as String?)) {
-                        return url
-                    }
-                }
-                for btn in buttons {
-                    if (btn["id"] as? String) == actionId,
-                       let url = validUrl((btn["url"] as? String) ?? ((btn["url"] as? NSString) as String?)) { return url }
+        if let buttons = parseCtaButtonsArray(merged["cta_buttons"]) {
+            if let index = actionIndex(actionId), buttons.indices.contains(index) {
+                if let s = urlStringFromButtonDict(buttons[index]), let url = validUrl(s) { return url }
+            }
+            for btn in buttons {
+                let bid = stringFromAny(btn["id"])
+                if bid == actionId, let s = urlStringFromButtonDict(btn), let url = validUrl(s) { return url }
+            }
+        }
+        if let index = actionIndex(actionId) {
+            let keysByIndex = [
+                ["url1", "cta1_url", "button1_url"],
+                ["url2", "cta2_url", "button2_url"],
+                ["url3", "cta3_url", "button3_url"]
+            ]
+            if keysByIndex.indices.contains(index) {
+                for key in keysByIndex[index] {
+                    if let url = validUrl(str(key)) { return url }
                 }
             }
         }

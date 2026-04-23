@@ -19,14 +19,25 @@ object NotificationPayloadUtils {
         "progressColorHex"
     )
 
+    /**
+     * Picks a single image URL from [image], [imageUrl], [image_url].
+     * If more than one is set (e.g. bulk sends a placeholder in [image] and the real URL in [image_url]),
+     * the first value that looks like an http(s) URL wins; otherwise the first non-empty in key order.
+     */
     fun resolveSingleImageUrl(data: Map<String, String>): String {
-        for (key in singleImageKeys) {
-            val value = data[key]?.trim()
-            if (!value.isNullOrEmpty()) {
-                return value
-            }
+        val ordered = singleImageKeys.mapNotNull { key ->
+            data[key]?.trim()?.takeIf { it.isNotEmpty() }
         }
-        return ""
+        if (ordered.isEmpty()) return ""
+        return ordered.firstOrNull { looksLikeHttpImageUrl(it) } ?: ordered.first()
+    }
+
+    private fun looksLikeHttpImageUrl(s: String): Boolean {
+        val t = s.trim()
+        if (t.isEmpty()) return false
+        val u = if (t.startsWith("@")) t.substring(1).trim() else t
+        return u.startsWith("http://", ignoreCase = true) ||
+            u.startsWith("https://", ignoreCase = true)
     }
 
     fun extractImageList(data: Map<String, String>): List<String> {

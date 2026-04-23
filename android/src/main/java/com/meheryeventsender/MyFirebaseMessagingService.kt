@@ -8,16 +8,38 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
-import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService
 
-
-class MyFirebaseMessagingService : FirebaseMessagingService() {
+/**
+ * Extends [ReactNativeFirebaseMessagingService] and removes the extra default RNFB service
+ * (see [android/src/main/AndroidManifest.xml] tools:node=remove) so a single
+ * MESSAGING_EVENT handler runs. The stock RN service had an empty onMessageReceived, which
+ * could "win" manifest merge and prevent this class from ever handling data messages in background.
+ */
+class MyFirebaseMessagingService : ReactNativeFirebaseMessagingService() {
     private val TAG = "MyFirebaseMessagingService"
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
-        Log.d(TAG, "From: ${remoteMessage.from}")
+        // Must run first: RN Firebase wires foreground `messaging().onMessage` and related JS
+        // delivery through the parent implementation.
+        super.onMessageReceived(remoteMessage)
+        Log.i(
+            TAG,
+            "Mehery FCM: onMessageReceived messageId=${remoteMessage.messageId} " +
+                "dataKeyCount=${remoteMessage.data.size} " +
+                "hasNotificationBlock=${remoteMessage.notification != null}"
+        )
+        logFcmSnapshot(remoteMessage, phase = "raw")
         val data = remoteMessage.data.toMutableMap()
+        if (remoteMessage.notification != null && remoteMessage.data.isEmpty()) {
+            Log.w(
+                TAG,
+                "FCM: notification-only (empty data) — Android often skips onMessageReceived when " +
+                    "backgrounded, so this SDK cannot attach image/actions; send a data map (Android " +
+                    "data-only or notification+data) for Mehery native handling."
+            )
+        }
 
         // Merge notification payload into data fallback keys for mixed payload compatibility.
         remoteMessage.notification?.title?.let {
@@ -32,30 +54,104 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             }
         }
 
-        if (data.isEmpty()) return
-        Log.d(TAG, "Message data payload: $data")
+        if (data.isEmpty()) {
+            Log.w(TAG, "FCM: merged data empty after notification merge; nothing to display")
+            return
+        }
+        logResolvedPayloadAndHandler(data)
 
         // Foreground: RN Firebase delivers to JS `onMessage`, which shows the notification.
         // Posting here too caused duplicates. When only RN runs (no native delivery), skipping
         // here alone would show nothing — so JS must remain the foreground path on Android.
         if (isAppInForeground()) {
-            Log.d(TAG, "App in foreground; skip native notify (handled in JS)")
+            Log.i(TAG, "App in foreground; skip native notify (handled in JS)")
             return
         }
 
         try {
             if (data.containsKey("message1") && data.containsKey("message2") && data.containsKey("message3")) {
+                Log.i(TAG, "Native handler: live activity (message1/2/3)")
                 handleLiveActivityNotification(data)
-            } else if (NotificationPayloadUtils.shouldUseBigPictureStyle(data)) {
+            } else if (NotificationPayloadUtils.extractImageList(data).size > 1) {
+                Log.i(TAG, "Native handler: rich media (multi-image carousel)")
+                handleRichMediaNotification(data)
+            } else if (
+                NotificationPayloadUtils.shouldUseBigPictureStyle(data) ||
+                NotificationPayloadUtils.resolveSingleImageUrl(data).isNotBlank()
+            ) {
+                val reason =
+                    if (NotificationPayloadUtils.shouldUseBigPictureStyle(data)) "standard"
+                    else "single image fallback (template keys present)"
+                Log.i(TAG, "Native handler: big picture ($reason)")
                 handleBigPictureNotification(data)
             } else if (NotificationPayloadUtils.hasAnyImage(data)) {
+                Log.i(TAG, "Native handler: rich media / custom layout (image list without single URL)")
                 handleRichMediaNotification(data)
             } else {
+                Log.i(TAG, "Native handler: simple (no image in data)")
                 handleSimpleNotification(data)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error handling FCM message", e)
         }
+    }
+
+    override fun onNewToken(token: String) {
+        super.onNewToken(token)
+        // Confirms the merged manifest uses this service class (token refresh path).
+        Log.i(TAG, "Mehery FCM: onNewToken (service active, token length=${token.length})")
+    }
+
+    /** See README: `adb logcat -s MyFirebaseMessagingService:I` (zsh: quote *:S if using the silence-all form). */
+    private fun logFcmSnapshot(remoteMessage: RemoteMessage, phase: String) {
+        val n = remoteMessage.notification
+        Log.i(
+            TAG,
+            "FCM[$phase] id=${remoteMessage.messageId} from=${remoteMessage.from} " +
+                "sentTime=${remoteMessage.sentTime} " +
+                "hasNotificationBlock=${n != null} priority=${remoteMessage.priority} " +
+                "origPriority=${remoteMessage.originalPriority}"
+        )
+        if (n != null) {
+            Log.i(
+                TAG,
+                "FCM[$phase] notification.title=${truncateForLog(n.title)} " +
+                    "body=${truncateForLog(n.body)} " +
+                    "imageUrl=${n.imageUrl} channelId=${n.channelId} " +
+                    "icon=${n.icon} tag=${n.tag} clickAction=${n.clickAction}"
+            )
+        }
+        val map = remoteMessage.data
+        if (map.isEmpty()) {
+            Log.i(TAG, "FCM[$phase] data: (empty map)")
+        } else {
+            Log.i(TAG, "FCM[$phase] data (${map.size} keys) — per-key on next lines")
+            for (key in map.keys.sorted()) {
+                Log.i(TAG, "FCM[$phase]   [$key] = ${truncateForLog(map[key] ?: "")}")
+            }
+        }
+    }
+
+    private fun logResolvedPayloadAndHandler(data: Map<String, String>) {
+        val imageUrl = NotificationPayloadUtils.resolveSingleImageUrl(data)
+        val ctaCount = NotificationCtaUtils.extractCtaSpecs(data).size
+        val useBig = NotificationPayloadUtils.shouldUseBigPictureStyle(data)
+        val hasImage = NotificationPayloadUtils.hasAnyImage(data)
+        Log.i(
+            TAG,
+            "FCM[merged] resolveSingleImageUrl=${truncateForLog(imageUrl)} " +
+                "ctaCount=$ctaCount shouldUseBigPicture=$useBig hasAnyImage=$hasImage"
+        )
+        Log.i(TAG, "FCM[merged] data (${data.size} keys) after notification merge")
+        for (key in data.keys.sorted()) {
+            Log.i(TAG, "FCM[merged]   [$key] = ${truncateForLog(data[key] ?: "")}")
+        }
+    }
+
+    private fun truncateForLog(s: String?, max: Int = 2000): String {
+        if (s.isNullOrEmpty()) return ""
+        if (s.length <= max) return s
+        return s.substring(0, max) + "…(+" + (s.length - max) + " chars)"
     }
 
     private fun isAppInForeground(): Boolean {
@@ -247,17 +343,23 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         NotificationCtaUtils.appendCtaActions(this, builder, data)
 
         if (imageUrl.isNotBlank()) {
+            // Text-only first so a slow/failed image download still shows title/body (better on strict OEMs).
+            notificationManager.notify(notificationId, builder.build())
             val customService = CustomNotificationService(this)
             customService.downloadImage(imageUrl) { bitmap ->
-                val finalBuilder = if (bitmap != null) {
-                    builder.setStyle(
-                        NotificationCompat.BigPictureStyle()
-                            .bigPicture(bitmap)
-                            .bigLargeIcon(null as android.graphics.Bitmap?)
-                    )
+                // Same id as first post: onlyAlertOnce suppresses a second sound when this update posts.
+                val finalBuilder = (if (bitmap != null) {
+                    // Large icon improves collapsed/preview on many devices (e.g. Samsung, MIUI).
+                    builder
+                        .setLargeIcon(bitmap)
+                        .setStyle(
+                            NotificationCompat.BigPictureStyle()
+                                .bigPicture(bitmap)
+                                .bigLargeIcon(null as android.graphics.Bitmap?)
+                        )
                 } else {
                     builder
-                }
+                }).setOnlyAlertOnce(true)
                 notificationManager.notify(notificationId, finalBuilder.build())
                 sendReceivedTracking(data)
             }

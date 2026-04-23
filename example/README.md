@@ -86,6 +86,8 @@ You've successfully run and modified your React Native App. :partying_face:
 
 If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
 
+**Android: `No connected devices` / `installDebug` failed** — The build can succeed and still fail at install if nothing is available to `adb`. Do one of: start an emulator (Device Manager in Android Studio, then `adb devices` should list `emulator-5554` or similar), or connect a phone with USB debugging and accept the device (`adb devices` must show `device`, not `offline`). You can also run `yarn android --deviceId <id>` with multiple devices. For environment checks, use `npx react-native doctor`.
+
 # Learn More
 
 To learn more about React Native, take a look at the following resources:

@@ -6,7 +6,6 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application>
-
         <!--
           react-native-push-notification does not ship this in its merged manifest.
           Without it, notification action buttons never fire (taps appear to do nothing).

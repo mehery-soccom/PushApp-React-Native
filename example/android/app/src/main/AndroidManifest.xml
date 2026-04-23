@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
@@ -14,6 +15,13 @@
       android:allowBackup="false"
       android:theme="@style/AppTheme"
       android:supportsRtl="true">
+
+        <!-- Only one Firebase MESSAGING_EVENT service. RNFB registers a no-op onMessageReceived;
+             com.meheryeventsender.MyFirebaseMessagingService extends it with rich notifications. -->
+        <service
+            android:name="io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService"
+            android:exported="false"
+            tools:node="remove" />
 
         <meta-data
             android:name="com.dieam.reactnativepushnotification.notification_foreground"

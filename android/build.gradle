@@ -106,6 +106,12 @@ def kotlin_version = getExtOrDefault("kotlinVersion")
 dependencies {
   implementation "com.facebook.react:react-android:0.80.0"
   implementation 'com.google.firebase:firebase-messaging:24.0.0'
+  // Subclass [ReactNativeFirebaseMessagingService] — only available when the host app autolinks RNFB messaging
+  def rnfb = rootProject.findProject(':react-native-firebase_messaging') ?:
+    rootProject.findProject(':@react-native-firebase_messaging')
+  if (rnfb != null) {
+    implementation rnfb
+  }
 
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
 

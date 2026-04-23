@@ -1,14 +1,9 @@
 import { AppRegistry } from 'react-native';
-import messaging from '@react-native-firebase/messaging';
+import { registerFcmBackgroundHandler } from 'react-native-mehery-event-sender';
 import App from './src/App';
 import { name as appName } from './app.json';
 
-messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-  // Keep RN background bridge alive for analytics/event hooks.
-  console.log(
-    '📨 Background FCM message received in example app:',
-    remoteMessage?.messageId || 'unknown'
-  );
-});
+// As early as possible (before AppRegistry) so FCM data messages get the same logging as foreground.
+registerFcmBackgroundHandler();
 
 AppRegistry.registerComponent(appName, () => App);

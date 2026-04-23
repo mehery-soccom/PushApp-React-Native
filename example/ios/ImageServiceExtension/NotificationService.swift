@@ -20,7 +20,8 @@ class NotificationService: UNNotificationServiceExtension {
             return
         }
 
-        let userInfo = request.content.userInfo
+        let rawUserInfo = request.content.userInfo
+        let mergedUserInfo = mergedUserInfoForMediaKeys(rawUserInfo)
 
         // Do not add `logo` as a UNNotificationAttachment. iOS uses the first
         // attachment as the large "hero" media slot; a small logo (or one that
@@ -28,21 +29,44 @@ class NotificationService: UNNotificationServiceExtension {
         // band above the real image. ImagePreviewExtension already reads `logo`
         // from userInfo / bundled assets and skips an attachment with id "logo".
         processImages(
-            userInfo: userInfo,
+            rawUserInfo: rawUserInfo,
+            mergedUserInfo: mergedUserInfo,
             content: content,
             contentHandler: contentHandler
         )
+    }
+
+    /// FCM / backends often nest custom keys under `data` (dict or JSON string).
+    /// Match `mergedNotificationFields` in `AppDelegate` so image URLs resolve the same way as CTA URLs.
+    private func mergedUserInfoForMediaKeys(_ userInfo: [AnyHashable: Any]) -> [AnyHashable: Any] {
+        var merged: [AnyHashable: Any] = [:]
+        for (k, v) in userInfo {
+            merged[k] = v
+        }
+        if let dataDict = userInfo["data"] as? [AnyHashable: Any] {
+            for (k, v) in dataDict {
+                merged[k] = v
+            }
+        } else if let dataStr = userInfo["data"] as? String,
+                  let d = dataStr.data(using: .utf8),
+                  let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+            for (k, v) in obj {
+                merged[AnyHashable(k)] = v
+            }
+        }
+        return merged
     }
 
     // ---------------------------------------------------------
     // MARK: - Image Processing
     // ---------------------------------------------------------
     private func processImages(
-        userInfo: [AnyHashable: Any],
+        rawUserInfo: [AnyHashable: Any],
+        mergedUserInfo: [AnyHashable: Any],
         content: UNMutableNotificationContent,
         contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
-        var imageUrls = extractImageUrls(from: userInfo)
+        var imageUrls = extractImageUrls(from: mergedUserInfo)
 
         // 🔥 sanitize dashboard garbage ("", "   ")
         imageUrls = imageUrls
@@ -57,7 +81,8 @@ class NotificationService: UNNotificationServiceExtension {
 
         // 🔥 IMPORTANT: persist full array for Content Extension
         persistMediaUrlsIfNeeded(
-            originalUserInfo: userInfo,
+            rawUserInfo: rawUserInfo,
+            mergedUserInfo: mergedUserInfo,
             imageUrls: imageUrls,
             content: content
         )
@@ -191,16 +216,22 @@ class NotificationService: UNNotificationServiceExtension {
     }
   
   private func persistMediaUrlsIfNeeded(
-      originalUserInfo: [AnyHashable: Any],
+      rawUserInfo: [AnyHashable: Any],
+      mergedUserInfo: [AnyHashable: Any],
       imageUrls: [String],
       content: UNMutableNotificationContent
   ) {
-      var updatedUserInfo = content.userInfo
+      // Start from raw APNs userInfo, then overlay merged keys so extensions
+      // see the same flattened `image` / list keys as used for extraction.
+      var updatedUserInfo: [AnyHashable: Any] = [:]
+      for (k, v) in rawUserInfo {
+          updatedUserInfo[k] = v
+      }
+      for (k, v) in mergedUserInfo {
+          updatedUserInfo[k] = v
+      }
 
-      // Always persist full array for Content Extension
       updatedUserInfo["media-url"] = imageUrls
-
-      // Optional: normalize key for safety
       updatedUserInfo["images"] = imageUrls
 
       content.userInfo = updatedUserInfo
@@ -241,7 +272,7 @@ class NotificationService: UNNotificationServiceExtension {
         config.timeoutIntervalForResource = 12
 
         let task = URLSession(configuration: config)
-            .downloadTask(with: url) { location, _, error in
+            .downloadTask(with: url) { location, response, error in
 
                 guard error == nil, let location = location else {
                     completion(nil)
@@ -249,8 +280,9 @@ class NotificationService: UNNotificationServiceExtension {
                 }
 
                 let tempDir = NSTemporaryDirectory()
+                let ext = Self.fileExtension(for: response, fallbackURL: url)
                 let fileUrl = URL(fileURLWithPath: tempDir)
-                    .appendingPathComponent("img_\(UUID().uuidString).jpg")
+                    .appendingPathComponent("img_\(UUID().uuidString)\(ext)")
 
                 do {
                     try FileManager.default.moveItem(at: location, to: fileUrl)
@@ -261,6 +293,21 @@ class NotificationService: UNNotificationServiceExtension {
             }
 
         task.resume()
+    }
+
+    private static func fileExtension(for response: URLResponse?, fallbackURL: URL) -> String {
+        if let mime = (response as? HTTPURLResponse)?.mimeType?.lowercased() {
+            if mime.contains("jpeg") || mime.contains("jpg") { return ".jpg" }
+            if mime.contains("png") { return ".png" }
+            if mime.contains("gif") { return ".gif" }
+            if mime.contains("webp") { return ".webp" }
+        }
+        let pathExt = fallbackURL.pathExtension.lowercased()
+        switch pathExt {
+        case "jpg", "jpeg": return ".jpg"
+        case "png", "gif", "webp": return ".\(pathExt)"
+        default: return ".jpg"
+        }
     }
 
     // ---------------------------------------------------------

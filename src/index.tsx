@@ -48,6 +48,7 @@ import { registerDeviceWithAPNS } from './firebase/IosAPNS';
 import { PollOverlayProvider } from './components/PollOverlay';
 
 export { TooltipPollContainer } from './components/TooltipPollContainer';
+export { registerFcmBackgroundHandler } from './firebase/Fb';
 
 import { buildCommonHeaders } from './helpers/buildCommonHeaders';
 import {

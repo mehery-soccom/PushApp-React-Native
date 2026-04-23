@@ -66,6 +66,36 @@ Make sure your app has notification/network permissions in `AndroidManifest.xml`
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 ```
 
+### 3a) Android: one Firebase messaging service (required for background rich notifications)
+
+`@react-native-firebase/messaging` registers `ReactNativeFirebaseMessagingService` with an empty `onMessageReceived`. This SDK provides `com.meheryeventsender.MyFirebaseMessagingService` (subclass) for BigPicture, CTAs, and rich layout. If **both** services stay in the merged manifest, only one may receive FCM, and you can get **no custom images or action buttons in the background**.
+
+Add `xmlns:tools` on the root `<manifest>` if needed, then inside `<application>` **remove** the default RNFB service so only the Mehery service remains:
+
+```xml
+<service
+    android:name="io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService"
+    android:exported="false"
+    tools:node="remove" />
+```
+
+### 3b) Android: native FCM logs (logcat)
+
+The SDK logs FCM handling at **INFO** from `MyFirebaseMessagingService` (not Debug), so default logcat filters that hide `Log.d` still show them.
+
+```text
+# Quote '*:S' on zsh (otherwise the shell treats * as a glob and errors).
+adb logcat '*:S' 'MyFirebaseMessagingService:I'
+```
+
+Simpler (shows only that tag at Info+; also safe in zsh):
+
+```text
+adb logcat -s MyFirebaseMessagingService:I
+```
+
+If you see **no** lines tagged `MyFirebaseMessagingService` when a push arrives in the background, **`onMessageReceived` did not run** for that delivery. Common causes: a top-level FCM **`notification`** payload while the app is backgrounded (the OS may show a stock notification and not call your service), or a missing **`tools:node="remove"`** so the wrong `FirebaseMessagingService` handles the message. Use **data-only**, high-priority FCM for Android and confirm the manifest step in **3a**. Also look for `Mehery FCM: onNewToken` after install/token refresh; that proves this service class is active.
+
 ### 4) iOS capabilities
 
 In your iOS `Info.plist`, include:
@@ -202,6 +232,16 @@ The `example/ios` project ships with native targets you can use as a starting po
 Mirror the same targets and capabilities in Xcode on your app if you are not using the example workspace directly.
 
 ## Notification payload notes
+
+### Android: FCM data-only for rich background notifications
+
+**Foreground** vs **background** use different code paths. When the app is in the **foreground**, JavaScript (`messaging().onMessage`) can show a local notification with big-picture image and CTA actions from the payload. When the app is in the **background** (or not running), **only** the native `FirebaseMessagingService` (`MyFirebaseMessagingService`) can add BigPicture, custom layouts, and `NotificationCompat` actions.
+
+On Android, Firebase will **not** call `onMessageReceived` for messages that use a top-level FCM **`notification`** block while the app is in the background; the system shows a default tray notification instead, which does not include this SDK’s custom images or action buttons. To get rich background notifications, send **data-only** messages: put everything the app needs (title, body, `image` / `imageUrl` / `image_url`, `cta_buttons` or `title1` / `url1`, etc.) as **string** fields in the FCM `data` map, and set **high priority** for the Android message (FCM HTTP v1: e.g. `android.priority: HIGH`) so delivery is not deferred too long under Doze.
+
+If you need a **`notification`** payload for iOS or other platforms, use **per-platform** FCM overrides (e.g. data-only for Android, `notification` + APNs for iOS). The `setBackgroundMessageHandler` in JS does not replace this: it cannot make `onMessageReceived` run when the system does not deliver the message to your service.
+
+**How to verify:** With the app in the background, send a **data-only** test push, then `adb logcat -s MyFirebaseMessagingService:I` (or `adb logcat '*:S' 'MyFirebaseMessagingService:I'`) — you should see `Mehery FCM: onMessageReceived` and `FCM[raw]` / `FCM[merged]` lines. With a `notification` block, the service often will **not** log in background, and the tray will show a basic system notification. Compare with the same content sent as data-only to confirm images and CTA actions.
 
 ### Android image keys
 

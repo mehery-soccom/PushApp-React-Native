@@ -27,6 +27,8 @@ class CustomNotificationService(private val context: Context) {
         private const val TAG = "CustomNotificationSvc"
         private const val CONNECT_TIMEOUT_MS = 15000
         private const val READ_TIMEOUT_MS = 15000
+        private const val IMAGE_DOWNLOAD_RETRIES = 3
+        private const val MAX_NOTIFICATION_BITMAP_EDGE_PX = 1200
         // Shared process-level cache so CarouselReceiver can access state.
         private val carouselIndexes = mutableMapOf<Int, Int>()
         private val cachedBitmaps = mutableMapOf<Int, List<Bitmap?>>()
@@ -194,6 +196,11 @@ class CustomNotificationService(private val context: Context) {
                     val manager =
                         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     manager.notify(notificationId, builder.build())
+                    Log.i(
+                        TAG,
+                        "Custom notification: bitmap loaded, posted notificationId=$notificationId " +
+                            "richMedia=$isRichMedia"
+                    )
                 }
             }
         }
@@ -357,8 +364,14 @@ class CustomNotificationService(private val context: Context) {
                     conn.disconnect()
                     if (bitmap == null) {
                         Log.w(TAG, "Bitmap decode failed for carousel image: $clean")
+                        results.add(null)
+                    } else {
+                        val limited = limitBitmapSizeForNotification(bitmap)
+                        if (limited !== bitmap) {
+                            bitmap.recycle()
+                        }
+                        results.add(limited)
                     }
-                    results.add(bitmap)
                 } catch (e: Exception) {
                     Log.e(TAG, "Carousel image download failed for $clean", e)
                     results.add(null)
@@ -375,33 +388,64 @@ class CustomNotificationService(private val context: Context) {
     fun downloadImage(urlString: String, onResult: (Bitmap?) -> Unit) {
         Thread {
             var bmp: Bitmap? = null
-            var conn: HttpURLConnection? = null
-            try {
-                val cleanedUrl = sanitizeImageUrl(urlString)
-                val url = URL(cleanedUrl)
-                conn = url.openConnection() as HttpURLConnection
-                conn.doInput = true
-                conn.connectTimeout = CONNECT_TIMEOUT_MS
-                conn.readTimeout = READ_TIMEOUT_MS
-                conn.instanceFollowRedirects = true
-                conn.connect()
-                conn.inputStream.use { input ->
-                    BufferedInputStream(input).use { buffered ->
-                        bmp = BitmapFactory.decodeStream(buffered)
+            for (attempt in 1..IMAGE_DOWNLOAD_RETRIES) {
+                bmp = downloadImageSyncOnce(urlString)
+                if (bmp != null) break
+                if (attempt < IMAGE_DOWNLOAD_RETRIES) {
+                    try {
+                        Thread.sleep(400L * attempt)
+                    } catch (_: InterruptedException) {
+                        break
                     }
                 }
-                conn.disconnect()
-                if (bmp == null) {
-                    Log.w(TAG, "Bitmap decode failed for $cleanedUrl")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Single image download failed for $urlString", e)
-            } finally {
-                conn?.disconnect()
             }
-
-            Handler(Looper.getMainLooper()).post { onResult(bmp) }
+            if (bmp != null) {
+                val limited = limitBitmapSizeForNotification(bmp!!)
+                if (limited !== bmp) {
+                    bmp!!.recycle()
+                }
+                bmp = limited
+            }
+            val out = bmp
+            Handler(Looper.getMainLooper()).post { onResult(out) }
         }.start()
+    }
+
+    private fun downloadImageSyncOnce(urlString: String): Bitmap? {
+        var conn: HttpURLConnection? = null
+        return try {
+            val cleanedUrl = sanitizeImageUrl(urlString)
+            val url = URL(cleanedUrl)
+            conn = url.openConnection() as HttpURLConnection
+            conn.doInput = true
+            conn.connectTimeout = CONNECT_TIMEOUT_MS
+            conn.readTimeout = READ_TIMEOUT_MS
+            conn.instanceFollowRedirects = true
+            conn.connect()
+            val decoded = conn.inputStream.use { input ->
+                BufferedInputStream(input).use { buffered ->
+                    BitmapFactory.decodeStream(buffered)
+                }
+            }
+            if (decoded == null) {
+                Log.w(TAG, "Bitmap decode failed for $cleanedUrl")
+            }
+            decoded
+        } catch (e: Exception) {
+            Log.e(TAG, "Single image download failed for $urlString", e)
+            null
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    private fun limitBitmapSizeForNotification(src: Bitmap): Bitmap {
+        val max = MAX_NOTIFICATION_BITMAP_EDGE_PX
+        if (src.width <= max && src.height <= max) return src
+        val scale = minOf(max.toFloat() / src.width, max.toFloat() / src.height)
+        val w = (src.width * scale).toInt().coerceAtLeast(1)
+        val h = (src.height * scale).toInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(src, w, h, true)
     }
 
     private fun sanitizeImageUrl(urlString: String): String {

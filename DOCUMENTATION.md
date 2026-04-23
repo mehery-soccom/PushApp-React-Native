@@ -87,6 +87,16 @@ Ensure `AndroidManifest.xml` includes these essential permissions:
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 ```
 
+#### **One Firebase MESSAGING_EVENT service (background rich push)**
+React Native Firebase registers `io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService` (no-op `onMessageReceived`). The SDK’s `com.meheryeventsender.MyFirebaseMessagingService` subclasses it. If two `MESSAGING_EVENT` services remain in the final merged manifest, background delivery can hit the wrong one and **images and CTA buttons will not show**. In your **app** `AndroidManifest.xml`, inside `<application>`, add `xmlns:tools` on the manifest element and:
+
+```xml
+<service
+    android:name="io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService"
+    android:exported="false"
+    tools:node="remove" />
+```
+
 ### **2. iOS Setup**
 
 #### **Capabilities & Info.plist**
@@ -213,6 +223,13 @@ The `example/ios` project contains reference implementations for advanced iOS fe
 ---
 
 ## 📝 Technical Reference
+
+### **Android: FCM data-only for rich background notifications**
+
+- **Why foreground can show image + buttons but background does not (same template):** In the **foreground**, React Native `messaging().onMessage` runs and the SDK builds a **local** notification (big-picture, actions) in JS. In the **background**, only native `MyFirebaseMessagingService.onMessageReceived` can attach BigPicture, custom `RemoteViews`, and `addAction` CTAs. That method is **not** invoked for the usual “notification + background app” FCM case when a top-level **`notification`** object is present — Android handles the message in the system tray and your service does not get a chance to customize it.
+- **What to send for Android:** Use **data-only** FCM (all string fields under the `data` map: title, body, image URL, CTA fields per `NotificationCtaUtils` / README). Set **high priority** on the Android message so delivery is reasonable under Doze. Use **platform-specific** FCM if iOS still needs a `notification` or APNs block.
+- **CTAs / images:** See Android notification keys below. Do not rely on `setBackgroundMessageHandler` alone to draw rich Android notifications; the data-only path to `MyFirebaseMessagingService` is the supported one.
+- **Verification (manual / QA):** With app backgrounded, send a data-only test push; filter logcat: `MyFirebaseMessagingService` — you should see `onMessageReceived` and `Message data payload`. Send the same with a FCM `notification` block: service often will not run in background; tray shows a basic system notification. That contrast explains “works in foreground, not in background.”
 
 ### **Android Notification Keys**
 For images in high-priority notifications:

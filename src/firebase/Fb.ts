@@ -27,6 +27,8 @@ let openTrackingUnsubscribe: null | (() => void) = null;
 let backgroundHandlerRegistered = false;
 const seenForegroundMessageIds = new Set<string>();
 const FOREGROUND_MESSAGE_CACHE_LIMIT = 50;
+const seenBackgroundMessageIds = new Set<string>();
+const BACKGROUND_MESSAGE_CACHE_LIMIT = 50;
 
 console.log('💬 Firebase messaging:', messaging);
 console.log('📦 Firebase app exists:', app ? 'Yes' : 'No');
@@ -177,15 +179,30 @@ const MAX_FCM_TOKEN_RETRIES = 4;
 const RETRY_DELAY_MS = 2000;
 const MAX_CAROUSEL_IMAGES = 4;
 
+function looksLikeHttpImageUrl(s: string): boolean {
+  const t = s.trim();
+  if (!t) {
+    return false;
+  }
+  const u = t.startsWith('@') ? t.slice(1).trim() : t;
+  return u.startsWith('http://') || u.startsWith('https://');
+}
+
+/** Prefer http(s) when several keys are set (bulk may send a bad value under `image` and a real URL under `image_url`). */
 function resolveSingleImageFromData(data: Record<string, any>): string | null {
-  const keys = ['image', 'imageUrl', 'image_url'];
+  const keys = ['image', 'imageUrl', 'image_url'] as const;
+  const values: string[] = [];
   for (const key of keys) {
     const value = data?.[key];
     if (typeof value === 'string' && value.trim()) {
-      return value.trim();
+      values.push(value.trim());
     }
   }
-  return null;
+  if (values.length === 0) {
+    return null;
+  }
+  const best = values.find((v) => looksLikeHttpImageUrl(v));
+  return (best ?? values[0]) ?? null;
 }
 
 function resolveImageListFromData(data: Record<string, any>): string[] {
@@ -446,12 +463,89 @@ async function trackPushEvent(
   }
 }
 
+/**
+ * Register the FCM background handler (logging + `trackPushEvent` received). Safe to call from
+ * `index.js` before `AppRegistry` so the handler is installed as early as RN Firebase recommends;
+ * `configurePushNotifications` also calls this (no-op if already registered).
+ */
+export function registerFcmBackgroundHandler(): void {
+  ensureBackgroundMessageHandlerRegistered();
+}
+
 function ensureBackgroundMessageHandlerRegistered(): void {
   if (backgroundHandlerRegistered) return;
   backgroundHandlerRegistered = true;
   messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-    const data = remoteMessage?.data || {};
+    let serialized = '';
+    try {
+      serialized = JSON.stringify(remoteMessage);
+    } catch {
+      try {
+        serialized = JSON.stringify({
+          messageId: remoteMessage?.messageId,
+          from: remoteMessage?.from,
+          data: remoteMessage?.data,
+          notification: remoteMessage?.notification,
+        });
+      } catch {
+        serialized = '(could not serialize remoteMessage)';
+      }
+    }
+    console.log('📨 Background FCM message:', serialized);
+
+    const messageId = remoteMessage?.messageId || '';
+    if (messageId && seenBackgroundMessageIds.has(messageId)) {
+      console.log('⏭️ Duplicate background FCM message ignored:', messageId);
+      const data = remoteMessage.data || {};
+      await trackPushEvent('received', data);
+      return;
+    }
+    if (messageId) {
+      seenBackgroundMessageIds.add(messageId);
+      if (seenBackgroundMessageIds.size > BACKGROUND_MESSAGE_CACHE_LIMIT) {
+        const oldest = seenBackgroundMessageIds.values().next()
+          .value as string | undefined;
+        if (oldest) seenBackgroundMessageIds.delete(oldest);
+      }
+    }
+
+    const data = remoteMessage.data || {};
     await trackPushEvent('received', data);
+
+    const title =
+      remoteMessage.notification?.title || data.title || 'Notification';
+
+    const message =
+      remoteMessage.notification?.body || data.body || 'You have a new message';
+
+    const image =
+      remoteMessage.notification?.android?.imageUrl ||
+      remoteMessage.notification?.image ||
+      resolveSingleImageFromData(data) ||
+      null;
+
+    if (Platform.OS === 'android') {
+      console.log(
+        '📲 Android background: native MyFirebaseMessagingService builds the tray notification; this log matches foreground field resolution (JS runs for data/headless messages).'
+      );
+    }
+    console.log('📲 Displaying local notification:', title, message, image);
+
+    const actionPairs = extractForegroundCtaPairs(data);
+    if (actionPairs.length > 0) {
+      const actionTitles = actionPairs.map((item) => item.title as string);
+      const actionMap = buildForegroundActionUrlMap(data);
+      const actionMapJson = JSON.stringify(actionMap);
+      try {
+        pushCtaLog('background FCM (JS) parsed CTAs — actions shown by native', {
+          actions: actionTitles,
+          pairs: actionPairs.map((p) => ({ title: p.title, url: p.url })),
+          actionMapJson,
+        });
+      } catch (e) {
+        pushCtaLog('log background CTA payload failed', e);
+      }
+    }
   });
 }
 
