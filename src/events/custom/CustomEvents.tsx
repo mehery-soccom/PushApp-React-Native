@@ -61,7 +61,8 @@ function interpolateTemplateString(
 
 // 📌 Sends a custom event, then triggers the poll fetchi
 export async function sendCustomEvent(event_name: string, event_data: object) {
-  const user_id = await AsyncStorage.getItem('user_id');
+  const stored_user_id = await AsyncStorage.getItem('user_id');
+  const user_id = stored_user_id || 'guest';
   const device_id = await AsyncStorage.getItem('device_id');
   console.log('device id:', device_id);
 
@@ -238,10 +239,12 @@ let showingPoll: boolean; // no initial value
 export async function sendPollEvent() {
   const user_id = await AsyncStorage.getItem('user_id');
   const device_id = await AsyncStorage.getItem('device_id');
-  if (!user_id || !device_id) return;
+  if (!device_id) return;
+
+  const final_user_id = user_id || 'guest';
 
   console.log('showing poll:', showingPoll);
-  const payload = { contact_id: `${user_id}_${device_id}` };
+  const payload = { contact_id: `${final_user_id}_${device_id}` };
   const commonHeaders = await buildCommonHeaders();
   const apiBaseUrl = await getApiBaseUrl();
 

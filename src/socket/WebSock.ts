@@ -5,7 +5,8 @@ import { getWsHostUrl } from '../helpers/tenantContext';
 let socket: WebSocket | null = null;
 
 export const connectToServer = async () => {
-  const userID = await AsyncStorage.getItem('user_id');
+  const storedUserID = await AsyncStorage.getItem('user_id');
+  const userID = storedUserID || 'guest';
   const device_id = await AsyncStorage.getItem('device_id');
 
   try {
