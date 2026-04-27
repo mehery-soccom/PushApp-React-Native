@@ -16,6 +16,7 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
     private var autoScrollTimer: Timer?
     private var notification: UNNotification?
     private var carouselNeedsBuild = false
+    private var fallbackImageLoadInProgress = false
 
     // NEW VIEWS (carousel with partial peek)
     private let carouselView = UIView()
@@ -47,8 +48,12 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
 
         titleLabel.textColor = .white
         textLabel.textColor = UIColor(white: 0.88, alpha: 1)
-        titleLabel.numberOfLines = 2
-        textLabel.numberOfLines = 3
+        titleLabel.numberOfLines = 0
+        textLabel.numberOfLines = 0
+        titleLabel.lineBreakMode = .byWordWrapping
+        textLabel.lineBreakMode = .byWordWrapping
+        titleLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+        textLabel.setContentCompressionResistancePriority(.required, for: .vertical)
         textLabel.backgroundColor = .clear
         titleLabel.backgroundColor = .clear
         titleLabel.font = UIFont.systemFont(ofSize: 17, weight: .semibold)
@@ -77,24 +82,32 @@ override func viewDidLayoutSubviews() {
     view.layoutIfNeeded()
 
     let width = max(view.bounds.width, 1)
-    let height: CGFloat
+
+    // Ensure multiline labels have an explicit wrapping width before measuring.
+    let textMaxWidth = max(textLabel.bounds.width, containerView.bounds.width - 64)
+    titleLabel.preferredMaxLayoutWidth = textMaxWidth
+    textLabel.preferredMaxLayoutWidth = textMaxWidth
+    titleLabel.layoutIfNeeded()
+    textLabel.layoutIfNeeded()
+
+    let headerBottom = max(
+        logoImageView.frame.maxY,
+        textLabel.isHidden ? titleLabel.frame.maxY : textLabel.frame.maxY
+    )
+    let headerBottomInView = containerView.convert(
+        CGPoint(x: 0, y: headerBottom),
+        to: view
+    ).y
+
+    var height = max(headerBottomInView + 12, 1)
     if !images.isEmpty, carouselView.superview != nil, carouselView.bounds.width > 0 {
-        // Use the real laid-out bottom edge; round down to avoid a sub-pixel strip below the media.
+        // Include media area when rich attachments are present.
         let carouselBottomInView = containerView.convert(
             CGPoint(x: 0, y: carouselView.frame.maxY),
             to: view
         ).y
-        height = max(floor(carouselBottomInView * UIScreen.main.scale) / UIScreen.main.scale, 1)
-    } else {
-        let headerBottom = max(
-            logoImageView.frame.maxY,
-            textLabel.isHidden ? titleLabel.frame.maxY : textLabel.frame.maxY
-        )
-        let headerBottomInView = containerView.convert(
-            CGPoint(x: 0, y: headerBottom),
-            to: view
-        ).y
-        height = max(headerBottomInView + 12, 1)
+        let mediaBottom = floor(carouselBottomInView * UIScreen.main.scale) / UIScreen.main.scale
+        height = max(height, mediaBottom)
     }
 
     preferredContentSize = CGSize(width: width, height: height)
@@ -230,9 +243,15 @@ if logoImageView.image == nil {
                 self.view.setNeedsLayout()
                 self.view.layoutIfNeeded()
             } else {
-                self.carouselHeightConstraint = nil
-                self.carouselView.removeFromSuperview()
-                self.pageControl.removeFromSuperview()
+                self.loadFallbackImageFromUserInfoIfNeeded(userInfo: userInfo)
+                if self.firstMediaUrl(from: userInfo) != nil {
+                    self.carouselView.isHidden = true
+                    self.pageControl.isHidden = true
+                } else {
+                    self.carouselHeightConstraint = nil
+                    self.carouselView.removeFromSuperview()
+                    self.pageControl.removeFromSuperview()
+                }
 
                 // Layout again to shrink height correctly
                 self.view.setNeedsLayout()
@@ -241,6 +260,76 @@ if logoImageView.image == nil {
         }
     }
 }
+
+    private func loadFallbackImageFromUserInfoIfNeeded(userInfo: [AnyHashable: Any]) {
+        guard images.isEmpty, !fallbackImageLoadInProgress else { return }
+        guard let fallbackUrl = firstMediaUrl(from: userInfo) else { return }
+        fallbackImageLoadInProgress = true
+
+        URLSession.shared.dataTask(with: fallbackUrl) { [weak self] data, _, _ in
+            guard let self = self else { return }
+            defer { self.fallbackImageLoadInProgress = false }
+            guard let data = data, let image = UIImage(data: data) else { return }
+
+            DispatchQueue.main.async {
+                self.images = [image]
+                self.currentIndex = 0
+                self.carouselView.isHidden = false
+                self.pageControl.numberOfPages = 1
+                self.pageControl.currentPage = 0
+                self.pageControl.isHidden = true
+
+                let hPadding: CGFloat = 0
+                self.carouselLeadingConstraint?.constant = hPadding
+                self.carouselTrailingConstraint?.constant = -hPadding
+                self.carouselTopConstraint?.constant = 20
+
+                self.carouselNeedsBuild = true
+                self.updateCarouselHeightConstraintForLoadedImages()
+                self.view.setNeedsLayout()
+                self.view.layoutIfNeeded()
+            }
+        }.resume()
+    }
+
+    private func firstMediaUrl(from userInfo: [AnyHashable: Any]) -> URL? {
+        let keys = ["media-url", "images", "image_urls", "imageUrls", "image_url", "imageUrl", "image"]
+        for key in keys {
+            if let values = stringListValue(for: key, userInfo: userInfo),
+               let first = values.first,
+               let url = URL(string: first) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    private func stringListValue(for key: String, userInfo: [AnyHashable: Any]) -> [String]? {
+        if let values = userInfo[key] as? [String] {
+            return values.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        }
+        if let values = userInfo[key] as? [Any] {
+            let mapped = values.compactMap { value -> String? in
+                if let s = value as? String { return s.trimmingCharacters(in: .whitespacesAndNewlines) }
+                if let s = value as? NSString { return s.trimmingCharacters(in: .whitespacesAndNewlines) }
+                return nil
+            }.filter { !$0.isEmpty }
+            return mapped.isEmpty ? nil : mapped
+        }
+        if let raw = stringValue(for: key, userInfo: userInfo), !raw.isEmpty {
+            if let data = raw.data(using: .utf8),
+               let parsed = try? JSONSerialization.jsonObject(with: data) as? [Any] {
+                let mapped = parsed.compactMap { value -> String? in
+                    if let s = value as? String { return s.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    if let s = value as? NSString { return s.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    return nil
+                }.filter { !$0.isEmpty }
+                if !mapped.isEmpty { return mapped }
+            }
+            return [raw]
+        }
+        return nil
+    }
 
     /// Replaces the fixed 0.7 height with the image aspect ratio so `scaleAspectFit` does not
     /// letterbox (dark band) above/below the photo inside the carousel.

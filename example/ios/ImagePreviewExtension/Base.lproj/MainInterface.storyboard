@@ -18,12 +18,12 @@
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ContainerView">
                                 <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                                 <subviews>
-                                    <label contentMode="left" misplaced="YES" text="Title Text" lineBreakMode="tailTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="TitleLabel">
+                                    <label contentMode="left" misplaced="YES" text="Title Text" lineBreakMode="wordWrap" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="TitleLabel">
                                         <rect key="frame" x="57" y="10" width="398" height="24"/>
                                         <fontDescription key="fontDescription" type="boldSystem" pointSize="18"/>
                                         <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                     </label>
-                                    <label contentMode="left" misplaced="YES" text="Sample Text" lineBreakMode="tailTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="TextLabel">
+                                    <label contentMode="left" misplaced="YES" text="Sample Text" lineBreakMode="wordWrap" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="TextLabel">
                                         <rect key="frame" x="57" y="35" width="398" height="24"/>
                                         <fontDescription key="fontDescription" type="boldSystem" pointSize="18"/>
                                         <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
