@@ -54,6 +54,22 @@ function LoginPage({ onLogin }: { onLogin: (id: string) => void }) {
 
   return (
     <View style={styles.container}>
+      <View style={styles.customEventButtons}>
+        <Button
+          title="Pre-login event 1"
+          onPress={() => {
+            sendCustomEvent('pre_login_button_1', { screen: 'login' });
+          }}
+        />
+        <View style={styles.customEventButtonSpacer} />
+        <Button
+          title="Pre-login event 2"
+          onPress={() => {
+            sendCustomEvent('pre_login_button_2', { screen: 'login' });
+          }}
+        />
+      </View>
+      <View style={styles.preLoginFormSpacer} />
       <Text style={styles.label}>Enter User ID:</Text>
       <TextInput
         style={styles.input}
@@ -256,4 +272,5 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   customEventButtonSpacer: { height: 12 },
+  preLoginFormSpacer: { height: 28 },
 });
