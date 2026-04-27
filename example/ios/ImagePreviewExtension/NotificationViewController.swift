@@ -371,9 +371,9 @@ if logoImageView.image == nil {
         
         for (index, img) in images.enumerated() {
             let iv = UIImageView(image: img)
-            iv.contentMode = .scaleAspectFit
+            iv.contentMode = .scaleAspectFill
             iv.clipsToBounds = true
-            iv.backgroundColor = UIColor(white: 0.08, alpha: 1.0)
+            iv.backgroundColor = .clear
             iv.translatesAutoresizingMaskIntoConstraints = false
             carouselScrollView.addSubview(iv)
             carouselImageViews.append(iv)
@@ -585,23 +585,10 @@ if logoImageView.image == nil {
             animateBackward()
             completion(.doNotDismiss)
 
-        case "PUSHAPP_OPT_IN", "PUSHAPP_NOT_INTERESTED":
-            if let url = urlForAction(actionId, userInfo: userInfo) {
-                extensionContext?.open(url, completionHandler: { _ in 
-                    completion(.dismiss)
-                })
-            } else {
-                completion(.dismissAndForwardAction)
-            }
-
         default:
-            if let url = urlForAction(actionId, userInfo: userInfo) {
-                extensionContext?.open(url, completionHandler: { _ in
-                    completion(.dismiss)
-                })
-            } else {
-                completion(.dismissAndForwardAction)
-            }
+            // Keep URL handling + JS forwarding in AppDelegate for consistent behavior.
+            _ = urlForAction(actionId, userInfo: userInfo)
+            completion(.dismissAndForwardAction)
         }
     }
 
@@ -728,7 +715,8 @@ if logoImageView.image == nil {
         if actionId == "PUSHAPP_NO", let url = validUrl(str("url_no") ?? str("url_not_interested")) { return url }
         if actionId.hasSuffix("_MID"),
            let url = validUrl(str("url_mid") ?? str("url_maybe") ?? str("url_action_2")) { return url }
-        if let buttons = parseCtaButtonsArray(merged["cta_buttons"]) {
+        let rawButtons = merged["cta_buttons"] ?? merged["buttons"]
+        if let buttons = parseCtaButtonsArray(rawButtons) {
             if let index = actionIndex(actionId), buttons.indices.contains(index) {
                 if let s = urlStringFromButtonDict(buttons[index]), let url = validUrl(s) { return url }
             }

@@ -290,7 +290,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
        let url = validUrl(str("url_mid") ?? str("url_maybe") ?? str("url_action_2")) { return url }
 
     // 3. cta_buttons — match `Fb.ts` url key variants (link, href, …), not only `url`
-    if let buttons = parseCtaButtonsArray(merged["cta_buttons"]) {
+    let rawButtons = merged["cta_buttons"] ?? merged["buttons"]
+    if let buttons = parseCtaButtonsArray(rawButtons) {
       if let index = actionIndex(actionId), buttons.indices.contains(index) {
         if let s = urlStringFromButtonDict(buttons[index]), let url = validUrl(s) { return url }
       }
