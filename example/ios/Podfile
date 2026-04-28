@@ -34,11 +34,8 @@ target 'MeheryEventSenderExample' do
   pod 'FirebaseCoreInternal', :modular_headers => true
   pod 'Firebase', :modular_headers => true
 
-  pod 'RNFBApp', :path => '../node_modules/@react-native-firebase/app'
-  pod 'RNFBMessaging', :path => '../node_modules/@react-native-firebase/messaging'
-  pod 'RNCAsyncStorage', :path => '../node_modules/@react-native-async-storage/async-storage'
-
-  pod 'react-native-webview', :path => '../node_modules/react-native-webview'
+  # These modules are auto-linked by `use_native_modules!`.
+  # Keeping manual pod paths here can create duplicate-source conflicts.
 
   # post_install do |installer|
   #   react_native_post_install(
