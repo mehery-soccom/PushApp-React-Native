@@ -9,7 +9,8 @@ import com.facebook.react.uimanager.ViewManager
 class MeheryEventSenderPackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
       return listOf(
-            LiveActivityModule(reactContext)
+            LiveActivityModule(reactContext),
+            MeheryPushTrackModule(reactContext)
       )
   }
 

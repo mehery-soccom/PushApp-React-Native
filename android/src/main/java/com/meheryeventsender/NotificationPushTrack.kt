@@ -23,12 +23,13 @@ object NotificationPushTrack {
         messageId: String,
         filterId: String,
         notificationId: String,
-        ctaId: String
+        ctaId: String,
+        trackToken: String = ""
     ) {
         Thread {
+            val endpoint = baseUrl.trimEnd('/') + "/v1/notification/push/track"
             var conn: HttpURLConnection? = null
             try {
-                val endpoint = baseUrl.trimEnd('/') + "/v1/notification/push/track"
                 conn = URL(endpoint).openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.connectTimeout = 4000
@@ -38,6 +39,9 @@ object NotificationPushTrack {
 
                 val payload = JSONObject()
                 payload.put("event", actionType.ifBlank { "opened" })
+                if (trackToken.isNotBlank()) {
+                    payload.put("t", trackToken)
+                }
                 if (messageId.isNotBlank()) payload.put("messageId", messageId)
                 if (filterId.isNotBlank()) payload.put("filterId", filterId)
                 if (notificationId.isNotBlank()) payload.put("notificationId", notificationId)
@@ -49,9 +53,22 @@ object NotificationPushTrack {
                 conn.outputStream.use { os ->
                     os.write(payload.toString().toByteArray(Charsets.UTF_8))
                 }
-                conn.responseCode
+                val code = conn.responseCode
+                if (code in 200..299) {
+                    Log.i(TAG, "Push track OK HTTP $code endpoint=$endpoint")
+                } else {
+                    val errBody = try {
+                        conn.errorStream?.use { it.readBytes() }?.toString(Charsets.UTF_8)?.take(500)
+                    } catch (_: Exception) {
+                        null
+                    }
+                    Log.w(
+                        TAG,
+                        "Push track HTTP $code endpoint=$endpoint body=${payload} errBody=$errBody"
+                    )
+                }
             } catch (err: Exception) {
-                Log.w(TAG, "Push track call failed", err)
+                Log.w(TAG, "Push track call failed endpoint=$endpoint", err)
             } finally {
                 conn?.disconnect()
             }

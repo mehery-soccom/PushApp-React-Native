@@ -20,6 +20,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val filterId = intent.getStringExtra(EXTRA_FILTER_ID).orEmpty()
         val notificationId = intent.getStringExtra(EXTRA_NOTIFICATION_ID).orEmpty()
         val ctaId = intent.getStringExtra(EXTRA_CTA_ID).orEmpty()
+        val trackToken = intent.getStringExtra(EXTRA_TRACK_TOKEN).orEmpty()
 
         if (trackBaseUrl.isNotBlank()) {
             NotificationPushTrack.sendPushTrackEvent(
@@ -28,7 +29,14 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 messageId,
                 filterId,
                 notificationId,
-                ctaId
+                ctaId,
+                trackToken
+            )
+        } else if (actionType == "cta" || ctaId.isNotBlank() || trackToken.isNotBlank()) {
+            Log.w(
+                TAG,
+                "Push track skipped: empty api_base_url/track_base_url. " +
+                    "actionType=$actionType ctaId=$ctaId hasToken=${trackToken.isNotBlank()}"
             )
         }
 
@@ -65,6 +73,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val EXTRA_FILTER_ID = "extra_filter_id"
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
         const val EXTRA_CTA_ID = "extra_cta_id"
+        const val EXTRA_TRACK_TOKEN = "extra_track_token"
     }
 
     private fun openApp(context: Context) {

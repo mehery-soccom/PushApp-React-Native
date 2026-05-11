@@ -60,6 +60,11 @@ import {
   storeTenantFromIdentifier,
   type SdkInitEnvironmentParam,
 } from './helpers/tenantContext';
+import {
+  extractClickTrackToken,
+  mergeIosNotificationPayload,
+  resolveIosSemanticCtaId,
+} from './utils/pushTrackPayload';
 
 const { PushTokenManager } = NativeModules;
 // const pushEmitter = PushTokenManager
@@ -109,13 +114,14 @@ const trackIosPushEvent = async (
   payload: Record<string, unknown>,
   ctaId?: string
 ) => {
+  const merged = mergeIosNotificationPayload(payload);
   const messageId = normalizePayloadString(
-    payload.messageId || payload.message_id
+    merged.messageId || merged.message_id
   );
   const filterId = normalizePayloadString(
-    payload.filterId || payload.filter_id
+    merged.filterId || merged.filter_id
   );
-  const notificationId = normalizePayloadString(payload.notification_id);
+  const notificationId = normalizePayloadString(merged.notification_id);
 
   const dedupeKey = [event, messageId, filterId, ctaId || '', notificationId]
     .join(':')
@@ -130,6 +136,8 @@ const trackIosPushEvent = async (
   }
 
   const body: Record<string, unknown> = { event };
+  const clickToken = extractClickTrackToken(merged);
+  if (clickToken) body.t = clickToken;
   if (messageId) body.messageId = messageId;
   if (filterId) body.filterId = filterId;
   if (notificationId) body.notificationId = notificationId;
@@ -250,16 +258,19 @@ export const addNotificationDebugListener = () => {
     console.log('📦 Push payload received:', payload);
 
     if (payload?.type !== 'silent_daily_ping') {
-      const actionId = normalizePayloadString(payload?.actionIdentifier);
+      const raw = payload as Record<string, unknown>;
+      const merged = mergeIosNotificationPayload(raw);
+      const actionId = normalizePayloadString(merged.actionIdentifier);
       const isDefaultTap =
         actionId === 'com.apple.UNNotificationDefaultActionIdentifier';
       const isDismiss =
         actionId === 'com.apple.UNNotificationDismissActionIdentifier';
 
       if (actionId && !isDefaultTap && !isDismiss) {
-        await trackIosPushEvent('cta', payload, actionId);
+        const semanticCtaId = resolveIosSemanticCtaId(actionId, merged);
+        await trackIosPushEvent('cta', merged, semanticCtaId);
       } else if (!actionId || isDefaultTap) {
-        await trackIosPushEvent('opened', payload);
+        await trackIosPushEvent('opened', merged);
       }
       return;
     }
@@ -379,6 +390,17 @@ export const initSdk = async (
     // ✅ Platform-specific setup
     if (Platform.OS === 'android') {
       console.log('📱 Android: Initializing push notification setup');
+
+      const MeheryPushTrack = NativeModules.MeheryPushTrack as
+        | { setApiBaseUrl?: (url: string) => void }
+        | undefined;
+      if (MeheryPushTrack?.setApiBaseUrl) {
+        try {
+          MeheryPushTrack.setApiBaseUrl(await getApiBaseUrl());
+        } catch (e) {
+          console.warn('MeheryPushTrack.setApiBaseUrl failed', e);
+        }
+      }
 
       await requestUserPermission();
       configurePushNotifications();

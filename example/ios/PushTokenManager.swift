@@ -15,7 +15,6 @@ class PushTokenManager: RCTEventEmitter {
     PushTokenManager.shared = self
   }
 
-  // ✅ ADD PushNotificationEvent
   override func supportedEvents() -> [String]! {
     return ["PushTokenEvent", "PushNotificationEvent"]
   }
@@ -27,7 +26,6 @@ class PushTokenManager: RCTEventEmitter {
   override func startObserving() {
     hasListeners = true
 
-    // Send saved token
     if let saved = lastToken {
       sendEvent(withName: "PushTokenEvent", body: [
         "type": saved.type,
@@ -35,7 +33,6 @@ class PushTokenManager: RCTEventEmitter {
       ])
     }
 
-    // Send saved notification payload
     if let payload = lastNotificationPayload {
       sendEvent(withName: "PushNotificationEvent", body: payload)
     }
@@ -45,7 +42,6 @@ class PushTokenManager: RCTEventEmitter {
     hasListeners = false
   }
 
-  // MARK: - Token Event
   @objc static func sendTokenEvent(_ type: String, token: String) {
     DispatchQueue.main.async {
       guard let instance = PushTokenManager.shared else {
@@ -60,19 +56,19 @@ class PushTokenManager: RCTEventEmitter {
           "type": type,
           "token": token
         ])
+      } else {
+        print("⚠️ No JS listeners for PushTokenEvent yet — saved for later.")
       }
     }
   }
 
-  // MARK: - 🔔 Notification Payload Event (NEW)
   @objc static func sendNotificationEvent(_ payload: [AnyHashable: Any]) {
     DispatchQueue.main.async {
       guard let instance = PushTokenManager.shared else {
-        print("⚠️ PushTokenManager.shared is nil")
+        print("⚠️ PushTokenManager.shared is nil — RN module not initialized yet.")
         return
       }
 
-      // Convert keys to String for RN
       var cleanPayload: [String: Any] = [:]
       payload.forEach { key, value in
         cleanPayload[String(describing: key)] = value
@@ -89,7 +85,6 @@ class PushTokenManager: RCTEventEmitter {
     }
   }
 
-  // Optional: expose last token to JS
   @objc func getLastToken(
     _ resolve: RCTPromiseResolveBlock,
     rejecter reject: RCTPromiseRejectBlock

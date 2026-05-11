@@ -18,10 +18,33 @@ object NotificationCtaUtils {
 
     data class CtaSpec(val label: String, val url: String, val trackId: String)
 
-    fun trackBaseUrl(data: Map<String, String>): String {
-        val explicit = data["track_base_url"]?.trim().orEmpty()
-        if (explicit.isNotEmpty()) return explicit
-        return data["api_base_url"]?.trim().orEmpty()
+    fun trackBaseUrl(context: Context, data: Map<String, String>): String {
+        val keys = listOf(
+            "track_base_url",
+            "api_base_url",
+            "apiBaseUrl",
+            "base_url",
+            "push_api_url",
+            "pushapp_api_url",
+            "mehery_api_base_url"
+        )
+        for (k in keys) {
+            val v = data[k]?.trim().orEmpty()
+            if (v.isNotEmpty()) return v
+        }
+        val cached = MeheryPushTrackPrefs.getApiBaseUrl(context)
+        if (cached.isNotEmpty()) return cached
+        return ""
+    }
+
+    /** Click JWT for POST …/push/track body field `t` (FCM data keys). */
+    fun trackClickToken(data: Map<String, String>): String {
+        val keys = listOf("t", "click_token", "clickToken", "track_token", "trackToken")
+        for (k in keys) {
+            val v = data[k]?.trim().orEmpty()
+            if (v.isNotEmpty()) return v
+        }
+        return ""
     }
 
     fun extractCtaSpecs(data: Map<String, String>): List<CtaSpec> {
@@ -127,7 +150,7 @@ object NotificationCtaUtils {
         return Intent(context, NotificationActionReceiver::class.java).apply {
             putExtra(NotificationActionReceiver.EXTRA_ACTION_TYPE, eventName)
             putExtra(NotificationActionReceiver.EXTRA_TARGET_URL, targetUrl.orEmpty())
-            putExtra(NotificationActionReceiver.EXTRA_TRACK_BASE_URL, trackBaseUrl(data))
+            putExtra(NotificationActionReceiver.EXTRA_TRACK_BASE_URL, trackBaseUrl(context, data))
             val messageId = data["messageId"].orEmpty().ifBlank { data["message_id"].orEmpty() }
             val filterId = data["filterId"].orEmpty().ifBlank { data["filter_id"].orEmpty() }
             val notifId = data["notification_id"].orEmpty().ifBlank {
@@ -140,6 +163,7 @@ object NotificationCtaUtils {
                 notifId
             )
             putExtra(NotificationActionReceiver.EXTRA_CTA_ID, ctaId.orEmpty())
+            putExtra(NotificationActionReceiver.EXTRA_TRACK_TOKEN, trackClickToken(data))
         }
     }
 
@@ -152,7 +176,7 @@ object NotificationCtaUtils {
         val intent = Intent(context, NotificationCtaUrlActivity::class.java).apply {
             putExtra(NotificationActionReceiver.EXTRA_ACTION_TYPE, "cta")
             putExtra(NotificationActionReceiver.EXTRA_TARGET_URL, spec.url)
-            putExtra(NotificationActionReceiver.EXTRA_TRACK_BASE_URL, trackBaseUrl(data))
+            putExtra(NotificationActionReceiver.EXTRA_TRACK_BASE_URL, trackBaseUrl(context, data))
             val messageId = data["messageId"].orEmpty().ifBlank { data["message_id"].orEmpty() }
             val filterId = data["filterId"].orEmpty().ifBlank { data["filter_id"].orEmpty() }
             val notifId = data["notification_id"].orEmpty().ifBlank {
@@ -162,6 +186,7 @@ object NotificationCtaUtils {
             putExtra(NotificationActionReceiver.EXTRA_FILTER_ID, filterId)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
             putExtra(NotificationActionReceiver.EXTRA_CTA_ID, spec.trackId)
+            putExtra(NotificationActionReceiver.EXTRA_TRACK_TOKEN, trackClickToken(data))
         }
         val stableNotifId = data["notification_id"].orEmpty().ifBlank { data["notificationId"].orEmpty() }
         return PendingIntent.getActivity(

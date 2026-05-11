@@ -55,6 +55,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             }
         }
 
+        NotificationPayloadUtils.mergeEmbeddedJsonObjectStringsInto(data)
+
         if (data.isEmpty()) {
             Log.w(TAG, "FCM: merged data empty after notification merge; nothing to display")
             return
@@ -153,10 +155,13 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val ctaCount = NotificationCtaUtils.extractCtaSpecs(data).size
         val useBig = NotificationPayloadUtils.shouldUseBigPictureStyle(data)
         val hasImage = NotificationPayloadUtils.hasAnyImage(data)
+        val trackBasePreview = NotificationCtaUtils.trackBaseUrl(this, data)
         Log.i(
             TAG,
             "FCM[merged] resolveSingleImageUrl=${truncateForLog(imageUrl)} " +
-                "ctaCount=$ctaCount shouldUseBigPicture=$useBig hasAnyImage=$hasImage"
+                "ctaCount=$ctaCount shouldUseBigPicture=$useBig hasAnyImage=$hasImage " +
+                "trackBaseUrlLen=${trackBasePreview.length} " +
+                "hasClickToken=${NotificationCtaUtils.trackClickToken(data).isNotEmpty()}"
         )
         Log.i(TAG, "FCM[merged] data (${data.size} keys) after notification merge")
         for (key in data.keys.sorted()) {
@@ -209,7 +214,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     private fun sendReceivedTracking(data: Map<String, String>) {
-        val trackBase = NotificationCtaUtils.trackBaseUrl(data)
+        val trackBase = NotificationCtaUtils.trackBaseUrl(this, data)
         if (trackBase.isBlank()) return
         val intent = NotificationCtaUtils.intentForPushTrackEvent(
             this,

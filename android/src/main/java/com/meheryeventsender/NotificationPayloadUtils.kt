@@ -1,6 +1,7 @@
 package com.meheryeventsender
 
 import org.json.JSONArray
+import org.json.JSONObject
 
 object NotificationPayloadUtils {
     const val MAX_CAROUSEL_IMAGES = 4
@@ -141,6 +142,39 @@ object NotificationPayloadUtils {
                 .split(",")
                 .map { it.trim().trim('"', '\'') }
                 .filter { it.isNotEmpty() }
+        }
+    }
+
+    /**
+     * Many backends send a stringified JSON object under `data`, `payload`, or `extras`.
+     * FCM [RemoteMessage.getData] is flat [String,String]; merge those keys so native code
+     * can read `api_base_url`, `t`, `cta_buttons`, etc. for [NotificationCtaUtils.trackBaseUrl].
+     * If still missing, [MeheryPushTrackPrefs] (filled from JS [initSdk]) supplies the host.
+     */
+    fun mergeEmbeddedJsonObjectStringsInto(data: MutableMap<String, String>) {
+        val blobKeys = listOf("data", "payload", "extras", "custom", "mehery_data")
+        for (blobKey in blobKeys) {
+            val raw = data[blobKey]?.trim().orEmpty()
+            if (raw.isEmpty() || !raw.startsWith("{")) continue
+            try {
+                val obj = JSONObject(raw)
+                val it = obj.keys()
+                while (it.hasNext()) {
+                    val k = it.next()
+                    if (k.isBlank()) continue
+                    val v = obj.opt(k) ?: continue
+                    val asString = when (v) {
+                        is String -> v.trim()
+                        else -> v.toString().trim()
+                    }
+                    if (asString.isEmpty()) continue
+                    // Prefer nested JSON values for known server-wrapped payloads (do not let
+                    // the outer blob key block real keys like `data` used for click routing).
+                    data[k] = asString
+                }
+            } catch (_: Exception) {
+                // ignore malformed blob
+            }
         }
     }
 }

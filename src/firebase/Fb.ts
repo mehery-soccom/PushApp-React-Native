@@ -8,6 +8,10 @@ import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
 import { waitForGeoIp } from '../utils/geoIpContext';
 import { SESSION_ID_STORAGE_KEY } from '../utils/user';
+import {
+  extractClickTrackToken,
+  mergeIosNotificationPayload,
+} from '../utils/pushTrackPayload';
 
 import { NativeModules, Platform } from 'react-native';
 
@@ -447,27 +451,52 @@ async function trackPushEvent(
   data: Record<string, any>,
   ctaId?: string
 ): Promise<void> {
-  const baseUrl = getPushTrackBaseUrl(data);
-  if (!baseUrl) return;
+  const merged = mergeIosNotificationPayload(data as Record<string, unknown>);
+  let baseUrl = getPushTrackBaseUrl(merged as Record<string, any>);
+  if (!baseUrl) {
+    try {
+      baseUrl = (await getApiBaseUrl()).trim();
+    } catch {
+      baseUrl = '';
+    }
+  }
+  if (!baseUrl) {
+    console.log(
+      '[PushTrack] skipped (no track_base_url / api_base_url in payload and getApiBaseUrl empty)',
+      eventType
+    );
+    return;
+  }
 
   const payload: Record<string, any> = {
     event: eventType,
   };
-  const messageId = normalizedString(data.messageId || data.message_id);
-  const filterId = normalizedString(data.filterId || data.filter_id);
-  const notificationId = normalizedString(data.notification_id);
+  const clickToken = extractClickTrackToken(merged);
+  if (clickToken) payload.t = clickToken;
+  const messageId = normalizedString(merged.messageId || merged.message_id);
+  const filterId = normalizedString(merged.filterId || merged.filter_id);
+  const notificationId = normalizedString(merged.notification_id);
   if (messageId) payload.messageId = messageId;
   if (filterId) payload.filterId = filterId;
   if (notificationId) payload.notificationId = notificationId;
   if (ctaId) payload.data = { ctaId };
 
   try {
+    const commonHeaders = await buildCommonHeaders();
     const endpoint = `${baseUrl.replace(/\/$/, '')}/v1/notification/push/track`;
-    await fetch(endpoint, {
+    const res = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
       body: JSON.stringify(payload),
     });
+    if (res.ok) {
+      console.log('[PushTrack]', eventType, 'HTTP', res.status);
+    } else {
+      console.log('[PushTrack]', eventType, 'HTTP', res.status, '(not ok)');
+    }
   } catch (err) {
     console.log('[PushTrack] non-blocking track failed:', eventType, err);
   }
@@ -641,16 +670,12 @@ async function handlePushNotificationInteraction(raw: any) {
 
   log('full notification object', JSON.stringify(notification, null, 2));
 
-  const notificationData = (notification?.data ||
+  const rawPayload = (notification?.data ||
     notification?.userInfo ||
-    {}) as Record<string, any>;
-
-  try {
-    log('track opened (non-fatal if it fails)');
-    await trackPushEvent('opened', notificationData);
-  } catch (e) {
-    log('trackPushEvent(opened) error', e);
-  }
+    {}) as Record<string, unknown>;
+  const notificationData = mergeIosNotificationPayload(
+    rawPayload
+  ) as Record<string, any>;
 
   const action = notification?.action;
   log('resolved action field', {
@@ -660,11 +685,18 @@ async function handlePushNotificationInteraction(raw: any) {
   });
 
   if (!action) {
+    try {
+      log('track opened (body tap, non-fatal if it fails)');
+      await trackPushEvent('opened', notificationData);
+    } catch (e) {
+      log('trackPushEvent(opened) error', e);
+    }
     log('no action on payload — likely body tap, not a CTA button; stop here');
     return;
   }
 
   const actionMapRaw =
+    notificationData.__actionMap ||
     notification?.data?.__actionMap ||
     notification?.userInfo?.__actionMap ||
     notification?.__actionMap;
