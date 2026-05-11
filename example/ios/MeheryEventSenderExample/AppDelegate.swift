@@ -8,6 +8,18 @@ import ActivityKit
 class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
   var window: UIWindow?
 
+  /// Ephemeral session with explicit timeouts so background pushes (TestFlight) finish before the system suspends the app.
+  private static let liveActivityImageURLSession: URLSession = {
+    let c = URLSessionConfiguration.ephemeral
+    c.timeoutIntervalForRequest = 22
+    c.timeoutIntervalForResource = 30
+    c.waitsForConnectivity = true
+    c.httpCookieStorage = nil
+    c.urlCache = nil
+    c.requestCachePolicy = .reloadIgnoringLocalCacheData
+    return URLSession(configuration: c)
+  }()
+
   func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -69,8 +81,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   }
     PushTokenManager.sendNotificationEvent(userInfo)
 
+    // Live Activity + image download must finish before background completion, or iOS suspends
+    // the app (especially TestFlight / production) and the file never reaches the app group.
     if #available(iOS 16.1, *) {
-      startLiveActivity(userInfo: userInfo)
+      let merged = mergedNotificationFields(userInfo)
+      if merged["activity_id"] != nil {
+        startLiveActivity(userInfo: userInfo) {
+          completionHandler(.newData)
+        }
+        return
+      }
     }
 
     completionHandler(.newData)
@@ -356,41 +376,50 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   // }
 
   // MARK: - Live Activity
+  /// - Parameter completion: Called on an arbitrary queue after the activity is updated/created (or on failure).
+  ///   Use this from background pushes so `completionHandler(.newData)` runs only after work completes.
   @available(iOS 16.1, *)
-  func startLiveActivity(userInfo: [AnyHashable: Any]) {
-    let progressPercent = parseDouble(userInfo["progressPercent"]) ?? 0
-    let imageFileName = saveLiveActivityImage(userInfo: userInfo)
+  func startLiveActivity(userInfo: [AnyHashable: Any], completion: (() -> Void)? = nil) {
+    let merged = mergedNotificationFields(userInfo)
+    let progressPercent = parseDouble(merged["progressPercent"]) ?? 0
 
-    let state = buildLiveActivityState(userInfo: userInfo, progressPercent: progressPercent, imageFileName: imageFileName)
-
-    // Update existing activity if one is running
-    if #available(iOS 16.2, *) {
-      if let activity = Activity<DeliveryActivityAttributes>.activities.first {
-        Task {
-          await activity.update(ActivityContent(state: state, staleDate: nil))
-          print("🟢 Updated Live Activity: \(activity.id)")
-        }
-        return
-      }
-    }
-
-    // No existing activity — create new one
-    do {
-      let activity = try Activity<DeliveryActivityAttributes>.request(
-        attributes: DeliveryActivityAttributes(),
-        contentState: state,
-        pushType: .token
+    DispatchQueue.global(qos: .userInitiated).async { [self] in
+      let imageFileName = saveLiveActivityImage(merged: merged)
+      let state = buildLiveActivityState(
+        userInfo: userInfo,
+        progressPercent: progressPercent,
+        imageFileName: imageFileName
       )
-      print("🟢 Started Live Activity: \(activity.id)")
 
-      Task {
-        for await tokenData in activity.pushTokenUpdates {
-          let pushToken = tokenData.map { String(format: "%02x", $0) }.joined()
-          print("📡 Live Activity Push Token: \(pushToken)")
+      Task { @MainActor in
+        defer { completion?() }
+
+        if #available(iOS 16.2, *) {
+          if let activity = Activity<DeliveryActivityAttributes>.activities.first {
+            await activity.update(ActivityContent(state: state, staleDate: nil))
+            print("🟢 Updated Live Activity: \(activity.id)")
+            return
+          }
+        }
+
+        do {
+          let activity = try Activity<DeliveryActivityAttributes>.request(
+            attributes: DeliveryActivityAttributes(),
+            contentState: state,
+            pushType: .token
+          )
+          print("🟢 Started Live Activity: \(activity.id)")
+
+          Task {
+            for await tokenData in activity.pushTokenUpdates {
+              let pushToken = tokenData.map { String(format: "%02x", $0) }.joined()
+              print("📡 Live Activity Push Token: \(pushToken)")
+            }
+          }
+        } catch {
+          print("❌ Live Activity start error: \(error)")
         }
       }
-    } catch {
-      print("❌ Live Activity start error: \(error)")
     }
   }
 
@@ -400,29 +429,174 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     progressPercent: Double,
     imageFileName: String?
   ) -> DeliveryActivityAttributes.ContentState {
-    DeliveryActivityAttributes.ContentState(
-      message1: (userInfo["message1"] as? String) ?? "",
-      message2: (userInfo["message2"] as? String) ?? "",
-      message3: (userInfo["message3"] as? String) ?? "",
-      message1FontSize: parseDouble(userInfo["message1FontSize"]) ?? 14,
-      message1FontColorHex: (userInfo["message1FontColorHex"] as? String) ?? "#000000",
-      line1_font_text_styles: parseStringArray(userInfo["line1_font_text_styles"]) ?? [],
-      message2FontSize: parseDouble(userInfo["message2FontSize"]) ?? 14,
-      message2FontColorHex: (userInfo["message2FontColorHex"] as? String) ?? "#000000",
-      line2_font_text_styles: parseStringArray(userInfo["line2_font_text_styles"]) ?? [],
-      message3FontSize: parseDouble(userInfo["message3FontSize"]) ?? 14,
-      message3FontColorHex: (userInfo["message3FontColorHex"] as? String) ?? "#000000",
-      line3_font_text_styles: parseStringArray(userInfo["line3_font_text_styles"]) ?? [],
-      backgroundColorHex: (userInfo["backgroundColorHex"] as? String) ?? "#FFFFFF",
-      fontColorHex: (userInfo["fontColorHex"] as? String) ?? "#000000",
-      progressColorHex: (userInfo["progressColorHex"] as? String) ?? "#0000FF",
-      fontSize: parseDouble(userInfo["fontSize"]) ?? 14,
+    let merged = mergedNotificationFields(userInfo)
+    let imageUrlString = firstPushImageUrlString(fromMerged: merged)
+    return DeliveryActivityAttributes.ContentState(
+      message1: stringFromAny(merged["message1"]) ?? "",
+      message2: stringFromAny(merged["message2"]) ?? "",
+      message3: stringFromAny(merged["message3"]) ?? "",
+      message1FontSize: parseDouble(merged["message1FontSize"]) ?? 14,
+      message1FontColorHex: stringFromAny(merged["message1FontColorHex"]) ?? "#000000",
+      line1_font_text_styles: parseStringArray(merged["line1_text_styles"])
+        ?? parseStringArray(merged["line1_font_text_styles"]) ?? [],
+      message2FontSize: parseDouble(merged["message2FontSize"]) ?? 14,
+      message2FontColorHex: stringFromAny(merged["message2FontColorHex"]) ?? "#000000",
+      line2_font_text_styles: parseStringArray(merged["line2_text_styles"])
+        ?? parseStringArray(merged["line2_font_text_styles"]) ?? [],
+      message3FontSize: parseDouble(merged["message3FontSize"]) ?? 14,
+      message3FontColorHex: stringFromAny(merged["message3FontColorHex"]) ?? "#000000",
+      line3_font_text_styles: parseStringArray(merged["line3_text_styles"])
+        ?? parseStringArray(merged["line3_font_text_styles"]) ?? [],
+      backgroundColorHex: stringFromAny(merged["backgroundColorHex"]) ?? "#FFFFFF",
+      fontColorHex: stringFromAny(merged["fontColorHex"]) ?? "#000000",
+      progressColorHex: stringFromAny(merged["progressColorHex"]) ?? "#0000FF",
+      fontSize: parseDouble(merged["fontSize"]) ?? 14,
       progressPercent: progressPercent,
-      align: (userInfo["align"] as? String) ?? "left",
-      bg_color_gradient: (userInfo["bg_color_gradient"] as? String) ?? "",
-      bg_color_gradient_dir: (userInfo["bg_color_gradient_dir"] as? String) ?? "",
-      imageFileName: imageFileName
+      align: stringFromAny(merged["align"]) ?? "left",
+      bg_color_gradient: stringFromAny(merged["bg_color_gradient"]) ?? "",
+      bg_color_gradient_dir: stringFromAny(merged["bg_color_gradient_dir"]) ?? "",
+      imageFileName: imageFileName,
+      imageUrl: imageUrlString
     )
+  }
+
+  /// Prefer explicit `imageUrl` / `image_url`, then `logoUrl` / `logo_url` (matches RN live template).
+  /// Parses `templateData` JSON when URLs are nested. Only after that uses `fcm_options` / lists / `image1`…
+  private func firstPushImageUrlString(fromMerged merged: [String: Any]) -> String? {
+    if let u = imageUrlFromLiveTemplatePayloads(merged) { return u }
+    let urls = extractPushImageUrlStrings(fromMerged: merged)
+    return urls.first
+  }
+
+  /// RN often sends `imageUrl` + `logoUrl` at root, or URLs inside `templateData` / `style`.
+  private func imageUrlFromLiveTemplatePayloads(_ merged: [String: Any]) -> String? {
+    func trimmed(_ value: Any?) -> String? {
+      if let s = value as? String {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
+      }
+      if let s = value as? NSString {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : (t as String)
+      }
+      return nil
+    }
+    func firstKey(in dict: [String: Any], keys: [String]) -> String? {
+      for k in keys {
+        if let v = trimmed(dict[k]) { return v }
+      }
+      return nil
+    }
+
+    let heroKeys = ["imageUrl", "image_url", "image", "styled_image", "styledImage", "media-url"]
+    let logoKeys = ["logoUrl", "logo_url", "logo", "iconUrl", "icon_url", "icon"]
+
+    if let u = firstKey(in: merged, keys: heroKeys) { return u }
+    if let u = firstKey(in: merged, keys: logoKeys) { return u }
+
+    if let td = merged["templateData"] as? String,
+       let data = td.data(using: .utf8),
+       let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+      if let u = firstKey(in: obj, keys: heroKeys) { return u }
+      if let u = firstKey(in: obj, keys: logoKeys) { return u }
+      if let style = obj["style"] as? [String: Any] {
+        if let u = firstKey(in: style, keys: heroKeys) { return u }
+        if let u = firstKey(in: style, keys: logoKeys) { return u }
+      }
+    }
+
+    if let tmpl = merged["template"] as? [String: Any],
+       let data = tmpl["data"] as? [String: Any] {
+      if let u = firstKey(in: data, keys: heroKeys) { return u }
+      if let u = firstKey(in: data, keys: logoKeys) { return u }
+    }
+
+    return nil
+  }
+
+  private func extractPushImageUrlStrings(fromMerged merged: [String: Any]) -> [String] {
+    func parseSingleString(_ value: Any?) -> String? {
+      if let s = value as? String { return s.trimmingCharacters(in: .whitespacesAndNewlines) }
+      if let s = value as? NSString { return s.trimmingCharacters(in: .whitespacesAndNewlines) }
+      return nil
+    }
+    func parseStringList(_ value: Any?) -> [String]? {
+      if let arr = value as? [String] { return arr }
+      if let arr = value as? [Any] { return arr.compactMap { parseSingleString($0) } }
+      if let s = parseSingleString(value), !s.isEmpty {
+        if let data = s.data(using: .utf8),
+           let parsed = try? JSONSerialization.jsonObject(with: data) as? [Any] {
+          return parsed.compactMap { parseSingleString($0) }
+        }
+        return [s]
+      }
+      return nil
+    }
+
+    var imageUrls: [String] = []
+
+    func dictionaryAny(_ value: Any?) -> [String: Any]? {
+      if let d = value as? [String: Any] { return d }
+      if let d = value as? [AnyHashable: Any] {
+        var out: [String: Any] = [:]
+        for (k, v) in d { out[String(describing: k)] = v }
+        return out
+      }
+      return nil
+    }
+
+    let heroKeys = ["imageUrl", "image_url", "image", "styled_image", "styledImage", "media-url"]
+    let logoKeys = ["logoUrl", "logo_url", "logo", "iconUrl", "icon_url", "icon"]
+
+    // 1) Explicit hero image, then logo — must run BEFORE fcm_options so RN `imageUrl` / `logoUrl` win.
+    if imageUrls.isEmpty {
+      for key in heroKeys {
+        if let value = parseSingleString(merged[key]), !value.isEmpty {
+          imageUrls = [value]
+          break
+        }
+      }
+    }
+    if imageUrls.isEmpty {
+      for key in logoKeys {
+        if let value = parseSingleString(merged[key]), !value.isEmpty {
+          imageUrls = [value]
+          break
+        }
+      }
+    }
+
+    // 2) FCM dashboard / legacy
+    if imageUrls.isEmpty,
+       let fcmOptions = dictionaryAny(merged["fcm_options"]),
+       let nested = parseSingleString(fcmOptions["image"]), !nested.isEmpty {
+      imageUrls = [nested]
+    }
+
+    // 3) Lists (carousel)
+    if imageUrls.isEmpty {
+      for key in ["image_urls", "imageUrls", "carousel_images", "images", "media-url"] {
+        if let values = parseStringList(merged[key]), !values.isEmpty {
+          imageUrls = values
+          break
+        }
+      }
+    }
+
+    if imageUrls.isEmpty {
+      var index = 1
+      while index <= 32 {
+        let key = "image\(index)"
+        if let value = parseSingleString(merged[key]), !value.isEmpty {
+          imageUrls.append(value)
+        }
+        index += 1
+      }
+    }
+
+    return imageUrls
+      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .filter { !$0.isEmpty }
   }
 
   // MARK: - Live Activity Helpers
@@ -448,27 +622,66 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     return nil
   }
 
-  private func saveLiveActivityImage(userInfo: [AnyHashable: Any]) -> String? {
-    let imageUrl = (userInfo["imageUrl"] as? String) ?? (userInfo["image_url"] as? String) ?? ""
-    guard let url = URL(string: imageUrl), !imageUrl.isEmpty else { return nil }
+  private static func isRenderableImageData(_ data: Data) -> Bool {
+    !data.isEmpty && UIImage(data: data) != nil
+  }
+
+  private func saveLiveActivityImage(merged: [String: Any]) -> String? {
+    guard let imageUrl = firstPushImageUrlString(fromMerged: merged), !imageUrl.isEmpty,
+          let url = URL(string: imageUrl) else {
+      print("📷 Live Activity: no image URL in merged payload")
+      return nil
+    }
+
+    // Release / TestFlight: ATS blocks plain HTTP unless you add exceptions (avoid HTTP image URLs).
+    if url.scheme?.lowercased() != "https" {
+      print("📷 Live Activity: image URL must use https (scheme was \(url.scheme ?? "nil"))")
+      return nil
+    }
 
     guard let containerURL = FileManager.default.containerURL(
       forSecurityApplicationGroupIdentifier: "group.meheryeventsender.example.NotificationLiveActivity"
-    ) else { return nil }
+    ) else {
+      print("📷 Live Activity: app group container missing — enable App Groups on the main app target + matching group in Apple Developer")
+      return nil
+    }
 
-    let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension
+    let ext: String = {
+      let p = url.pathExtension.lowercased()
+      if !p.isEmpty, p.count <= 5 { return p }
+      return "jpg"
+    }()
     let fileName = "live_activity_\(UUID().uuidString).\(ext)"
     let fileURL = containerURL.appendingPathComponent(fileName)
 
     var result: String?
     let semaphore = DispatchSemaphore(value: 0)
-    URLSession.shared.dataTask(with: url) { data, _, _ in
+    Self.liveActivityImageURLSession.dataTask(with: url) { data, _, error in
       defer { semaphore.signal() }
-      guard let data = data else { return }
-      try? data.write(to: fileURL)
-      result = fileName
+      if let error = error {
+        print("📷 Live Activity image download failed: \(error.localizedDescription)")
+        return
+      }
+      guard let data = data, !data.isEmpty else {
+        print("📷 Live Activity image download: empty data")
+        return
+      }
+      guard Self.isRenderableImageData(data) else {
+        print("📷 Live Activity image: response is not a decodable image (wrong URL or HTML error page)")
+        return
+      }
+      do {
+        try data.write(to: fileURL, options: [.atomic])
+        result = fileName
+        print("📷 Live Activity image saved: \(fileName) (\(data.count) bytes)")
+      } catch {
+        print("📷 Live Activity image write failed: \(error.localizedDescription)")
+      }
     }.resume()
-    _ = semaphore.wait(timeout: .now() + 10)
+    _ = semaphore.wait(timeout: .now() + 35)
+    if result == nil {
+      print("📷 Live Activity image: timed out or failed for URL \(imageUrl)")
+    }
     return result
   }
 

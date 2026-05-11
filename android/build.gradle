@@ -81,18 +81,13 @@ android {
   }
 
   compileOptions {
-    sourceCompatibility JavaVersion.VERSION_1_8
-    targetCompatibility JavaVersion.VERSION_1_8
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
   }
 
   kotlinOptions {
     jvmTarget = "17"
   }
-  java {
-      toolchain {
-          languageVersion = JavaLanguageVersion.of(17)
-      }
-  }  
 }
 
 
@@ -106,12 +101,6 @@ def kotlin_version = getExtOrDefault("kotlinVersion")
 dependencies {
   implementation "com.facebook.react:react-android:0.80.0"
   implementation 'com.google.firebase:firebase-messaging:24.0.0'
-  // Subclass [ReactNativeFirebaseMessagingService] — only available when the host app autolinks RNFB messaging
-  def rnfb = rootProject.findProject(':react-native-firebase_messaging') ?:
-    rootProject.findProject(':@react-native-firebase_messaging')
-  if (rnfb != null) {
-    implementation rnfb
-  }
 
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
 

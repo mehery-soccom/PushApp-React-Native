@@ -72,6 +72,47 @@ object NotificationPayloadUtils {
         return extractImageList(data).take(MAX_CAROUSEL_IMAGES)
     }
 
+    /**
+     * FCM `data` is all strings. [PushUtil.mapToActivityData] sends [progressPercent] as a string;
+     * the server may use **0…1** (e.g. `0.35`) or **0…100** (e.g. `35`) from `style.progress_percent`.
+     * Returns a 0…1 fraction and 0…100 for [android.widget.RemoteViews.setProgressBar].
+     */
+    /** FCM uses camelCase; ad-hoc / tests may send snake_case. */
+    fun progressPercentRawFromData(data: Map<String, String>): String? {
+        val a = data["progressPercent"]?.trim()
+        if (!a.isNullOrEmpty()) return a
+        val b = data["progress_percent"]?.trim()
+        if (!b.isNullOrEmpty()) return b
+        return null
+    }
+
+    fun parseProgressPercentString(raw: String?): Pair<Double, Int> {
+        val v = raw?.trim()?.toDoubleOrNull() ?: 0.0
+        val fraction = if (v > 1.0) {
+            (v / 100.0).coerceIn(0.0, 1.0)
+        } else {
+            v.coerceIn(0.0, 1.0)
+        }
+        val intForBar = (fraction * 100).toInt().coerceIn(0, 100)
+        return Pair(fraction, intForBar)
+    }
+
+    /** Show indeterminate/full progress chrome whenever the server included an explicit key (even `"0"`). */
+    fun shouldShowLiveActivityProgressBar(data: Map<String, String>): Boolean {
+        if (data.containsKey("progressPercent") || data.containsKey("progress_percent")) return true
+        val (_, intBar) = parseProgressPercentString(progressPercentRawFromData(data))
+        return intBar > 0
+    }
+
+    /**
+     * Live notification layout uses one hero image; multiple URLs would switch to carousel and **drop** the progress bar.
+     */
+    fun resolveLiveActivityHeroImageUrl(data: Map<String, String>): String {
+        val single = resolveSingleImageUrl(data)
+        if (single.isNotEmpty()) return single
+        return extractLimitedImageList(data).firstOrNull() ?: ""
+    }
+
     fun shouldUseBigPictureStyle(data: Map<String, String>): Boolean {
         if (extractImageList(data).isNotEmpty()) return false
         if (resolveSingleImageUrl(data).isEmpty()) return false

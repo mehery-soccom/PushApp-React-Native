@@ -4,6 +4,8 @@ export { BannerScreen } from './components/BannerScreen';
 export { CustomBanner } from './components/CustomBanner';
 export { getDeviceId } from './utils/device';
 export { setDeviceMetadata } from './utils/deviceMetadata';
+export { setGeoIP } from './utils/geoIpContext';
+export type { GeoIpInput, GeoIpPayload } from './types/geoIp';
 export type { SdkInitEnvironmentParam } from './helpers/tenantContext';
 
 export {
@@ -18,6 +20,7 @@ export {
   sendCustomEvent,
   OnAppOpen,
 } from './events/custom/CustomEvents';
+export type { SendCustomEventOptions } from './events/custom/CustomEvents';
 
 export { updateUserProfile } from './events/custom/ProfileUpdate';
 

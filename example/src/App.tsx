@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   initSdk,
   OnUserLogin,
+  OnUserLogOut,
   OnPageOpen,
   OnAppOpen,
   updateUserProfile,
@@ -24,7 +25,10 @@ import { InlinePollContainer } from 'react-native-mehery-event-sender';
 import { TooltipPollContainer } from 'react-native-mehery-event-sender';
 
 import DeviceInfo from 'react-native-device-info';
-import { setDeviceMetadata } from 'react-native-mehery-event-sender';
+import {
+  setDeviceMetadata,
+  setGeoIP,
+} from 'react-native-mehery-event-sender';
 
 const toSeconds = (ms: number) => Math.floor(ms / 1000);
 
@@ -47,8 +51,6 @@ function LoginPage({ onLogin }: { onLogin: (id: string) => void }) {
     if (!trimmedId) return;
 
     await AsyncStorage.setItem('user_id', trimmedId);
-
-    OnUserLogin(trimmedId);
     onLogin(trimmedId); // switch to HomePage
   };
 
@@ -83,15 +85,17 @@ function LoginPage({ onLogin }: { onLogin: (id: string) => void }) {
 }
 function HomePage({
   userId,
-  // onLogout,
+  onLogout,
 }: {
   userId: string;
-  // onLogout: () => void;
+  onLogout: () => void;
 }) {
   // const handlePageOpen = () => OnPageOpen();
 
   useEffect(() => {
     try {
+      OnUserLogin(userId);
+      console.log('OnUserLogin called', userId);
       OnAppOpen();
       OnPageOpen('login');
 
@@ -125,7 +129,8 @@ function HomePage({
           }}
         />
       </View>
-      {/* <Button title="Logout" onPress={onLogout} /> */}
+      <View style={styles.customEventButtonSpacer} />
+      <Button title="Logout" onPress={onLogout} />
       <View style={styles.ve}>
         <TooltipPollContainer placeholderId="center">
           <View style={styles.vex} />
@@ -182,11 +187,22 @@ export default function App() {
       // 1️⃣ Inject device metadata FIRST
       await initDeviceMetadata();
 
+      // Example geoIP (host app should set from location / geo-IP service before register/login)
+      setGeoIP({
+        ip: '103.21.244.0',
+        location: { lat: 19.076, lng: 72.8777 },
+        country: { iso_code: 'IN', name: 'India' },
+        region: { iso_code: 'MH', name: 'Maharashtra' },
+        city: { name: 'Mumbai' },
+        area: { name: 'Parel' },
+      });
+
       // 2️⃣ Initialize SDK (3rd arg: false=pushapp.ai, true=pushapp.xyz, 'development'=pushapp.in)
 
       let environment: SdkInitEnvironmentParam = 'development';
       await initSdk(null, 'demo_1754408042569', environment);
       console.log('SDK initialized with environment:', environment);
+
       // 3️⃣ Log FCM Token
       try {
         await messaging().requestPermission();
@@ -217,21 +233,20 @@ export default function App() {
     setCurrentPage('home');
   };
 
-  // const handleLogout = async () => {
-  //   if (userId) {
-  //     // OnUserLogOut(userId); // call SDK logout if needed
-  //     await AsyncStorage.removeItem('user_id');
-  //     setUserId('');
-  //     setCurrentPage('login');
-  //   }
-  // };
+  const handleLogout = async () => {
+    if (!userId) return;
+    await OnUserLogOut(userId);
+    await AsyncStorage.removeItem('user_id');
+    setUserId('');
+    setCurrentPage('login');
+  };
 
   return (
     <>
       {currentPage === 'login' ? (
         <LoginPage onLogin={handleLogin} />
       ) : (
-        <HomePage userId={userId} />
+        <HomePage userId={userId} onLogout={handleLogout} />
       )}
       <PollOverlayProvider />
     </>

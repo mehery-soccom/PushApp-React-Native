@@ -1,6 +1,6 @@
 {
   "name": "react-native-mehery-event-sender",
-  "version": "0.0.26",
+  "version": "0.0.27",
   "description": "A React Native SDK for event tracking that works with both Expo Go and bare React Native applications",
   "source": "./src/index.tsx",
   "main": "./lib/module/index.js",
@@ -32,7 +32,7 @@
   ],
   "scripts": {
     "example": "yarn workspace react-native-mehery-event-sender-example",
-    "test": "jest",
+    "test": "jest --no-watchman",
     "typecheck": "tsc",
     "lint": "eslint \"**/*.{js,ts,tsx}\"",
     "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",

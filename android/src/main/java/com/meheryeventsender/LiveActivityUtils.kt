@@ -28,23 +28,30 @@ object LiveActivityUtils {
 
             val notificationId = (data["activity_id"] ?: "activity_${System.currentTimeMillis()}").hashCode()
 
+            val (_, progressInt) = NotificationPayloadUtils.parseProgressPercentString(
+                NotificationPayloadUtils.progressPercentRawFromData(data)
+            )
+            val showProgress = NotificationPayloadUtils.shouldShowLiveActivityProgressBar(data)
+            val heroImage = NotificationPayloadUtils.resolveLiveActivityHeroImageUrl(data)
+
             val notification = customService.createCustomNotification(
                 channelId = "live_activity_channel",
                 title = data["message1"] ?: "",
                 message = data["message2"] ?: "",
                 tapText = data["message3"] ?: "",
-                progress = ((data["progressPercent"]?.toDoubleOrNull() ?: 0.0) * 100).toInt(),
+                progress = progressInt,
                 titleColor = data["message1FontColorHex"] ?: "#FF0000",
                 messageColor = data["message2FontColorHex"] ?: "#000000",
                 tapTextColor = data["message3FontColorHex"] ?: "#CCCCCC",
                 progressColor = data["progressColorHex"] ?: "#00FF00",
                 backgroundColor = data["backgroundColorHex"] ?: "#FFFFFF",
-                imageUrl = NotificationPayloadUtils.resolveSingleImageUrl(data),
+                imageUrl = heroImage,
                 bg_color_gradient = data["bg_color_gradient"] ?: "",
                 bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
                 align = data["align"] ?: "",
                 notificationId = notificationId,
-                imageUrls = NotificationPayloadUtils.extractLimitedImageList(data),
+                imageUrls = emptyList(),
+                showProgress = showProgress,
                 ctaData = data
             )
 

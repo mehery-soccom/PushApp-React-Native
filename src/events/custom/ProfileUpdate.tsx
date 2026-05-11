@@ -6,7 +6,21 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const PROFILE_UPDATED_KEY = 'mehery_profile_updated';
 const DATE_FIELD_KEY_REGEX = /(dob|date|birth|expiry|expires|expir)/i;
-const DATE_ONLY_FIELD_KEY_REGEX = /(dob|birth)/i;
+
+// Wait until UserLoggedIn is set in AsyncStorage, up to `timeoutMs`.
+// Falls back to a plain delay if the flag never appears.
+async function waitForUserLoggedIn(
+  timeoutMs = 30_000,
+  pollIntervalMs = 500
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const flag = await AsyncStorage.getItem('UserLoggedIn');
+    if (flag === 'true') return true;
+    await delay(pollIntervalMs);
+  }
+  return false;
+}
 
 function toUtcTimestampMs(value: unknown): number | null {
   if (value instanceof Date) {
@@ -15,7 +29,6 @@ function toUtcTimestampMs(value: unknown): number | null {
   }
 
   if (typeof value === 'number' && Number.isFinite(value)) {
-    // Treat 10-digit unix values as seconds and convert to ms.
     return value < 1_000_000_000_000
       ? Math.trunc(value * 1000)
       : Math.trunc(value);
@@ -62,10 +75,6 @@ function parseDateLikeValue(value: unknown): Date | null {
   return null;
 }
 
-function formatUtcDateOnly(value: Date): string {
-  return value.toISOString().split('T')[0] ?? '';
-}
-
 function normalizeAdditionalInfoDates(
   data: Record<string, any>,
   sourceName: string
@@ -77,9 +86,9 @@ function normalizeAdditionalInfoDates(
 
     const parsedDate = parseDateLikeValue(value);
     if (parsedDate) {
-      normalized[key] = DATE_ONLY_FIELD_KEY_REGEX.test(key)
-        ? formatUtcDateOnly(parsedDate)
-        : parsedDate.toISOString();
+      // Always send full ISO UTC string — backend isValidUTC requires
+      // the "YYYY-MM-DDTHH:mm:ss.sssZ" format; date-only strings fail.
+      normalized[key] = parsedDate.toISOString();
       continue;
     }
 
@@ -92,7 +101,29 @@ function normalizeAdditionalInfoDates(
   return normalized;
 }
 
-// 📌 Updates customer profile (PUT) – runs only once
+async function attemptProfileUpdate(
+  url: string,
+  payload: object,
+  headers: Record<string, string>
+): Promise<{ ok: boolean; status: number; data: any }> {
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(payload),
+  });
+
+  const rawText = await res.text();
+  let data: any = null;
+  try {
+    data = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    // non-JSON body — keep data as null
+  }
+
+  return { ok: res.ok, status: res.status, data };
+}
+
+// 📌 Updates customer profile (PUT) – runs only once per install
 export async function updateUserProfile(
   info: Record<string, any> = {},
   cohorts: Record<string, any> = {}
@@ -102,19 +133,21 @@ export async function updateUserProfile(
   try {
     // 🔒 ONE-TIME GUARD
     const alreadyUpdated = await AsyncStorage.getItem(PROFILE_UPDATED_KEY);
-
     if (alreadyUpdated === 'true') {
-      console.log(
-        '⏭️ [SDK][Profile] Profile already updated – skipping API call'
-      );
+      console.log('⏭️ [SDK][Profile] Profile already updated – skipping API call');
       return;
     }
 
-    console.log('⏳ [SDK][Profile] Waiting 5 seconds before API call...');
-    await delay(5000);
-    console.log('🚀 [SDK][Profile] Delay complete, proceeding with API call');
-
-    console.log('📦 [SDK][Profile] Fetching identifiers from AsyncStorage...');
+    // Wait for OnUserLogin to complete before hitting the profile endpoint.
+    // The server creates the profile record during /device/link; if we fire
+    // too early the backend returns "profile not found" → 500.
+    console.log('⏳ [SDK][Profile] Waiting for UserLoggedIn flag...');
+    const loggedIn = await waitForUserLoggedIn(30_000);
+    if (!loggedIn) {
+      console.warn('⚠️ [SDK][Profile] Timed out waiting for login – aborting profile update');
+      return;
+    }
+    console.log('✅ [SDK][Profile] User is logged in, proceeding');
 
     const channel_code = await AsyncStorage.getItem('mehery_channel_id');
     const user_id = await AsyncStorage.getItem('user_id');
@@ -123,93 +156,68 @@ export async function updateUserProfile(
     console.log('👤 [SDK][Profile] user_id:', user_id);
 
     if (!channel_code) {
-      console.warn(
-        '⚠️ [SDK][Profile] Aborting profile update: channel_code is missing'
-      );
+      console.warn('⚠️ [SDK][Profile] Aborting: channel_code is missing');
       return;
     }
-
     if (!user_id) {
-      console.warn(
-        '⚠️ [SDK][Profile] Aborting profile update: user_id is missing'
-      );
+      console.warn('⚠️ [SDK][Profile] Aborting: user_id is missing');
       return;
     }
 
-    const normalizedAdditionalInfo = normalizeAdditionalInfoDates(
-      info,
-      'additionalInfo'
-    );
+    const normalizedAdditionalInfo = normalizeAdditionalInfoDates(info, 'additionalInfo');
     const normalizedCohorts = normalizeAdditionalInfoDates(cohorts, 'cohorts');
 
     const payload = {
       additionalInfo: normalizedAdditionalInfo,
-      ...(Object.keys(normalizedCohorts).length
-        ? { cohorts: normalizedCohorts }
-        : {}),
+      ...(Object.keys(normalizedCohorts).length ? { cohorts: normalizedCohorts } : {}),
     };
 
-    console.log(
-      '📡 [SDK][Profile] PUT /customer/profile payload:',
-      JSON.stringify(payload, null, 2)
-    );
+    console.log('📡 [SDK][Profile] PUT /customer/profile payload:', JSON.stringify(payload, null, 2));
 
     const baseUrl = await getApiBaseUrl();
-    const url = `${baseUrl}/v1/customer/profile?code=${encodeURIComponent(
-      user_id
-    )}`;
+    const url = `${baseUrl}/v1/customer/profile?code=${encodeURIComponent(user_id)}`;
     console.log('🌐 [SDK][Profile] Request URL:', url);
 
-    // ✅ BUILD COMMON HEADERS (SAFE, JS-ONLY)
     const commonHeaders = await buildCommonHeaders();
 
-    console.log('🧾 [SDK][Profile] Request headers:', {
-      'Content-Type': 'application/json',
-      ...commonHeaders,
-    });
+    // Retry up to 3 times on 5xx — the profile record may still be
+    // propagating shortly after device registration completes.
+    const MAX_RETRIES = 3;
+    const RETRY_DELAYS = [2_000, 5_000, 10_000];
+    let lastStatus = 0;
 
-    const startTime = Date.now();
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      console.log(`🔄 [SDK][Profile] Attempt ${attempt}/${MAX_RETRIES}`);
+      const startTime = Date.now();
 
-    const res = await fetch(url, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...commonHeaders,
-      },
-      body: JSON.stringify(payload),
-    });
+      const { ok, status, data } = await attemptProfileUpdate(url, payload, commonHeaders);
+      lastStatus = status;
 
-    const duration = Date.now() - startTime;
-    console.log(`⏱️ [SDK][Profile] Response received in ${duration}ms`);
+      console.log(`⏱️ [SDK][Profile] Response in ${Date.now() - startTime}ms — status ${status}`);
+      console.log('📥 [SDK][Profile] Response body:', data);
 
-    const rawText = await res.text();
-    console.log('📥 [SDK][Profile] Raw response body:', rawText);
+      if (ok) {
+        console.log('✅ [SDK][Profile] Profile updated successfully:', data);
+        await AsyncStorage.setItem(PROFILE_UPDATED_KEY, 'true');
+        console.log('🔒 [SDK][Profile] Profile update flag saved');
+        return data;
+      }
 
-    let data: any = null;
-    try {
-      data = rawText ? JSON.parse(rawText) : null;
-    } catch (parseErr) {
-      console.error(
-        '❌ [SDK][Profile] Failed to parse JSON response',
-        parseErr
-      );
+      // 4xx errors are data/auth problems — retrying won't help
+      if (status >= 400 && status < 500) {
+        console.error(`🚨 [SDK][Profile] Client error ${status}, not retrying`, data);
+        throw new Error(`[SDK][Profile] HTTP ${status}`);
+      }
+
+      // 5xx — retry after a back-off delay
+      if (attempt < MAX_RETRIES) {
+        const wait = RETRY_DELAYS[attempt - 1] ?? 5_000;
+        console.warn(`⚠️ [SDK][Profile] Server error ${status}, retrying in ${wait}ms...`);
+        await delay(wait);
+      }
     }
 
-    if (!res.ok) {
-      console.error('🚨 [SDK][Profile] Non-2xx response', {
-        status: res.status,
-        body: data,
-      });
-      throw new Error(`[SDK][Profile] HTTP ${res.status}`);
-    }
-
-    console.log('✅ [SDK][Profile] Profile updated successfully:', data);
-
-    // 🔐 MARK AS DONE (ONLY AFTER SUCCESS)
-    await AsyncStorage.setItem(PROFILE_UPDATED_KEY, 'true');
-    console.log('🔒 [SDK][Profile] Profile update flag saved');
-
-    return data;
+    throw new Error(`[SDK][Profile] HTTP ${lastStatus} after ${MAX_RETRIES} attempts`);
   } catch (err) {
     console.error('❌ [SDK][Profile] updateUserProfile failed', err);
     throw err;

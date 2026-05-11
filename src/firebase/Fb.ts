@@ -6,6 +6,8 @@ import { getDeviceId } from '../utils/device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
+import { waitForGeoIp } from '../utils/geoIpContext';
+import { SESSION_ID_STORAGE_KEY } from '../utils/user';
 
 import { NativeModules, Platform } from 'react-native';
 
@@ -91,11 +93,13 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
 
     const channel_id = await AsyncStorage.getItem('mehery_channel_id');
 
+    const geoIP = await waitForGeoIp();
     const payload = {
       device_id: finalDeviceId,
       channel_id: channel_id,
       platform: Platform.OS,
       token: token,
+      geoIP,
     };
 
     console.log('📡 Registering device with payload:', payload);
@@ -125,6 +129,12 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
     console.log('✅ Device registered/updated:', resData);
 
     lastApiCallTime = Date.now();
+
+    const newSessionId =
+      (resData && (resData.session_id || resData.sessionId)) || '';
+    if (newSessionId) {
+      await AsyncStorage.setItem(SESSION_ID_STORAGE_KEY, newSessionId);
+    }
 
     // 🧩 Save new registration state
     await AsyncStorage.multiSet([
@@ -907,7 +917,9 @@ export function setupForegroundNotificationListener(): () => void {
       localNotif.largeIconUrl = image;
     }
 
-    PushNotification.localNotification(localNotif);
+    if (Platform.OS === 'android') {
+      PushNotification.localNotification(localNotif);
+    }
   });
 
   foregroundUnsubscribe = () => {

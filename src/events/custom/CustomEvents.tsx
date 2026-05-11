@@ -9,6 +9,11 @@ import { renderTooltipPoll } from '../../components/TooltipPollManager';
 import Floater from '../../components/FloaterPoll';
 import { buildCommonHeaders } from '../../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../../helpers/tenantContext';
+import { waitForGeoIp } from '../../utils/geoIpContext';
+
+export type SendCustomEventOptions = {
+  eventType?: 'INTERACTIVE' | 'LOG';
+};
 
 function htmlToPlainText(value: unknown): string {
   if (typeof value !== 'string') return '';
@@ -60,7 +65,11 @@ function interpolateTemplateString(
 }
 
 // 📌 Sends a custom event, then triggers the poll fetchi
-export async function sendCustomEvent(event_name: string, event_data: object) {
+export async function sendCustomEvent(
+  event_name: string,
+  event_data: object,
+  options?: SendCustomEventOptions
+) {
   const stored_user_id = await AsyncStorage.getItem('user_id');
   const user_id = stored_user_id || 'guest';
   const device_id = await AsyncStorage.getItem('device_id');
@@ -69,7 +78,19 @@ export async function sendCustomEvent(event_name: string, event_data: object) {
   const channel_id = await AsyncStorage.getItem('mehery_channel_id');
   console.log('channel id at custom:', channel_id);
 
-  const payload = { user_id, channel_id, event_name, event_data };
+  const geoIP = await waitForGeoIp();
+  const session_id = (await AsyncStorage.getItem('sessionId')) ?? '';
+  const event_type = options?.eventType ?? 'INTERACTIVE';
+
+  const payload = {
+    user_id,
+    channel_id,
+    event_name,
+    event_data,
+    session_id,
+    event_type,
+    geoIP,
+  };
 
   console.log(`📡 Sending ${event_name} event:`, payload);
   const commonHeaders = await buildCommonHeaders();
@@ -492,7 +513,7 @@ export function OnAppOpen() {
   setTimeout(() => {
     try {
       console.log('🚀 Triggering app_open event');
-      sendCustomEvent('app_open', {});
+      sendCustomEvent('app_open', {}, { eventType: 'LOG' });
     } catch (error) {
       console.error('❌ Error during OnAppOpen:', error);
     }
@@ -500,7 +521,7 @@ export function OnAppOpen() {
 }
 
 export function OnAppClose() {
-  sendCustomEvent('app_close', {});
+  sendCustomEvent('app_close', {}, { eventType: 'LOG' });
 }
 
 /**

@@ -71,7 +71,13 @@ export default function PipPoll({
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: () => !maximized && !fullscreen,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return (
+          (Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5) &&
+          !maximized &&
+          !fullscreen
+        );
+      },
       onPanResponderGrant: () => {
         const x = (pan.x as any).__getValue();
         const y = (pan.y as any).__getValue();
@@ -236,8 +242,9 @@ export default function PipPoll({
             sendTrackEvent('dismissed').catch(() => {});
             onClose?.();
           }}
+          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
         >
-          <Text style={styles.maxBtnText}>X</Text>
+          <Text style={styles.maxBtnText}>✕</Text>
         </TouchableOpacity>
       </View>
     );
@@ -266,6 +273,7 @@ export default function PipPoll({
         onPress={() => setMaximized(true)}
         accessibilityRole="button"
         accessibilityLabel="Enter fullscreen"
+        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
       >
         <Text style={styles.maxBtnGlyph}>⛶</Text>
       </TouchableOpacity>
@@ -292,26 +300,32 @@ const styles = StyleSheet.create({
   },
   maxBtn: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 58 : 20,
-    right: 20,
-    backgroundColor: 'black',
-    padding: 12,
-    borderRadius: 5,
+    top: Platform.OS === 'ios' ? 50 : 20,
+    right: 15,
+    padding: 10,
+    zIndex: 10001,
   },
   maxBtnSmall: {
     position: 'absolute',
-    bottom: 5,
-    right: 5,
-    backgroundColor: 'black',
-    padding: 6,
-    borderRadius: 5,
+    bottom: 0,
+    right: 0,
+    padding: 10,
   },
-  maxBtnText: { color: 'white', fontWeight: 'bold' },
-  maxBtnGlyph: {
+  maxBtnText: {
     color: 'white',
     fontWeight: 'bold',
-    fontSize: 16,
-    lineHeight: 18,
+    fontSize: 28,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  maxBtnGlyph: {
+    color: 'white',
+    fontSize: 24,
+    lineHeight: 28,
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
 });

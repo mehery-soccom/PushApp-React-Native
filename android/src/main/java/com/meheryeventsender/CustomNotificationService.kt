@@ -3,7 +3,9 @@ package com.meheryeventsender
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.*
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.widget.RemoteViews
@@ -104,20 +106,21 @@ class CustomNotificationService(private val context: Context) {
 
         if (!isRichMedia) {
             if (showProgress) {
+                customView.setViewVisibility(R.id.progress_bar, View.VISIBLE)
                 customView.setProgressBar(R.id.progress_bar, 100, progress, false)
-            
                 try {
                     val color = Color.parseColor(progressColor)
-                    customView.setInt(
-                        R.id.progress_bar,
-                        "setColorFilter",
-                        color
-                    )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        customView.setColorStateList(
+                            R.id.progress_bar,
+                            "setProgressTintList",
+                            ColorStateList.valueOf(color)
+                        )
+                    }
                 } catch (_: Exception) {}
             } else {
                 customView.setViewVisibility(R.id.progress_bar, View.GONE)
             }
-            
         }
         
                 customView.setImageViewResource(R.id.icon, R.mipmap.ic_launcher)

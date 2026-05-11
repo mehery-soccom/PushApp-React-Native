@@ -21,9 +21,14 @@ class LiveActivityModule(private val reactContext: ReactApplicationContext) :
 
         while (iterator.hasNextKey()) {
             val key = iterator.nextKey()
-            val value = dataMap.getString(key)
-            if (value != null) {
-                data[key] = value
+            when (dataMap.getType(key)) {
+                ReadableType.String ->
+                    dataMap.getString(key)?.let { data[key] = it }
+                ReadableType.Number ->
+                    data[key] = dataMap.getDouble(key).toString()
+                ReadableType.Boolean ->
+                    data[key] = dataMap.getBoolean(key).toString()
+                else -> Unit
             }
         }
 

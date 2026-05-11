@@ -8,21 +8,22 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
-import io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService
 
 /**
- * Extends [ReactNativeFirebaseMessagingService] and removes the extra default RNFB service
- * (see [android/src/main/AndroidManifest.xml] tools:node=remove) so a single
- * MESSAGING_EVENT handler runs. The stock RN service had an empty onMessageReceived, which
- * could "win" manifest merge and prevent this class from ever handling data messages in background.
+ * Extends [FirebaseMessagingService] (not RNFB's subclass) so this library AAR compiles without a
+ * Gradle dependency on `@react-native-firebase/messaging`. Token and send lifecycle events are
+ * forwarded to RNFB via [RnfbMessagingCompat] when that library is on the classpath at runtime.
+ *
+ * Removes the extra default RNFB service (see [android/src/main/AndroidManifest.xml]
+ * tools:node=remove) so a single MESSAGING_EVENT handler runs.
  */
-class MyFirebaseMessagingService : ReactNativeFirebaseMessagingService() {
+class MyFirebaseMessagingService : FirebaseMessagingService() {
     private val TAG = "MyFirebaseMessagingService"
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
-        // Must run first: RN Firebase wires foreground `messaging().onMessage` and related JS
-        // delivery through the parent implementation.
+        // RNFB's stock service used an empty onMessageReceived (delivery via receiver/JS paths).
         super.onMessageReceived(remoteMessage)
         Log.i(
             TAG,
@@ -97,9 +98,24 @@ class MyFirebaseMessagingService : ReactNativeFirebaseMessagingService() {
     }
 
     override fun onNewToken(token: String) {
+        RnfbMessagingCompat.emitNewToken(token)
         super.onNewToken(token)
-        // Confirms the merged manifest uses this service class (token refresh path).
         Log.i(TAG, "Mehery FCM: onNewToken (service active, token length=${token.length})")
+    }
+
+    override fun onMessageSent(messageId: String) {
+        RnfbMessagingCompat.emitMessageSent(messageId)
+        super.onMessageSent(messageId)
+    }
+
+    override fun onSendError(messageId: String, exception: Exception) {
+        RnfbMessagingCompat.emitMessageSendError(messageId, exception)
+        super.onSendError(messageId, exception)
+    }
+
+    override fun onDeletedMessages() {
+        RnfbMessagingCompat.emitMessagesDeleted()
+        super.onDeletedMessages()
     }
 
     /** See README: `adb logcat -s MyFirebaseMessagingService:I` (zsh: quote *:S if using the silence-all form). */
@@ -223,15 +239,14 @@ class MyFirebaseMessagingService : ReactNativeFirebaseMessagingService() {
     
             val customService = CustomNotificationService(this)
     
-            // Extract image list from FCM
-            val imageList = NotificationPayloadUtils.extractLimitedImageList(data)
-    
             val notificationId =
                 (data["activity_id"] ?: "activity_${System.currentTimeMillis()}").hashCode()
     
-            val progressPercent = data["progressPercent"]?.toDoubleOrNull() ?: 0.0
-            val progressInt = (progressPercent * 100).toInt().coerceIn(0, 100)
-            val showProgress = !data["progressPercent"].isNullOrBlank()
+            val (_, progressInt) = NotificationPayloadUtils.parseProgressPercentString(
+                NotificationPayloadUtils.progressPercentRawFromData(data)
+            )
+            val showProgress = NotificationPayloadUtils.shouldShowLiveActivityProgressBar(data)
+            val heroImage = NotificationPayloadUtils.resolveLiveActivityHeroImageUrl(data)
 
             val notification = customService.createCustomNotification(
                 channelId = "live_activity_channel",
@@ -243,12 +258,12 @@ class MyFirebaseMessagingService : ReactNativeFirebaseMessagingService() {
                 tapTextColor = data["message3FontColorHex"] ?: "#CCCCCC",
                 progressColor = data["progressColorHex"] ?: "#00FF00",
                 backgroundColor = data["backgroundColorHex"] ?: "#FFFFFF",
-                imageUrl = NotificationPayloadUtils.resolveSingleImageUrl(data),
+                imageUrl = heroImage,
                 bg_color_gradient = data["bg_color_gradient"] ?: "",
                 bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
                 align = data["align"] ?: "",
                 notificationId = notificationId,
-                imageUrls = imageList,
+                imageUrls = emptyList(),
                 showProgress = showProgress,
                 progress = progressInt,
                 ctaData = data
@@ -256,6 +271,9 @@ class MyFirebaseMessagingService : ReactNativeFirebaseMessagingService() {
 
             decorateWithOpenTrackingIntent(notification, data)
             NotificationCtaUtils.appendCtaActions(this, notification, data)
+            if (data["action"] == "update") {
+                notification.setOnlyAlertOnce(true)
+            }
             notificationManager.notify(notificationId, notification.build())
             sendReceivedTracking(data)
         } catch (e: Exception) {

@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
+import { waitForGeoIp } from '../utils/geoIpContext';
+import { SESSION_ID_STORAGE_KEY } from '../utils/user';
 import messaging from '@react-native-firebase/messaging';
 
 let deviceRegistrationInProgress = false;
@@ -52,7 +54,7 @@ export async function registerDeviceWithAPNS(token: string) {
       lastRegisteredState,
     ] = await AsyncStorage.multiGet([
       'device_id',
-      'sessionId',
+      SESSION_ID_STORAGE_KEY,
       'contact_id',
       'lastRegisteredToken',
       'lastRegisteredState',
@@ -93,6 +95,7 @@ export async function registerDeviceWithAPNS(token: string) {
     const channel_id = await AsyncStorage.getItem('mehery_channel_id');
     console.log('channel id at custom:', channel_id);
 
+    const geoIP = await waitForGeoIp();
     // Prepare payload
     const payload = {
       device_id,
@@ -100,6 +103,7 @@ export async function registerDeviceWithAPNS(token: string) {
       platform: Platform.OS,
       token,
       fcm_token: fcmToken,
+      geoIP,
     };
     console.log('payload:', fcmToken);
     console.log('📡 Registering/updating device...', payload);
@@ -138,7 +142,7 @@ export async function registerDeviceWithAPNS(token: string) {
     await AsyncStorage.multiSet([
       ['APNStoken', token],
       ['lastRegisteredToken', token],
-      ['sessionId', newSessionId],
+      [SESSION_ID_STORAGE_KEY, newSessionId],
       ['contact_id', newContactId],
       [
         'lastRegisteredState',

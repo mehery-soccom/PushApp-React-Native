@@ -308,6 +308,7 @@ struct DeliveryActivityAttributes: ActivityAttributes {
         var bg_color_gradient : String
         var bg_color_gradient_dir : String
         var imageFileName: String?
+        var imageUrl: String?
     }
 }
 
@@ -317,7 +318,7 @@ struct DeliveryActivityLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: DeliveryActivityAttributes.self) { context in
             // Lock Screen / Banner
-            HStack {
+            HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 6) {
                     // Debug: Print styles being applied
                     let _ = print("🎨 Applying styles to message1: \(context.state.line1_font_text_styles)")
@@ -378,14 +379,15 @@ struct DeliveryActivityLiveActivity: Widget {
                         .frame(height: 6)
                 }
 
-                Spacer()
-                
-                if let avatar = loadImageFromAppGroup(named: context.state.imageFileName ?? "") {
-                    avatar
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 100, height: 60) // rectangle frame
-                        .clipped() // prevent overflow
+                if appGroupImageExists(context.state.imageFileName) {
+                    Spacer(minLength: 8)
+                    // Shown on the right like a standard rich notification; file is written in AppDelegate from the push image URL.
+                    liveActivityArtwork(
+                        imageFileName: context.state.imageFileName,
+                        width: 88,
+                        height: 56,
+                        cornerRadius: 10
+                    )
                 }
 
             }
@@ -401,15 +403,26 @@ struct DeliveryActivityLiveActivity: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Image(systemName: "shippingbox")
-                }
-                DynamicIslandExpandedRegion(.trailing) {
-                    Text("\(Int(context.state.progressPercent * 100))%")
-                        .font(.system(size: context.state.fontSize))
-                        .bold()
                         .foregroundColor(colorFromHex(context.state.fontColorHex))
                 }
+                DynamicIslandExpandedRegion(.trailing) {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        if appGroupImageExists(context.state.imageFileName) {
+                            liveActivityArtwork(
+                                imageFileName: context.state.imageFileName,
+                                width: 80,
+                                height: 80,
+                                cornerRadius: 12
+                            )
+                        }
+                        Text("\(Int(context.state.progressPercent * 100))%")
+                            .font(.system(size: context.state.fontSize))
+                            .bold()
+                            .foregroundColor(colorFromHex(context.state.fontColorHex))
+                    }
+                }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(context.state.message1)
                             .font(.caption)
                             .foregroundColor(.gray)
@@ -420,13 +433,23 @@ struct DeliveryActivityLiveActivity: Widget {
                     }
                 }
             } compactLeading: {
-                Text("Progress")
-                    .font(.caption)
+                Text("\(Int(context.state.progressPercent * 100))%")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
                     .foregroundColor(colorFromHex(context.state.fontColorHex))
             } compactTrailing: {
-                Text("\(Int(context.state.progressPercent * 100))%")
-                    .font(.caption)
-                    .foregroundColor(colorFromHex(context.state.fontColorHex))
+                if appGroupImageExists(context.state.imageFileName) {
+                    liveActivityArtwork(
+                        imageFileName: context.state.imageFileName,
+                        width: 36,
+                        height: 36,
+                        cornerRadius: 8
+                    )
+                } else {
+                    Text("\(Int(context.state.progressPercent * 100))%")
+                        .font(.caption)
+                        .foregroundColor(colorFromHex(context.state.fontColorHex))
+                }
             } minimal: {
                 Image(systemName: "clock")
                     .foregroundColor(colorFromHex(context.state.fontColorHex))
@@ -434,6 +457,17 @@ struct DeliveryActivityLiveActivity: Widget {
             .keylineTint(colorFromHex(context.state.progressColorHex))
         }
     }
+}
+
+private func appGroupImageExists(_ fileName: String?) -> Bool {
+    guard let name = fileName, !name.isEmpty,
+          let containerURL = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: "group.meheryeventsender.example.NotificationLiveActivity"
+          ) else {
+        return false
+    }
+    let path = containerURL.appendingPathComponent(name).path
+    return FileManager.default.fileExists(atPath: path)
 }
 
 func loadImageFromAppGroup(named name: String) -> Image? {
@@ -457,6 +491,25 @@ func loadImageFromAppGroup(named name: String) -> Image? {
 
     print("✅ Successfully loaded image: \(name)")
     return Image(uiImage: uiImage)
+}
+
+@ViewBuilder
+private func liveActivityArtwork(
+    imageFileName: String?,
+    width: CGFloat,
+    height: CGFloat,
+    cornerRadius: CGFloat
+) -> some View {
+    if let img = loadImageFromAppGroup(named: imageFileName ?? "") {
+        img
+            .resizable()
+            .scaledToFill()
+            .frame(width: width, height: height)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    } else {
+        Color.clear
+            .frame(width: width, height: height)
+    }
 }
 
 
@@ -566,7 +619,8 @@ extension DeliveryActivityAttributes.ContentState {
             align: "left",
             bg_color_gradient: "#080000",
             bg_color_gradient_dir: "toRight",
-            imageFileName: nil // Preview image URL
+            imageFileName: nil,
+            imageUrl: nil
         )
     }
 }
