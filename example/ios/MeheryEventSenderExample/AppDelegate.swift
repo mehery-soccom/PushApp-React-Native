@@ -73,13 +73,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   if let type = userInfo["type"] as? String,
      type == "silent_daily_ping" {
 
-    PushTokenManager.sendNotificationEvent(userInfo)
+    PushTokenManager.sendNotificationEventOrQueue(dictToAnyHashable(mergedNotificationFields(userInfo)))
 
     // 🚫 DO NOT start Live Activity
     completionHandler(.newData)
     return
   }
-    PushTokenManager.sendNotificationEvent(userInfo)
+    PushTokenManager.sendNotificationEventOrQueue(dictToAnyHashable(mergedNotificationFields(userInfo)))
 
     // Live Activity + image download must finish before background completion, or iOS suspends
     // the app (especially TestFlight / production) and the file never reaches the app group.
@@ -107,12 +107,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
      type == "silent_daily_ping" {
 
     // ✅ Silent = no UI
-    PushTokenManager.sendNotificationEvent(userInfo)
+    PushTokenManager.sendNotificationEventOrQueue(dictToAnyHashable(mergedNotificationFields(userInfo)))
     completionHandler([])
     return
   }
 
-    PushTokenManager.sendNotificationEvent(userInfo)
+    PushTokenManager.sendNotificationEventOrQueue(dictToAnyHashable(mergedNotificationFields(userInfo)))
 
     completionHandler([.banner, .sound, .badge, .list])
   }
@@ -128,12 +128,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     print("📩 User tapped action: \(actionID) in category: \(categoryID)")
     print("📦 Payload on tap: \(userInfo)")
 
-    // ✅ SEND TO JS (include action info)
-    var payload = userInfo
-    payload["actionIdentifier"] = actionID
-    payload["categoryIdentifier"] = categoryID
-
-    PushTokenManager.sendNotificationEvent(payload)
+    // ✅ SEND TO JS (flatten FCM blobs like Android; include action info)
+    var merged = mergedNotificationFields(userInfo)
+    merged["actionIdentifier"] = actionID
+    merged["categoryIdentifier"] = categoryID
+    PushTokenManager.sendNotificationEventOrQueue(dictToAnyHashable(merged))
 
     // ✅ Open URL when action has one (carousel buttons, 3-button, etc.)
     if let url = urlForAction(actionID, userInfo: userInfo) {
@@ -183,7 +182,30 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
               let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
       for (k, v) in obj { merged[k] = v }
     }
+    mergeJsonObjectStringBlobs(into: &merged, keys: ["payload", "extras", "custom", "mehery_data"])
     return merged
+  }
+
+  /// Same extra blob keys as Android [NotificationPayloadUtils.mergeEmbeddedJsonObjectStringsInto].
+  private func mergeJsonObjectStringBlobs(into merged: inout [String: Any], keys: [String]) {
+    for key in keys {
+      if let dict = merged[key] as? [String: Any] {
+        for (k, v) in dict { merged[k] = v }
+      } else if let dictH = merged[key] as? [AnyHashable: Any] {
+        for (k, v) in dictH { merged[String(describing: k)] = v }
+      } else if let raw = merged[key] as? String {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.hasPrefix("{"), let d = t.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { continue }
+        for (k, v) in obj { merged[k] = v }
+      }
+    }
+  }
+
+  private func dictToAnyHashable(_ dict: [String: Any]) -> [AnyHashable: Any] {
+    var out: [AnyHashable: Any] = [:]
+    for (k, v) in dict { out[k] = v }
+    return out
   }
 
   private func stringFromAny(_ value: Any?) -> String? {
@@ -282,6 +304,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
       return nil
     }
 
+    func legacyActionSlotFromPayload(_ id: String) -> Int? {
+      for i in 1...3 {
+        if let v = stringFromAny(merged["action\(i)"]), v == id { return i - 1 }
+      }
+      return nil
+    }
+
     // 0. __actionMap — same idea as foreground local notifications in `Fb.ts`
     if let mapObj = merged["__actionMap"] {
       if let map = mapObj as? [String: Any], let url = validUrl(stringFromAny(map[actionId])) {
@@ -322,16 +351,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     }
 
     // 3b. Indexed url1/url2… (templates used with `resolveForegroundCtaUrl` on JS)
-    if let index = actionIndex(actionId) {
-      let keysByIndex = [
-        ["url1", "cta1_url", "button1_url"],
-        ["url2", "cta2_url", "button2_url"],
-        ["url3", "cta3_url", "button3_url"]
-      ]
-      if keysByIndex.indices.contains(index) {
-        for key in keysByIndex[index] {
-          if let url = validUrl(str(key)) { return url }
-        }
+    let keysByIndex = [
+      ["url1", "cta1_url", "button1_url"],
+      ["url2", "cta2_url", "button2_url"],
+      ["url3", "cta3_url", "button3_url"]
+    ]
+    if let slot = legacyActionSlotFromPayload(actionId), keysByIndex.indices.contains(slot) {
+      for key in keysByIndex[slot] {
+        if let url = validUrl(str(key)) { return url }
+      }
+    }
+    if let index = actionIndex(actionId), keysByIndex.indices.contains(index) {
+      for key in keysByIndex[index] {
+        if let url = validUrl(str(key)) { return url }
       }
     }
 

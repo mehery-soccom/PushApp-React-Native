@@ -6,6 +6,8 @@ class PushTokenManager: RCTEventEmitter {
 
   @objc static var shared: PushTokenManager?
 
+  private static let pendingNotificationKey = "mehery_pending_notification_event_json"
+
   private var hasListeners = false
   private var lastToken: (type: String, token: String)?
   private var lastNotificationPayload: [String: Any]?
@@ -13,6 +15,9 @@ class PushTokenManager: RCTEventEmitter {
   override init() {
     super.init()
     PushTokenManager.shared = self
+    DispatchQueue.main.async {
+      PushTokenManager.flushPendingNotificationFromColdStartIfNeeded()
+    }
   }
 
   override func supportedEvents() -> [String]! {
@@ -60,6 +65,40 @@ class PushTokenManager: RCTEventEmitter {
         print("⚠️ No JS listeners for PushTokenEvent yet — saved for later.")
       }
     }
+  }
+
+  private static func persistPendingNotification(_ payload: [AnyHashable: Any]) {
+    var clean: [String: Any] = [:]
+    payload.forEach { clean[String(describing: $0.key)] = $0.value }
+    guard JSONSerialization.isValidJSONObject(clean),
+          let data = try? JSONSerialization.data(withJSONObject: clean, options: []) else {
+      print("⚠️ Mehery: could not serialize pending notification for cold start")
+      return
+    }
+    UserDefaults.standard.set(data, forKey: pendingNotificationKey)
+    print("📦 Mehery: buffered push notification for JS (bridge not ready)")
+  }
+
+  /// When the app opens from a killed state, `shared` may still be nil — queue until RN inits the module.
+  @objc static func sendNotificationEventOrQueue(_ payload: [AnyHashable: Any]) {
+    DispatchQueue.main.async {
+      guard PushTokenManager.shared != nil else {
+        persistPendingNotification(payload)
+        return
+      }
+      sendNotificationEvent(payload)
+    }
+  }
+
+  static func flushPendingNotificationFromColdStartIfNeeded() {
+    guard let data = UserDefaults.standard.data(forKey: pendingNotificationKey) else { return }
+    UserDefaults.standard.removeObject(forKey: pendingNotificationKey)
+    guard !data.isEmpty,
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [AnyHashable: Any] else {
+      return
+    }
+    print("📦 Mehery: delivering buffered push notification to JS")
+    sendNotificationEvent(obj)
   }
 
   @objc static func sendNotificationEvent(_ payload: [AnyHashable: Any]) {

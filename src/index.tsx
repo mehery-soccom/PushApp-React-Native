@@ -62,6 +62,7 @@ import {
 } from './helpers/tenantContext';
 import {
   extractClickTrackToken,
+  getPushTrackBaseFromMerged,
   mergeIosNotificationPayload,
   resolveIosSemanticCtaId,
 } from './utils/pushTrackPayload';
@@ -145,8 +146,19 @@ const trackIosPushEvent = async (
 
   try {
     const commonHeaders = await buildCommonHeaders();
-    const apiBaseUrl = await getApiBaseUrl();
-    await fetch(`${apiBaseUrl}/v1/notification/push/track`, {
+    let apiBaseUrl = getPushTrackBaseFromMerged(merged);
+    if (!apiBaseUrl) {
+      apiBaseUrl = await getApiBaseUrl();
+    }
+    if (!apiBaseUrl?.trim()) {
+      console.log(
+        '[PushTrack] iOS skipped (no api_base_url in payload and getApiBaseUrl empty)',
+        event
+      );
+      return;
+    }
+    const endpoint = `${apiBaseUrl.replace(/\/$/, '')}/v1/notification/push/track`;
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -154,6 +166,11 @@ const trackIosPushEvent = async (
       },
       body: JSON.stringify(body),
     });
+    if (res.ok) {
+      console.log('[PushTrack] iOS', event, 'HTTP', res.status);
+    } else {
+      console.log('[PushTrack] iOS', event, 'HTTP', res.status, '(not ok)');
+    }
   } catch (err) {
     console.log('⚠️ iOS push track failed (non-blocking):', err);
   }

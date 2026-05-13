@@ -1,5 +1,6 @@
 import {
   extractClickTrackToken,
+  getPushTrackBaseFromMerged,
   mergeIosNotificationPayload,
   resolveIosSemanticCtaId,
 } from '../utils/pushTrackPayload';
@@ -21,6 +22,23 @@ describe('pushTrackPayload', () => {
     });
     expect(merged.api_base_url).toBe('https://api.example/pushapp/api');
     expect(merged.title).toBe('Hi');
+  });
+
+  it('mergeIosNotificationPayload merges payload / extras JSON blobs', () => {
+    const merged = mergeIosNotificationPayload({
+      payload: '{"click_token":"jwt2","title":"x"}',
+      extras: '{"url1":"https://one.example"}',
+    });
+    expect(merged.click_token).toBe('jwt2');
+    expect(merged.url1).toBe('https://one.example');
+  });
+
+  it('getPushTrackBaseFromMerged reads api_base_url', () => {
+    expect(
+      getPushTrackBaseFromMerged({
+        track_base_url: ' https://t.example/ ',
+      })
+    ).toBe('https://t.example/');
   });
 
   it('extractClickTrackToken prefers t', () => {
@@ -48,5 +66,18 @@ describe('pushTrackPayload', () => {
     expect(resolveIosSemanticCtaId('custom_action', merged)).toBe(
       'custom_action'
     );
+  });
+
+  it('resolveIosSemanticCtaId maps PUSHAPP_* to title via action1..3', () => {
+    const merged = {
+      title1: 'Buy',
+      title2: 'Sell',
+      title3: 'Later',
+      action1: 'PUSHAPP_BUY',
+      action2: 'PUSHAPP_SELL',
+      action3: 'PUSHAPP_LATER',
+    };
+    expect(resolveIosSemanticCtaId('PUSHAPP_SELL', merged)).toBe('Sell');
+    expect(resolveIosSemanticCtaId('PUSHAPP_LATER', merged)).toBe('Later');
   });
 });

@@ -6,6 +6,34 @@
 const normalizedString = (value: unknown): string =>
   typeof value === 'string' ? value.trim() : '';
 
+const EMBEDDED_JSON_BLOB_KEYS = [
+  'payload',
+  'extras',
+  'custom',
+  'mehery_data',
+] as const;
+
+function mergeJsonObjectBlobInto(
+  merged: Record<string, unknown>,
+  rawBlob: unknown
+): void {
+  if (rawBlob != null && typeof rawBlob === 'object' && !Array.isArray(rawBlob)) {
+    Object.assign(merged, rawBlob as Record<string, unknown>);
+    return;
+  }
+  if (typeof rawBlob !== 'string') return;
+  const text = rawBlob.trim();
+  if (!text.startsWith('{')) return;
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      Object.assign(merged, parsed as Record<string, unknown>);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export function mergeIosNotificationPayload(
   payload: Record<string, unknown>
 ): Record<string, unknown> {
@@ -26,7 +54,30 @@ export function mergeIosNotificationPayload(
       }
     }
   }
+  for (const k of EMBEDDED_JSON_BLOB_KEYS) {
+    mergeJsonObjectBlobInto(merged, merged[k]);
+  }
   return merged;
+}
+
+/** Same host keys as Android [NotificationCtaUtils.trackBaseUrl] (payload-first). */
+export function getPushTrackBaseFromMerged(
+  merged: Record<string, unknown>
+): string {
+  const keys = [
+    'track_base_url',
+    'api_base_url',
+    'apiBaseUrl',
+    'base_url',
+    'push_api_url',
+    'pushapp_api_url',
+    'mehery_api_base_url',
+  ] as const;
+  for (const k of keys) {
+    const v = normalizedString(merged[k]);
+    if (v) return v;
+  }
+  return '';
 }
 
 export function extractClickTrackToken(
@@ -136,6 +187,14 @@ export function resolveIosSemanticCtaId(
 ): string {
   const id = normalizedString(actionId);
   if (!id) return '';
+
+  for (let i = 1; i <= 3; i++) {
+    const ak = `action${i}` as const;
+    if (normalizedString(merged[ak]) === id) {
+      const label = legacyTrackIdAtIndex(merged, i - 1);
+      return label || id;
+    }
+  }
 
   const buttons = parseCtaButtonArray(merged.cta_buttons ?? merged.buttons);
   if (buttons.length > 0) {
