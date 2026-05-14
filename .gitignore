@@ -90,3 +90,6 @@ android/generated
 nitrogen/
 android/java_pid*.hprof
 android/java_pid*.hprof
+
+*.tgz
+example/android/app/build/
