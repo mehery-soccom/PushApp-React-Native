@@ -56,6 +56,16 @@ async function persistRegistrationState(params: {
   await AsyncStorage.multiSet(valuesToStore);
 }
 
+async function cacheRegistrationTokens(params: {
+  token: string;
+  fcmToken: string | null;
+}) {
+  await AsyncStorage.multiSet([
+    ['APNStoken', params.token],
+    ['fcmToken', params.fcmToken ?? ''],
+  ]);
+}
+
 /**
  * Registers the device with APNS / push server.
  * Ensures registration only happens when needed and not repeatedly.
@@ -105,6 +115,8 @@ export async function registerDeviceWithAPNS(token: string) {
     } catch (e) {
       console.warn('⚠️ Could not fetch FCM token on iOS', e);
     }
+
+    await cacheRegistrationTokens({ token, fcmToken });
 
     const channel_id = (await AsyncStorage.getItem('mehery_channel_id')) ?? '';
     console.log('channel id at custom:', channel_id);

@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { OnAppOpen } from '../events/custom/CustomEvents';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { extractChannelSegment, getApiBaseUrl } from '../helpers/tenantContext';
+import { getDeviceId } from './device';
 import { waitForGeoIp } from './geoIpContext';
 
 /** AsyncStorage key; also written by device/register on some platforms. */
@@ -33,6 +34,45 @@ type UserDetails = {
 
 let storedUserDetails: UserDetails | null = null;
 let loginInProgress = false;
+const AUTO_REGISTER_TOKEN_WAIT_MS = 8000;
+const AUTO_REGISTER_TOKEN_POLL_MS = 400;
+
+async function waitForStoredRegistrationToken(
+  timeoutMs = AUTO_REGISTER_TOKEN_WAIT_MS
+): Promise<{ token: string; fcmToken: string }> {
+  const startedAt = Date.now();
+  let loggedWaiting = false;
+
+  while (true) {
+    const [lastRegisteredToken, apnsToken, fcmToken] =
+      await AsyncStorage.multiGet([
+        'lastRegisteredToken',
+        'APNStoken',
+        'fcmToken',
+      ]).then((entries) => entries.map(([_, v]) => v || ''));
+
+    const token = lastRegisteredToken || apnsToken || '';
+    const normalizedFcmToken = fcmToken || '';
+    if (token) {
+      return { token, fcmToken: normalizedFcmToken };
+    }
+
+    if (!loggedWaiting) {
+      console.log(
+        `⏳ Waiting up to ${Math.ceil(timeoutMs / 1000)}s for stored push token before auto-register.`
+      );
+      loggedWaiting = true;
+    }
+
+    if (Date.now() - startedAt >= timeoutMs) {
+      return { token: '', fcmToken: '' };
+    }
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, AUTO_REGISTER_TOKEN_POLL_MS)
+    );
+  }
+}
 
 async function recoverDeviceRegistration(
   apiBaseUrl: string,
@@ -40,13 +80,7 @@ async function recoverDeviceRegistration(
   deviceId: string,
   channelId: string
 ): Promise<boolean> {
-  const [lastRegisteredToken, apnsToken, fcmToken] =
-    await AsyncStorage.multiGet([
-      'lastRegisteredToken',
-      'APNStoken',
-      'fcmToken',
-    ]).then((entries) => entries.map(([_, v]) => v || ''));
-  const token = lastRegisteredToken || apnsToken;
+  const { token, fcmToken } = await waitForStoredRegistrationToken();
   if (!token) {
     console.warn(
       '⚠️ Cannot auto-register device: token is missing in storage.'
@@ -102,7 +136,13 @@ async function recoverDeviceRegistration(
   if (contactId) {
     await AsyncStorage.setItem('contact_id', contactId);
   }
-  await AsyncStorage.setItem('isRegistered', 'true');
+  await AsyncStorage.multiSet([
+    ['APNStoken', token],
+    ['fcmToken', fcmToken ?? ''],
+    ['lastRegisteredToken', token],
+    ['UserRegistered', 'true'],
+    ['isRegistered', 'true'],
+  ]);
   console.log('✅ Auto-registered device before relink.');
   return true;
 }
@@ -143,7 +183,8 @@ export async function OnUserLogin(user_id: string) {
   }
 
   try {
-    const device_id = await AsyncStorage.getItem('device_id');
+    const storedDeviceId = await AsyncStorage.getItem('device_id');
+    const device_id = storedDeviceId || (await getDeviceId());
     const userID = await AsyncStorage.getItem('user_id');
     const loginUserId = (userID || normalizedUserId).trim();
 
