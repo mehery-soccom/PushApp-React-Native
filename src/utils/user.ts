@@ -40,14 +40,17 @@ async function recoverDeviceRegistration(
   deviceId: string,
   channelId: string
 ): Promise<boolean> {
-  const [lastRegisteredToken, apnsToken, fcmToken] = await AsyncStorage.multiGet([
-    'lastRegisteredToken',
-    'APNStoken',
-    'fcmToken',
-  ]).then((entries) => entries.map(([_, v]) => v || ''));
+  const [lastRegisteredToken, apnsToken, fcmToken] =
+    await AsyncStorage.multiGet([
+      'lastRegisteredToken',
+      'APNStoken',
+      'fcmToken',
+    ]).then((entries) => entries.map(([_, v]) => v || ''));
   const token = lastRegisteredToken || apnsToken;
   if (!token) {
-    console.warn('⚠️ Cannot auto-register device: token is missing in storage.');
+    console.warn(
+      '⚠️ Cannot auto-register device: token is missing in storage.'
+    );
     return false;
   }
 
@@ -116,9 +119,7 @@ export function logUserDetails(details: UserDetails) {
 export async function OnUserLogin(user_id: string) {
   const normalizedUserId = user_id.trim();
   if (!normalizedUserId) {
-    console.warn(
-      '⏭️ [SDK][OnUserLogin] Skipped: user_id is missing/empty.'
-    );
+    console.warn('⏭️ [SDK][OnUserLogin] Skipped: user_id is missing/empty.');
     return;
   }
 
@@ -166,10 +167,8 @@ export async function OnUserLogin(user_id: string) {
         'UserLoggedIn',
         SESSION_ID_STORAGE_KEY,
       ]).then((entries) => entries.map(([_, v]) => v || ''));
-    if (
-      storedContactId === currentContactId &&
-      userLoggedInFlag.toLowerCase() === 'true'
-    ) {
+    const isUserLoggedIn = (userLoggedInFlag ?? '').toLowerCase() === 'true';
+    if (storedContactId === currentContactId && isUserLoggedIn) {
       console.log(
         '⏭️ [SDK][OnUserLogin] Skipped: same contact already logged in.',
         JSON.stringify({
