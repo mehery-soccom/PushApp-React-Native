@@ -95,14 +95,13 @@ export async function registerDeviceWithAPNS(token: string) {
       return;
     }
 
-    const [, , lastServerToken, lastRegisteredState] = await AsyncStorage.multiGet(
-      [
+    const [, , lastServerToken, lastRegisteredState] =
+      await AsyncStorage.multiGet([
         SESSION_ID_STORAGE_KEY,
         'contact_id',
         'lastRegisteredToken',
         'lastRegisteredState',
-      ]
-    ).then((entries) => entries.map(([_, v]) => v));
+      ]).then((entries) => entries.map(([_, v]) => v));
     console.log('last servertoken:', lastServerToken);
 
     const device_id = await getDeviceId();

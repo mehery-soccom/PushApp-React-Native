@@ -62,8 +62,14 @@ class LiveActivityModule(private val reactContext: ReactApplicationContext) :
                         }
                     }
                 }
+                ReadableType.Number ->
+                    data[key] = dataMap.getDouble(key).toInt().toString()
                 else -> Unit
             }
+        }
+
+        if (!data.containsKey("body") && data.containsKey("message")) {
+            data["body"] = data["message"]!!
         }
 
         LiveActivityUtils.handleCarouselNotification(reactContext, data)

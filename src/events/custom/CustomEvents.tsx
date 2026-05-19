@@ -9,6 +9,7 @@ import { renderTooltipPoll } from '../../components/TooltipPollManager';
 import Floater from '../../components/FloaterPoll';
 import { buildCommonHeaders } from '../../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../../helpers/tenantContext';
+import { getDeviceId } from '../../utils/device';
 import { waitForGeoIp } from '../../utils/geoIpContext';
 
 export type SendCustomEventOptions = {
@@ -72,7 +73,7 @@ export async function sendCustomEvent(
 ) {
   const stored_user_id = await AsyncStorage.getItem('user_id');
   const user_id = stored_user_id || 'guest';
-  const device_id = await AsyncStorage.getItem('device_id');
+  const device_id = await getDeviceId();
   console.log('device id:', device_id);
 
   const channel_id = await AsyncStorage.getItem('mehery_channel_id');

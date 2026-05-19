@@ -87,7 +87,9 @@ function isKnownHostRoot(v: string): boolean {
 }
 
 async function getPushAppHostRootFromStorage(): Promise<string> {
-  const root = (await AsyncStorage.getItem(MEHERY_PUSHAPP_HOST_ROOT_KEY))?.trim();
+  const root = (
+    await AsyncStorage.getItem(MEHERY_PUSHAPP_HOST_ROOT_KEY)
+  )?.trim();
   if (root && isKnownHostRoot(root)) return root;
   return DEFAULT_HOST_ROOT;
 }

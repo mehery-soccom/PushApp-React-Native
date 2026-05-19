@@ -17,7 +17,11 @@ function mergeJsonObjectBlobInto(
   merged: Record<string, unknown>,
   rawBlob: unknown
 ): void {
-  if (rawBlob != null && typeof rawBlob === 'object' && !Array.isArray(rawBlob)) {
+  if (
+    rawBlob != null &&
+    typeof rawBlob === 'object' &&
+    !Array.isArray(rawBlob)
+  ) {
     Object.assign(merged, rawBlob as Record<string, unknown>);
     return;
   }
@@ -39,7 +43,11 @@ export function mergeIosNotificationPayload(
 ): Record<string, unknown> {
   const merged: Record<string, unknown> = { ...payload };
   const rawData = payload.data;
-  if (rawData != null && typeof rawData === 'object' && !Array.isArray(rawData)) {
+  if (
+    rawData != null &&
+    typeof rawData === 'object' &&
+    !Array.isArray(rawData)
+  ) {
     Object.assign(merged, rawData as Record<string, unknown>);
   } else if (typeof rawData === 'string') {
     const text = rawData.trim();
@@ -83,7 +91,13 @@ export function getPushTrackBaseFromMerged(
 export function extractClickTrackToken(
   merged: Record<string, unknown>
 ): string | undefined {
-  const keys = ['t', 'click_token', 'clickToken', 'track_token', 'trackToken'] as const;
+  const keys = [
+    't',
+    'click_token',
+    'clickToken',
+    'track_token',
+    'trackToken',
+  ] as const;
   for (const k of keys) {
     const v = normalizedString(merged[k]);
     if (v) return v;
@@ -104,7 +118,9 @@ function parseCtaButtonArray(raw: unknown): Record<string, unknown>[] {
     }
   }
   if (Array.isArray(parsed)) {
-    return parsed.filter((x): x is Record<string, unknown> => !!x && typeof x === 'object');
+    return parsed.filter(
+      (x): x is Record<string, unknown> => !!x && typeof x === 'object'
+    );
   }
   if (parsed && typeof parsed === 'object') {
     const o = parsed as Record<string, unknown>;
@@ -121,8 +137,18 @@ function parseCtaButtonArray(raw: unknown): Record<string, unknown>[] {
   return [];
 }
 
-function trackIdFromButton(btn: Record<string, unknown>, fallback: string): string {
-  const idKeys = ['id', 'ctaId', 'cta_id', 'actionId', 'action_id', 'value'] as const;
+function trackIdFromButton(
+  btn: Record<string, unknown>,
+  fallback: string
+): string {
+  const idKeys = [
+    'id',
+    'ctaId',
+    'cta_id',
+    'actionId',
+    'action_id',
+    'value',
+  ] as const;
   for (const k of idKeys) {
     const s = normalizedString(btn[k]);
     if (s) return s;
@@ -162,7 +188,10 @@ function iosActionButtonIndex(actionId: string): number | null {
   return null;
 }
 
-function legacyTrackIdAtIndex(merged: Record<string, unknown>, index: number): string {
+function legacyTrackIdAtIndex(
+  merged: Record<string, unknown>,
+  index: number
+): string {
   const titleKeys = [
     ['title1', 'cta1_title', 'button1_title'],
     ['title2', 'cta2_title', 'button2_title'],

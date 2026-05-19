@@ -68,51 +68,28 @@ object LiveActivityUtils {
 
     fun handleCarouselNotification(context: Context, data: Map<String, String>) {
         try {
-            val notificationManager =
-                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-            val channelId = "rich_media_channel"
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channel = NotificationChannel(
-                    channelId,
-                    "Rich Media Notifications",
-                    NotificationManager.IMPORTANCE_HIGH
-                )
-                notificationManager.createNotificationChannel(channel)
+            val imageList = NotificationPayloadUtils.extractLimitedImageList(data)
+            if (imageList.size < 2) {
+                Log.w("LiveActivityUtils", "Carousel requires at least 2 images")
+                return
             }
 
-            val imageList = NotificationPayloadUtils.extractLimitedImageList(data)
-            if (imageList.isEmpty()) return
-
-            val customService = CustomNotificationService(context)
             val notificationId =
                 (data["notification_id"] ?: "carousel_${System.currentTimeMillis()}").hashCode()
 
-            val builder = customService.createCustomNotification(
-                channelId = channelId,
-                title = data["title"] ?: "Notification",
-                message = data["message"] ?: (data["body"] ?: ""),
-                tapText = data["tapText"] ?: "",
-                titleColor = data["titleColorHex"] ?: "#000000",
-                messageColor = data["messageColorHex"] ?: "#000000",
-                tapTextColor = data["tapTextColorHex"] ?: "#666666",
-                progressColor = data["progressColorHex"] ?: "#00FF00",
-                backgroundColor = data["backgroundColorHex"] ?: "#FFFFFF",
-                imageUrl = NotificationPayloadUtils.resolveSingleImageUrl(data),
-                bg_color_gradient = data["bg_color_gradient"] ?: "",
-                bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
-                align = data["align"] ?: "",
+            val title = data["title"] ?: "Notification"
+            val body = data["body"] ?: data["message"] ?: ""
+            val startIndex = data["index"]?.toIntOrNull()?.coerceIn(0, imageList.size - 1) ?: 0
+
+            CarouselBigPictureNotification.show(
+                context = context,
                 notificationId = notificationId,
-                imageUrls = imageList,
-                showProgress = false,
-                isRichMedia = true,
+                images = imageList,
+                index = startIndex,
+                title = title,
+                body = body,
                 ctaData = data
             )
-
-            builder.setContentIntent(NotificationCtaUtils.buildOpenPendingIntent(context, data))
-            NotificationCtaUtils.appendCtaActions(context, builder, data)
-
-            notificationManager.notify(notificationId, builder.build())
         } catch (e: Exception) {
             Log.e("LiveActivityUtils", "Carousel notification error: ${e.message}", e)
         }

@@ -42,9 +42,9 @@ describe('pushTrackPayload', () => {
   });
 
   it('extractClickTrackToken prefers t', () => {
-    expect(
-      extractClickTrackToken({ t: '  abc  ', click_token: 'other' })
-    ).toBe('abc');
+    expect(extractClickTrackToken({ t: '  abc  ', click_token: 'other' })).toBe(
+      'abc'
+    );
     expect(extractClickTrackToken({ clickToken: 'x' })).toBe('x');
   });
 

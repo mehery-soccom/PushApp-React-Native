@@ -1,6 +1,6 @@
 import messaging from '@react-native-firebase/messaging';
 import app from '@react-native-firebase/app';
-import { Linking, PermissionsAndroid } from 'react-native';
+import { Linking } from 'react-native';
 import PushNotification from 'react-native-push-notification';
 import { getDeviceId } from '../utils/device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -14,6 +14,7 @@ import {
 } from '../utils/pushTrackPayload';
 
 import { NativeModules, Platform } from 'react-native';
+import { ensureAndroidNotificationPermission } from '../native/LiveActivity';
 
 const pushCtaLog = (msg: string, extra?: unknown) => {
   if (extra !== undefined) {
@@ -154,39 +155,33 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
   }
 }
 
-export function requestUserPermission(): void {
-  // iOS-style permission
-  messaging()
-    .requestPermission()
-    .then((authStatus) => {
+export async function requestUserPermission(): Promise<void> {
+  if (Platform.OS === 'ios') {
+    try {
+      const authStatus = await messaging().requestPermission();
       const enabled =
         authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
         authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
       if (enabled) {
-        console.log('✅ iOS-like notification permission granted:', authStatus);
+        console.log('✅ iOS notification permission granted:', authStatus);
       } else {
-        console.warn('❌ iOS-like notification permission denied');
+        console.warn('❌ iOS notification permission denied');
       }
-    })
-    .catch(() => {
-      // Probably not iOS
-    });
+    } catch {
+      // Not iOS Firebase messaging
+    }
+    return;
+  }
 
-  // Android POST_NOTIFICATIONS (Android 13+)
-  PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS)
-    .then((permission) => {
-      if (permission === PermissionsAndroid.RESULTS.GRANTED) {
-        console.log('✅ Android POST_NOTIFICATIONS permission granted');
-      } else {
-        console.warn('❌ Android POST_NOTIFICATIONS permission denied');
-      }
-    })
-    .catch(() => {
-      // Possibly not Android or permission API not available
-    });
-
-  console.log('check perms');
+  if (Platform.OS === 'android') {
+    const granted = await ensureAndroidNotificationPermission();
+    if (granted) {
+      console.log('✅ Android POST_NOTIFICATIONS permission granted');
+    } else {
+      console.warn('❌ Android POST_NOTIFICATIONS permission denied');
+    }
+  }
 }
 
 const MAX_FCM_TOKEN_RETRIES = 4;
@@ -216,7 +211,7 @@ function resolveSingleImageFromData(data: Record<string, any>): string | null {
     return null;
   }
   const best = values.find((v) => looksLikeHttpImageUrl(v));
-  return (best ?? values[0]) ?? null;
+  return best ?? values[0] ?? null;
 }
 
 function resolveImageListFromData(data: Record<string, any>): string[] {
@@ -408,10 +403,16 @@ function resolveForegroundCtaUrl(
     if (u) return u;
   }
 
-  if ((action === '0' || action === 'ACTION_0') && normalizedString(data.url1)) {
+  if (
+    (action === '0' || action === 'ACTION_0') &&
+    normalizedString(data.url1)
+  ) {
     return normalizedString(data.url1);
   }
-  if ((action === '1' || action === 'ACTION_1') && normalizedString(data.url2)) {
+  if (
+    (action === '1' || action === 'ACTION_1') &&
+    normalizedString(data.url2)
+  ) {
     return normalizedString(data.url2);
   }
   return undefined;
@@ -542,8 +543,9 @@ function ensureBackgroundMessageHandlerRegistered(): void {
     if (messageId) {
       seenBackgroundMessageIds.add(messageId);
       if (seenBackgroundMessageIds.size > BACKGROUND_MESSAGE_CACHE_LIMIT) {
-        const oldest = seenBackgroundMessageIds.values().next()
-          .value as string | undefined;
+        const oldest = seenBackgroundMessageIds.values().next().value as
+          | string
+          | undefined;
         if (oldest) seenBackgroundMessageIds.delete(oldest);
       }
     }
@@ -576,11 +578,14 @@ function ensureBackgroundMessageHandlerRegistered(): void {
       const actionMap = buildForegroundActionUrlMap(data);
       const actionMapJson = JSON.stringify(actionMap);
       try {
-        pushCtaLog('background FCM (JS) parsed CTAs — actions shown by native', {
-          actions: actionTitles,
-          pairs: actionPairs.map((p) => ({ title: p.title, url: p.url })),
-          actionMapJson,
-        });
+        pushCtaLog(
+          'background FCM (JS) parsed CTAs — actions shown by native',
+          {
+            actions: actionTitles,
+            pairs: actionPairs.map((p) => ({ title: p.title, url: p.url })),
+            actionMapJson,
+          }
+        );
       } catch (e) {
         pushCtaLog('log background CTA payload failed', e);
       }
@@ -648,118 +653,124 @@ async function handlePushNotificationInteraction(raw: any) {
   const log = pushCtaLog;
 
   try {
-  log('--- interaction start ---', {
-    platform: Platform.OS,
-    rawKeys: raw && typeof raw === 'object' ? Object.keys(raw) : typeof raw,
-  });
-
-  let notification = raw;
-  if (Platform.OS === 'android' && notification?.data != null) {
-    if (typeof notification.data === 'string') {
-      try {
-        notification = {
-          ...notification,
-          data: JSON.parse(notification.data),
-        };
-        log('parsed notification.data from JSON string');
-      } catch (e) {
-        log('failed to JSON.parse notification.data, keeping string', e);
-      }
-    }
-  }
-
-  log('full notification object', JSON.stringify(notification, null, 2));
-
-  const rawPayload = (notification?.data ||
-    notification?.userInfo ||
-    {}) as Record<string, unknown>;
-  const notificationData = mergeIosNotificationPayload(
-    rawPayload
-  ) as Record<string, any>;
-
-  const action = notification?.action;
-  log('resolved action field', {
-    action,
-    userInteraction: notification?.userInteraction,
-    foreground: notification?.foreground,
-  });
-
-  if (!action) {
-    try {
-      log('track opened (body tap, non-fatal if it fails)');
-      await trackPushEvent('opened', notificationData);
-    } catch (e) {
-      log('trackPushEvent(opened) error', e);
-    }
-    log('no action on payload — likely body tap, not a CTA button; stop here');
-    return;
-  }
-
-  const actionMapRaw =
-    notificationData.__actionMap ||
-    notification?.data?.__actionMap ||
-    notification?.userInfo?.__actionMap ||
-    notification?.__actionMap;
-  log('__actionMap raw', actionMapRaw ?? '(none)');
-
-  let actionMap: Record<string, string> =
-    buildForegroundActionUrlMap(notificationData);
-  log('actionMap from url1/title1/action1…', actionMap);
-
-  if (actionMapRaw) {
-    try {
-      const parsed = JSON.parse(String(actionMapRaw)) as Record<string, string>;
-      if (parsed && typeof parsed === 'object') {
-        actionMap = { ...actionMap, ...parsed };
-        log('actionMap after merge with __actionMap', actionMap);
-      }
-    } catch (e) {
-      log('JSON.parse(__actionMap) failed', e);
-    }
-  }
-
-  try {
-    const targetUrl = resolveForegroundCtaUrl(
-      String(action),
-      notificationData,
-      actionMap
-    );
-    log('resolveForegroundCtaUrl result', {
-      action: String(action),
-      targetUrl: targetUrl ?? '(null)',
+    log('--- interaction start ---', {
+      platform: Platform.OS,
+      rawKeys: raw && typeof raw === 'object' ? Object.keys(raw) : typeof raw,
     });
 
-    try {
-      await trackPushEvent('cta', notificationData, String(action));
-      log('trackPushEvent(cta) finished');
-    } catch (e) {
-      log('trackPushEvent(cta) error (continuing to try open URL)', e);
-    }
-
-    if (targetUrl) {
-      log('calling Linking.openURL', targetUrl);
-      try {
-        const opened = await Linking.openURL(targetUrl);
-        log('Linking.openURL returned', opened);
-      } catch (e) {
-        log('Linking.openURL threw', e);
+    let notification = raw;
+    if (Platform.OS === 'android' && notification?.data != null) {
+      if (typeof notification.data === 'string') {
+        try {
+          notification = {
+            ...notification,
+            data: JSON.parse(notification.data),
+          };
+          log('parsed notification.data from JSON string');
+        } catch (e) {
+          log('failed to JSON.parse notification.data, keeping string', e);
+        }
       }
-    } else {
-      log('no targetUrl — dump url/title/action fields from data', {
-        url1: notificationData.url1,
-        url2: notificationData.url2,
-        title1: notificationData.title1,
-        title2: notificationData.title2,
-        action1: notificationData.action1,
-        action2: notificationData.action2,
-        actionMapKeys: Object.keys(actionMap),
-      });
     }
-  } catch (err) {
-    log('handlePushNotificationInteraction CTA block failed', err);
-  }
 
-  log('--- interaction end ---');
+    log('full notification object', JSON.stringify(notification, null, 2));
+
+    const rawPayload = (notification?.data ||
+      notification?.userInfo ||
+      {}) as Record<string, unknown>;
+    const notificationData = mergeIosNotificationPayload(rawPayload) as Record<
+      string,
+      any
+    >;
+
+    const action = notification?.action;
+    log('resolved action field', {
+      action,
+      userInteraction: notification?.userInteraction,
+      foreground: notification?.foreground,
+    });
+
+    if (!action) {
+      try {
+        log('track opened (body tap, non-fatal if it fails)');
+        await trackPushEvent('opened', notificationData);
+      } catch (e) {
+        log('trackPushEvent(opened) error', e);
+      }
+      log(
+        'no action on payload — likely body tap, not a CTA button; stop here'
+      );
+      return;
+    }
+
+    const actionMapRaw =
+      notificationData.__actionMap ||
+      notification?.data?.__actionMap ||
+      notification?.userInfo?.__actionMap ||
+      notification?.__actionMap;
+    log('__actionMap raw', actionMapRaw ?? '(none)');
+
+    let actionMap: Record<string, string> =
+      buildForegroundActionUrlMap(notificationData);
+    log('actionMap from url1/title1/action1…', actionMap);
+
+    if (actionMapRaw) {
+      try {
+        const parsed = JSON.parse(String(actionMapRaw)) as Record<
+          string,
+          string
+        >;
+        if (parsed && typeof parsed === 'object') {
+          actionMap = { ...actionMap, ...parsed };
+          log('actionMap after merge with __actionMap', actionMap);
+        }
+      } catch (e) {
+        log('JSON.parse(__actionMap) failed', e);
+      }
+    }
+
+    try {
+      const targetUrl = resolveForegroundCtaUrl(
+        String(action),
+        notificationData,
+        actionMap
+      );
+      log('resolveForegroundCtaUrl result', {
+        action: String(action),
+        targetUrl: targetUrl ?? '(null)',
+      });
+
+      try {
+        await trackPushEvent('cta', notificationData, String(action));
+        log('trackPushEvent(cta) finished');
+      } catch (e) {
+        log('trackPushEvent(cta) error (continuing to try open URL)', e);
+      }
+
+      if (targetUrl) {
+        log('calling Linking.openURL', targetUrl);
+        try {
+          const opened = await Linking.openURL(targetUrl);
+          log('Linking.openURL returned', opened);
+        } catch (e) {
+          log('Linking.openURL threw', e);
+        }
+      } else {
+        log('no targetUrl — dump url/title/action fields from data', {
+          url1: notificationData.url1,
+          url2: notificationData.url2,
+          title1: notificationData.title1,
+          title2: notificationData.title2,
+          action1: notificationData.action1,
+          action2: notificationData.action2,
+          actionMapKeys: Object.keys(actionMap),
+        });
+      }
+    } catch (err) {
+      log('handlePushNotificationInteraction CTA block failed', err);
+    }
+
+    log('--- interaction end ---');
   } catch (fatal) {
     log('handlePushNotificationInteraction fatal (outer catch)', fatal);
   }
@@ -869,15 +880,16 @@ export function setupForegroundNotificationListener(): () => void {
       0,
       MAX_CAROUSEL_IMAGES
     );
-    if (carouselImages.length > 0) {
+    if (carouselImages.length > 1) {
       console.log('🖼️ Carousel images parsed:', carouselImages);
     }
 
-    if (carouselImages.length > 0) {
-      console.log('🚀 Triggering Carousel Live Activity...');
+    if (carouselImages.length > 1) {
+      console.log('🚀 Triggering Android carousel notification...');
       if (Platform.OS === 'android' && LiveActivityModule?.triggerCarousel) {
         LiveActivityModule.triggerCarousel({
           title,
+          body: message,
           message,
           images: carouselImages,
         });

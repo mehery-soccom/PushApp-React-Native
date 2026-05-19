@@ -287,11 +287,29 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     private fun handleRichMediaNotification(data: Map<String, String>) {
+        val imageList = NotificationPayloadUtils.extractLimitedImageList(data)
+        val notificationId =
+            (data["notification_id"] ?: System.currentTimeMillis().toString()).hashCode()
+
+        if (imageList.size > 1) {
+            CarouselBigPictureNotification.show(
+                context = this,
+                notificationId = notificationId,
+                images = imageList,
+                index = 0,
+                title = data["title"] ?: "Notification",
+                body = data["body"] ?: "",
+                ctaData = data
+            )
+            sendReceivedTracking(data)
+            return
+        }
+
         val notificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    
+
         val channelId = "rich_media_channel"
-    
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
@@ -300,14 +318,9 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             )
             notificationManager.createNotificationChannel(channel)
         }
-    
-        val notificationId =
-            (data["notification_id"] ?: System.currentTimeMillis().toString()).hashCode()
-    
+
         val customService = CustomNotificationService(this)
-    
-        val imageList = NotificationPayloadUtils.extractLimitedImageList(data)
-    
+
         val builder = customService.createCustomNotification(
             channelId = channelId,
             title = data["title"] ?: "Notification",
@@ -322,13 +335,11 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
             align = data["align"] ?: "",
             notificationId = notificationId,
-            imageUrls = imageList,
-            showProgress = false, // ✅ IMPORTANT
-            isRichMedia = true,   // ✅ KEY LINE
+            imageUrls = emptyList(),
+            showProgress = false,
+            isRichMedia = true,
             progressColor = data["progressColorHex"] ?: "#00FF00",
             ctaData = data
-
-
         )
         decorateWithOpenTrackingIntent(builder, data)
         NotificationCtaUtils.appendCtaActions(this, builder, data)

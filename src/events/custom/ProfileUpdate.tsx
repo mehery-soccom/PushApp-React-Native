@@ -134,7 +134,9 @@ export async function updateUserProfile(
     // 🔒 ONE-TIME GUARD
     const alreadyUpdated = await AsyncStorage.getItem(PROFILE_UPDATED_KEY);
     if (alreadyUpdated === 'true') {
-      console.log('⏭️ [SDK][Profile] Profile already updated – skipping API call');
+      console.log(
+        '⏭️ [SDK][Profile] Profile already updated – skipping API call'
+      );
       return;
     }
 
@@ -144,7 +146,9 @@ export async function updateUserProfile(
     console.log('⏳ [SDK][Profile] Waiting for UserLoggedIn flag...');
     const loggedIn = await waitForUserLoggedIn(30_000);
     if (!loggedIn) {
-      console.warn('⚠️ [SDK][Profile] Timed out waiting for login – aborting profile update');
+      console.warn(
+        '⚠️ [SDK][Profile] Timed out waiting for login – aborting profile update'
+      );
       return;
     }
     console.log('✅ [SDK][Profile] User is logged in, proceeding');
@@ -164,15 +168,23 @@ export async function updateUserProfile(
       return;
     }
 
-    const normalizedAdditionalInfo = normalizeAdditionalInfoDates(info, 'additionalInfo');
+    const normalizedAdditionalInfo = normalizeAdditionalInfoDates(
+      info,
+      'additionalInfo'
+    );
     const normalizedCohorts = normalizeAdditionalInfoDates(cohorts, 'cohorts');
 
     const payload = {
       additionalInfo: normalizedAdditionalInfo,
-      ...(Object.keys(normalizedCohorts).length ? { cohorts: normalizedCohorts } : {}),
+      ...(Object.keys(normalizedCohorts).length
+        ? { cohorts: normalizedCohorts }
+        : {}),
     };
 
-    console.log('📡 [SDK][Profile] PUT /customer/profile payload:', JSON.stringify(payload, null, 2));
+    console.log(
+      '📡 [SDK][Profile] PUT /customer/profile payload:',
+      JSON.stringify(payload, null, 2)
+    );
 
     const baseUrl = await getApiBaseUrl();
     const url = `${baseUrl}/v1/customer/profile?code=${encodeURIComponent(user_id)}`;
@@ -190,10 +202,16 @@ export async function updateUserProfile(
       console.log(`🔄 [SDK][Profile] Attempt ${attempt}/${MAX_RETRIES}`);
       const startTime = Date.now();
 
-      const { ok, status, data } = await attemptProfileUpdate(url, payload, commonHeaders);
+      const { ok, status, data } = await attemptProfileUpdate(
+        url,
+        payload,
+        commonHeaders
+      );
       lastStatus = status;
 
-      console.log(`⏱️ [SDK][Profile] Response in ${Date.now() - startTime}ms — status ${status}`);
+      console.log(
+        `⏱️ [SDK][Profile] Response in ${Date.now() - startTime}ms — status ${status}`
+      );
       console.log('📥 [SDK][Profile] Response body:', data);
 
       if (ok) {
@@ -205,19 +223,26 @@ export async function updateUserProfile(
 
       // 4xx errors are data/auth problems — retrying won't help
       if (status >= 400 && status < 500) {
-        console.error(`🚨 [SDK][Profile] Client error ${status}, not retrying`, data);
+        console.error(
+          `🚨 [SDK][Profile] Client error ${status}, not retrying`,
+          data
+        );
         throw new Error(`[SDK][Profile] HTTP ${status}`);
       }
 
       // 5xx — retry after a back-off delay
       if (attempt < MAX_RETRIES) {
         const wait = RETRY_DELAYS[attempt - 1] ?? 5_000;
-        console.warn(`⚠️ [SDK][Profile] Server error ${status}, retrying in ${wait}ms...`);
+        console.warn(
+          `⚠️ [SDK][Profile] Server error ${status}, retrying in ${wait}ms...`
+        );
         await delay(wait);
       }
     }
 
-    throw new Error(`[SDK][Profile] HTTP ${lastStatus} after ${MAX_RETRIES} attempts`);
+    throw new Error(
+      `[SDK][Profile] HTTP ${lastStatus} after ${MAX_RETRIES} attempts`
+    );
   } catch (err) {
     console.error('❌ [SDK][Profile] updateUserProfile failed', err);
     throw err;

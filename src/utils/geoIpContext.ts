@@ -69,7 +69,9 @@ export function setGeoIP(partial: GeoIpInput): void {
   hostPartial = mergeGeoInput(hostPartial, partial);
   setGeoEverCalled = true;
   flushEarlyNotify();
-  void scheduleSessionGeoSync();
+  scheduleSessionGeoSync().catch(() => {
+    // Errors are logged inside syncSessionGeoInBackground.
+  });
 }
 
 function delay(ms: number): Promise<void> {
@@ -112,7 +114,9 @@ async function syncSessionGeoInBackground(): Promise<void> {
   try {
     const AsyncStorage =
       require('@react-native-async-storage/async-storage')?.default;
-    session_id = (await AsyncStorage?.getItem?.(SESSION_ID_STORAGE_KEY))?.trim();
+    session_id = (
+      await AsyncStorage?.getItem?.(SESSION_ID_STORAGE_KEY)
+    )?.trim();
   } catch {
     session_id = '';
   }

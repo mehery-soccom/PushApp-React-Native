@@ -120,9 +120,10 @@ object NotificationCtaUtils {
     fun appendCtaActions(
         context: Context,
         builder: NotificationCompat.Builder,
-        data: Map<String, String>
+        data: Map<String, String>,
+        maxActions: Int = MAX_ANDROID_ACTIONS
     ) {
-        val specs = extractCtaSpecs(data).take(MAX_ANDROID_ACTIONS)
+        val specs = extractCtaSpecs(data).take(maxActions.coerceIn(0, MAX_ANDROID_ACTIONS))
         val actionIcons = intArrayOf(
             android.R.drawable.ic_menu_view,
             android.R.drawable.ic_menu_send,

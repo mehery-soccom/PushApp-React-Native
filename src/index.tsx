@@ -29,6 +29,13 @@ export { showPollOverlay, hidePollOverlay } from './components/PollOverlay';
 
 export { InlinePollContainer } from './components/RenderInlinePoll';
 
+export {
+  triggerCarouselNotification,
+  triggerLiveActivity,
+  ensureAndroidNotificationPermission,
+} from './native/LiveActivity';
+export type { TriggerCarouselNotificationParams } from './native/LiveActivity';
+
 import { AppRegistry } from 'react-native';
 
 // 🛠 Imports
@@ -119,9 +126,7 @@ const trackIosPushEvent = async (
   const messageId = normalizePayloadString(
     merged.messageId || merged.message_id
   );
-  const filterId = normalizePayloadString(
-    merged.filterId || merged.filter_id
-  );
+  const filterId = normalizePayloadString(merged.filterId || merged.filter_id);
   const notificationId = normalizePayloadString(merged.notification_id);
 
   const dedupeKey = [event, messageId, filterId, ctaId || '', notificationId]
@@ -382,8 +387,8 @@ export const initSdk = async (
     await AsyncStorage.setItem('mehery_channel_id', identifier);
     console.log(`💾 Saved Channel ID: ${identifier}`);
 
-    // ✅ Fetch or create device ID
-    fetchDeviceId();
+    // ✅ Fetch or create device ID (await so early custom events have x-device-id)
+    await fetchDeviceId();
 
     // ✅ iOS specific setup
     if (Platform.OS === 'ios') {

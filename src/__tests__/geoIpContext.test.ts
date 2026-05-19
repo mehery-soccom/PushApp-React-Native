@@ -69,5 +69,4 @@ describe('geoIpContext', () => {
       city: { name: 'Berlin' },
     });
   });
-
 });

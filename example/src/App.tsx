@@ -18,6 +18,7 @@ import {
   OnAppOpen,
   updateUserProfile,
   sendCustomEvent,
+  triggerCarouselNotification,
   type SdkInitEnvironmentParam,
 } from 'react-native-mehery-event-sender';
 import { PollOverlayProvider } from 'react-native-mehery-event-sender';
@@ -25,10 +26,7 @@ import { InlinePollContainer } from 'react-native-mehery-event-sender';
 import { TooltipPollContainer } from 'react-native-mehery-event-sender';
 
 import DeviceInfo from 'react-native-device-info';
-import {
-  setDeviceMetadata,
-  setGeoIP,
-} from 'react-native-mehery-event-sender';
+import { setDeviceMetadata, setGeoIP } from 'react-native-mehery-event-sender';
 
 const toSeconds = (ms: number) => Math.floor(ms / 1000);
 
@@ -107,7 +105,7 @@ function HomePage({
     } catch (error) {
       console.log('error in opening page:', error);
     }
-  }, []); // ✅ runs once when HomePage mounts
+  }, [userId]);
 
   return (
     <View style={styles.container}>
@@ -130,6 +128,25 @@ function HomePage({
         />
       </View>
       <View style={styles.customEventButtonSpacer} />
+      {Platform.OS === 'android' && (
+        <>
+          <Button
+            title="Test carousel notification"
+            onPress={async () => {
+              await triggerCarouselNotification({
+                title: 'Summer Sale',
+                body: 'Tap Prev / Next to browse',
+                images: [
+                  'https://picsum.photos/seed/a/600/300',
+                  'https://picsum.photos/seed/b/600/300',
+                  'https://picsum.photos/seed/c/600/300',
+                ],
+              });
+            }}
+          />
+          <View style={styles.customEventButtonSpacer} />
+        </>
+      )}
       <Button title="Logout" onPress={onLogout} />
       <View style={styles.ve}>
         <TooltipPollContainer placeholderId="center">
