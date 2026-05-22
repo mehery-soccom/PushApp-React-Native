@@ -126,18 +126,23 @@ async function attemptProfileUpdate(
   return { ok: res.ok, status: res.status, data };
 }
 
+export type UpdateUserProfileResult = {
+  skipped: boolean;
+  message: string;
+};
+
 // Updates customer profile (PUT) — skips API when payload matches last successful push.
 export async function updateUserProfile(
   info: Record<string, any> = {},
   cohorts: Record<string, any> = {}
-) {
+): Promise<UpdateUserProfileResult> {
   console.log('🧩 [SDK][Profile] updateUserProfile called');
 
   if (profileUpdateInProgress) {
-    console.log(
-      '⏭️ [SDK][Profile] Skipped: profile update already in progress (duplicate call).'
-    );
-    return;
+    const message =
+      'Skipped: profile update already in progress (duplicate call).';
+    console.log(`⏭️ [SDK][Profile] ${message}`);
+    return { skipped: true, message };
   }
 
   profileUpdateInProgress = true;
@@ -147,12 +152,14 @@ export async function updateUserProfile(
     const user_id = (await AsyncStorage.getItem('user_id'))?.trim() ?? '';
 
     if (!channel_code) {
-      console.warn('⚠️ [SDK][Profile] Aborting: channel_code is missing');
-      return;
+      const message = 'Skipped: channel_code is missing.';
+      console.warn(`⚠️ [SDK][Profile] ${message}`);
+      return { skipped: true, message };
     }
     if (!user_id) {
-      console.warn('⚠️ [SDK][Profile] Aborting: user_id is missing');
-      return;
+      const message = 'Skipped: user_id is missing.';
+      console.warn(`⚠️ [SDK][Profile] ${message}`);
+      return { skipped: true, message };
     }
 
     const normalizedAdditionalInfo = normalizeAdditionalInfoDates(
@@ -168,20 +175,17 @@ export async function updateUserProfile(
 
     const lastSnapshot = await loadLastProfileSnapshot(user_id);
     if (lastSnapshot && profilePayloadsEqual(lastSnapshot, payload)) {
-      console.log(
-        '⏭️ [SDK][Profile] Skipped: same profile already pushed.',
-        JSON.stringify({ user_id })
-      );
-      return;
+      const message = 'Skipped: same profile already pushed (no API call).';
+      console.log(`⏭️ [SDK][Profile] ${message}`, JSON.stringify({ user_id }));
+      return { skipped: true, message };
     }
 
     console.log('⏳ [SDK][Profile] Waiting for UserLoggedIn flag...');
     const loggedIn = await waitForUserLoggedIn(30_000);
     if (!loggedIn) {
-      console.warn(
-        '⚠️ [SDK][Profile] Timed out waiting for login – aborting profile update'
-      );
-      return;
+      const message = 'Skipped: timed out waiting for login.';
+      console.warn(`⚠️ [SDK][Profile] ${message}`);
+      return { skipped: true, message };
     }
     console.log('✅ [SDK][Profile] User is logged in, proceeding');
 
@@ -223,7 +227,10 @@ export async function updateUserProfile(
         console.log('✅ [SDK][Profile] Profile updated successfully:', data);
         await saveLastProfileSnapshot(user_id, payload);
         console.log('🔒 [SDK][Profile] Profile snapshot saved locally');
-        return data;
+        return {
+          skipped: false,
+          message: 'Profile updated (API call sent).',
+        };
       }
 
       if (status >= 400 && status < 500) {

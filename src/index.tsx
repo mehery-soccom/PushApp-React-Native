@@ -22,7 +22,10 @@ export {
 } from './events/custom/CustomEvents';
 export type { SendCustomEventOptions } from './events/custom/CustomEvents';
 
-export { updateUserProfile } from './events/custom/ProfileUpdate';
+export {
+  updateUserProfile,
+  type UpdateUserProfileResult,
+} from './events/custom/ProfileUpdate';
 
 export { PollOverlayProvider } from './components/PollOverlay';
 export { showPollOverlay, hidePollOverlay } from './components/PollOverlay';

@@ -98,9 +98,11 @@ function HomePage({
 
     setProfileStatus('Updating profile…');
     try {
-      await updateUserProfile({ name });
+      const result = await updateUserProfile({ name });
       setProfileStatus(
-        'updateUserProfile finished — check logs for API call vs skip.'
+        result.skipped
+          ? `updateUserProfile finished — skipped. ${result.message}`
+          : `updateUserProfile finished — sent. ${result.message}`
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
