@@ -39,7 +39,12 @@ export type { TriggerCarouselNotificationParams } from './native/LiveActivity';
 import { AppRegistry } from 'react-native';
 
 // 🛠 Imports
-import { Platform, NativeModules, NativeEventEmitter } from 'react-native';
+import {
+  Platform,
+  NativeModules,
+  NativeEventEmitter,
+  Linking,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   requestUserPermission,
@@ -72,6 +77,7 @@ import {
   getPushTrackBaseFromMerged,
   mergeIosNotificationPayload,
   resolveIosSemanticCtaId,
+  resolveNotificationUrl,
 } from './utils/pushTrackPayload';
 
 const { PushTokenManager } = NativeModules;
@@ -293,6 +299,26 @@ export const addNotificationDebugListener = () => {
         await trackIosPushEvent('cta', merged, semanticCtaId);
       } else if (!actionId || isDefaultTap) {
         await trackIosPushEvent('opened', merged);
+        const bodyUrl = resolveNotificationUrl(merged);
+        if (bodyUrl) {
+          try {
+            await Linking.openURL(bodyUrl);
+            console.log(
+              '[PushNotificationEvent] iOS body tap opened notification_url:',
+              bodyUrl
+            );
+          } catch (e) {
+            console.warn(
+              '[PushNotificationEvent] iOS Linking.openURL failed:',
+              e
+            );
+          }
+        } else {
+          console.warn(
+            '[PushNotificationEvent] iOS body tap: no notification_url in payload (checked style/templateData). Keys:',
+            Object.keys(merged).join(', ')
+          );
+        }
       }
       return;
     }

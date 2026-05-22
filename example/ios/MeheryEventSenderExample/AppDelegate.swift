@@ -85,7 +85,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     // the app (especially TestFlight / production) and the file never reaches the app group.
     if #available(iOS 16.1, *) {
       let merged = mergedNotificationFields(userInfo)
-      if merged["activity_id"] != nil {
+      if shouldStartLiveActivity(merged: merged) {
         startLiveActivity(userInfo: userInfo) {
           completionHandler(.newData)
         }
@@ -134,8 +134,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     merged["categoryIdentifier"] = categoryID
     PushTokenManager.sendNotificationEventOrQueue(dictToAnyHashable(merged))
 
-    // ✅ Open URL when action has one (carousel buttons, 3-button, etc.)
-    if let url = urlForAction(actionID, userInfo: userInfo) {
+    // ✅ Body tap: notification_url (default action). CTAs use urlForAction.
+    if actionID == UNNotificationDefaultActionIdentifier {
+      if let url = urlForNotificationBody(userInfo: userInfo) {
+        DispatchQueue.main.async {
+          UIApplication.shared.open(url, options: [:]) { success in
+            print(success ? "✅ Opened notification_url" : "❌ Failed to open notification_url")
+          }
+        }
+      } else {
+        let keys = mergedNotificationFields(userInfo).keys.sorted().joined(separator: ", ")
+        print("⚠️ Body tap: no notification_url (checked root, style, templateData). Payload keys: \(keys)")
+      }
+    } else if let url = urlForAction(actionID, userInfo: userInfo) {
       DispatchQueue.main.async {
         UIApplication.shared.open(url, options: [:]) { success in
           print(success ? "✅ Opened URL" : "❌ Failed to open URL")
@@ -270,8 +281,76 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     return nil
   }
 
+  private func validUrl(_ raw: String?) -> URL? {
+    guard let raw else { return nil }
+    let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !cleaned.isEmpty else { return nil }
+    guard let url = URL(string: cleaned),
+          let scheme = url.scheme?.lowercased(),
+          ["http", "https"].contains(scheme) || cleaned.contains("://") else {
+      return nil
+    }
+    return url
+  }
+
+  private func normalizeTargetUrlString(_ raw: String) -> String {
+    let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    if cleaned.isEmpty { return cleaned }
+    if cleaned.contains("://") { return cleaned }
+    return "https://\(cleaned)"
+  }
+
+  /// Body-tap link from `notification_url` / `notificationUrl` (root + Mehery `style` / `templateData` nests).
+  private func urlForNotificationBody(userInfo: [AnyHashable: Any]) -> URL? {
+    let merged = mergedNotificationFields(userInfo)
+    return notificationUrlString(fromMerged: merged).flatMap { validUrl(normalizeTargetUrlString($0)) }
+  }
+
+  private func notificationUrlString(fromMerged merged: [String: Any]) -> String? {
+    let keys = ["notification_url", "notificationUrl"]
+    for key in keys {
+      if let raw = stringFromAny(merged[key])?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+        return normalizeTargetUrlString(raw)
+      }
+    }
+
+    if let styleDict = merged["style"] as? [String: Any],
+       let s = notificationUrlString(fromMerged: styleDict) {
+      return s
+    }
+    if let styleStr = stringFromAny(merged["style"]),
+       let data = styleStr.data(using: .utf8),
+       let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+       let s = notificationUrlString(fromMerged: obj) {
+      return s
+    }
+
+    if let td = merged["templateData"] as? String,
+       let data = td.data(using: .utf8),
+       let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+      if let s = notificationUrlString(fromMerged: obj) { return s }
+      if let style = obj["style"] as? [String: Any],
+         let s = notificationUrlString(fromMerged: style) {
+        return s
+      }
+    }
+
+    if let tmpl = merged["template"] as? [String: Any] {
+      if let data = tmpl["data"] as? [String: Any],
+         let s = notificationUrlString(fromMerged: data) {
+        return s
+      }
+      if let style = tmpl["style"] as? [String: Any],
+         let s = notificationUrlString(fromMerged: style) {
+        return s
+      }
+    }
+
+    return nil
+  }
+
   private func urlForAction(_ actionId: String, userInfo: [AnyHashable: Any]) -> URL? {
-    // Skip default/dismiss actions
+    // Skip default/dismiss actions (body URL handled by urlForNotificationBody)
     if actionId == UNNotificationDefaultActionIdentifier || actionId == UNNotificationDismissActionIdentifier {
       return nil
     }
@@ -280,18 +359,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
 
     func str(_ key: String) -> String? {
       stringFromAny(merged[key])
-    }
-
-    func validUrl(_ raw: String?) -> URL? {
-      guard let raw else { return nil }
-      let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !cleaned.isEmpty else { return nil }
-      guard let url = URL(string: cleaned),
-            let scheme = url.scheme?.lowercased(),
-            ["http", "https"].contains(scheme) || cleaned.contains("://") else {
-        return nil
-      }
-      return url
     }
 
     func actionIndex(_ id: String) -> Int? {
@@ -408,6 +475,30 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   // }
 
   // MARK: - Live Activity
+
+  /// Avoid blank Live Activity on simple pushes that only carry `activity_id` without live-template content.
+  private func shouldStartLiveActivity(merged: [String: Any]) -> Bool {
+    let activityId = stringFromAny(merged["activity_id"])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard !activityId.isEmpty else { return false }
+
+    for key in ["live_activity", "enable_live_activity"] {
+      let flag = stringFromAny(merged[key])?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+      if flag == "true" || flag == "1" || flag == "yes" { return true }
+    }
+
+    for key in ["message1", "message2", "message3"] {
+      let text = stringFromAny(merged[key])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      if !text.isEmpty { return true }
+    }
+
+    if let progress = parseDouble(merged["progressPercent"]), progress > 0 { return true }
+    if let progress = parseDouble(merged["progress_percent"]), progress > 0 { return true }
+
+    if firstPushImageUrlString(fromMerged: merged) != nil { return true }
+
+    return false
+  }
+
   /// - Parameter completion: Called on an arbitrary queue after the activity is updated/created (or on failure).
   ///   Use this from background pushes so `completionHandler(.newData)` runs only after work completes.
   @available(iOS 16.1, *)

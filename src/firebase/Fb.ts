@@ -11,6 +11,7 @@ import { SESSION_ID_STORAGE_KEY } from '../utils/user';
 import {
   extractClickTrackToken,
   mergeIosNotificationPayload,
+  resolveNotificationUrl,
 } from '../utils/pushTrackPayload';
 
 import { NativeModules, Platform } from 'react-native';
@@ -697,9 +698,23 @@ async function handlePushNotificationInteraction(raw: any) {
       } catch (e) {
         log('trackPushEvent(opened) error', e);
       }
-      log(
-        'no action on payload — likely body tap, not a CTA button; stop here'
-      );
+
+      const bodyUrl = resolveNotificationUrl(notificationData);
+      if (bodyUrl) {
+        log('body tap notification_url — opening in browser', bodyUrl);
+        try {
+          await Linking.openURL(bodyUrl);
+          log('Linking.openURL (body tap) finished');
+        } catch (e) {
+          log('Linking.openURL (body tap) threw', e);
+        }
+      } else {
+        log(
+          'body tap: notification_url / notificationUrl missing from FCM data — ' +
+            'body will not open a link (fix send-notification to include it in FCM data). ' +
+            `data keys: ${Object.keys(notificationData).join(', ')}`
+        );
+      }
       return;
     }
 
@@ -862,6 +877,12 @@ export function setupForegroundNotificationListener(): () => void {
     }
 
     const data = remoteMessage.data || {};
+    if (Platform.OS === 'android' && !resolveNotificationUrl(data)) {
+      pushCtaLog(
+        'FCM data has no notification_url — body tap will open the app, not a browser link',
+        { keys: Object.keys(data) }
+      );
+    }
     trackPushEvent('received', data).catch(() => undefined);
 
     const title =
@@ -888,6 +909,7 @@ export function setupForegroundNotificationListener(): () => void {
       console.log('🚀 Triggering Android carousel notification...');
       if (Platform.OS === 'android' && LiveActivityModule?.triggerCarousel) {
         LiveActivityModule.triggerCarousel({
+          ...(data as Record<string, string>),
           title,
           body: message,
           message,
@@ -922,6 +944,12 @@ export function setupForegroundNotificationListener(): () => void {
       importance: 'high',
       vibrate: true,
     };
+
+    if (Platform.OS === 'android') {
+      const dataPayload = data as Record<string, string>;
+      localNotif.data = { ...dataPayload };
+      localNotif.userInfo = { ...dataPayload };
+    }
 
     const actionPairs = extractForegroundCtaPairs(data);
 
@@ -975,19 +1003,43 @@ export function setupForegroundNotificationListener(): () => void {
   return foregroundUnsubscribe;
 }
 
+async function openIosNotificationBodyUrl(
+  raw: Record<string, unknown> | undefined
+): Promise<void> {
+  if (Platform.OS !== 'ios' || !raw) return;
+  const merged = mergeIosNotificationPayload(raw);
+  const bodyUrl = resolveNotificationUrl(merged);
+  if (!bodyUrl) {
+    pushCtaLog(
+      'iOS FCM open: no notification_url in data (checked style/templateData)',
+      { keys: Object.keys(merged) }
+    );
+    return;
+  }
+  try {
+    await Linking.openURL(bodyUrl);
+    pushCtaLog('iOS FCM open: opened notification_url', bodyUrl);
+  } catch (e) {
+    pushCtaLog('iOS FCM open: Linking.openURL failed', e);
+  }
+}
+
 export function setupNotificationOpenTracking(): () => void {
   if (openTrackingUnsubscribe) return openTrackingUnsubscribe;
 
   const unsubscribe = messaging().onNotificationOpenedApp((remoteMessage) => {
-    const data = remoteMessage?.data || {};
+    const data = (remoteMessage?.data || {}) as Record<string, unknown>;
     trackPushEvent('opened', data).catch(() => undefined);
+    openIosNotificationBodyUrl(data).catch(() => undefined);
   });
 
   messaging()
     .getInitialNotification()
     .then((remoteMessage) => {
       if (remoteMessage?.data) {
-        trackPushEvent('opened', remoteMessage.data).catch(() => undefined);
+        const data = remoteMessage.data as Record<string, unknown>;
+        trackPushEvent('opened', data).catch(() => undefined);
+        openIosNotificationBodyUrl(data).catch(() => undefined);
       }
     })
     .catch(() => undefined);

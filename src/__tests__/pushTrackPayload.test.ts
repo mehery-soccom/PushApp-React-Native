@@ -2,7 +2,9 @@ import {
   extractClickTrackToken,
   getPushTrackBaseFromMerged,
   mergeIosNotificationPayload,
+  normalizeTargetUrl,
   resolveIosSemanticCtaId,
+  resolveNotificationUrl,
 } from '../utils/pushTrackPayload';
 
 describe('pushTrackPayload', () => {
@@ -66,6 +68,43 @@ describe('pushTrackPayload', () => {
     expect(resolveIosSemanticCtaId('custom_action', merged)).toBe(
       'custom_action'
     );
+  });
+
+  it('normalizeTargetUrl adds https when scheme missing', () => {
+    expect(normalizeTargetUrl('example.com/promo')).toBe(
+      'https://example.com/promo'
+    );
+    expect(normalizeTargetUrl('https://ok.example')).toBe('https://ok.example');
+  });
+
+  it('resolveNotificationUrl reads notification_url and notificationUrl', () => {
+    expect(
+      resolveNotificationUrl({ notification_url: 'https://a.example' })
+    ).toBe('https://a.example');
+    expect(resolveNotificationUrl({ notificationUrl: 'b.example' })).toBe(
+      'https://b.example'
+    );
+    expect(resolveNotificationUrl({ title: 'x' })).toBe('');
+  });
+
+  it('resolveNotificationUrl reads notification_url nested in style (Mehery template API)', () => {
+    expect(
+      resolveNotificationUrl({
+        style: { notification_url: 'https://www.google.com' },
+      })
+    ).toBe('https://www.google.com');
+    expect(
+      resolveNotificationUrl({
+        style: JSON.stringify({ notification_url: 'https://example.com/x' }),
+      })
+    ).toBe('https://example.com/x');
+    expect(
+      resolveNotificationUrl({
+        templateData: JSON.stringify({
+          style: { notification_url: 'https://nested.example' },
+        }),
+      })
+    ).toBe('https://nested.example');
   });
 
   it('resolveIosSemanticCtaId maps PUSHAPP_* to title via action1..3', () => {

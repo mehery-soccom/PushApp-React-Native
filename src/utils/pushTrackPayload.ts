@@ -247,3 +247,83 @@ export function resolveIosSemanticCtaId(
 
   return id;
 }
+
+/** Aligns with Android [NotificationPushTrack.normalizeTargetUrl]. */
+export function normalizeTargetUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return trimmed;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+const NOTIFICATION_URL_KEYS = ['notification_url', 'notificationUrl'] as const;
+
+function notificationUrlFromDict(dict: Record<string, unknown>): string {
+  for (const k of NOTIFICATION_URL_KEYS) {
+    const raw = normalizedString(dict[k]);
+    if (raw) return normalizeTargetUrl(raw);
+  }
+  return '';
+}
+
+function parseJsonObjectRecord(raw: unknown): Record<string, unknown> | null {
+  if (raw != null && typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+  if (typeof raw !== 'string') return null;
+  const text = raw.trim();
+  if (!text.startsWith('{')) return null;
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/**
+ * Body-tap link from FCM data (`notification_url` / `notificationUrl`), including
+ * Mehery template nests (`style`, `templateData`, `template`).
+ */
+export function resolveNotificationUrl(
+  merged: Record<string, unknown>
+): string {
+  const root = notificationUrlFromDict(merged);
+  if (root) return root;
+
+  const styleObj = parseJsonObjectRecord(merged.style);
+  if (styleObj) {
+    const fromStyle = notificationUrlFromDict(styleObj);
+    if (fromStyle) return fromStyle;
+  }
+
+  const templateData = parseJsonObjectRecord(merged.templateData);
+  if (templateData) {
+    const fromTemplateData = notificationUrlFromDict(templateData);
+    if (fromTemplateData) return fromTemplateData;
+    const styleInTemplateData = parseJsonObjectRecord(templateData.style);
+    if (styleInTemplateData) {
+      const fromNested = notificationUrlFromDict(styleInTemplateData);
+      if (fromNested) return fromNested;
+    }
+  }
+
+  const template = parseJsonObjectRecord(merged.template);
+  if (template) {
+    const templateDataNested = parseJsonObjectRecord(template.data);
+    if (templateDataNested) {
+      const fromData = notificationUrlFromDict(templateDataNested);
+      if (fromData) return fromData;
+    }
+    const styleInTemplate = parseJsonObjectRecord(template.style);
+    if (styleInTemplate) {
+      const fromTemplateStyle = notificationUrlFromDict(styleInTemplate);
+      if (fromTemplateStyle) return fromTemplateStyle;
+    }
+  }
+
+  return '';
+}

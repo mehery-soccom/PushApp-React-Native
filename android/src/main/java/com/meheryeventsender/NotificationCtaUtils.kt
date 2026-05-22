@@ -47,6 +47,69 @@ object NotificationCtaUtils {
         return ""
     }
 
+    /** Body-tap destination when FCM data includes `notification_url` / `notificationUrl`. */
+    fun resolveNotificationUrl(data: Map<String, String>): String {
+        notificationUrlFromFlatMap(data)?.let { return it }
+
+        val styleRaw = data["style"]?.trim().orEmpty()
+        if (styleRaw.startsWith("{")) {
+            try {
+                notificationUrlFromJsonObject(JSONObject(styleRaw))?.let { return it }
+            } catch (_: Exception) {
+                // ignore malformed style blob
+            }
+        }
+
+        val templateDataRaw = data["templateData"]?.trim().orEmpty()
+        if (templateDataRaw.startsWith("{")) {
+            try {
+                val obj = JSONObject(templateDataRaw)
+                notificationUrlFromJsonObject(obj)?.let { return it }
+                val style = obj.optJSONObject("style")
+                if (style != null) {
+                    notificationUrlFromJsonObject(style)?.let { return it }
+                }
+            } catch (_: Exception) {
+                // ignore malformed templateData blob
+            }
+        }
+
+        val templateRaw = data["template"]?.trim().orEmpty()
+        if (templateRaw.startsWith("{")) {
+            try {
+                val tmpl = JSONObject(templateRaw)
+                val dataObj = tmpl.optJSONObject("data")
+                if (dataObj != null) {
+                    notificationUrlFromJsonObject(dataObj)?.let { return it }
+                }
+                val style = tmpl.optJSONObject("style")
+                if (style != null) {
+                    notificationUrlFromJsonObject(style)?.let { return it }
+                }
+            } catch (_: Exception) {
+                // ignore malformed template blob
+            }
+        }
+
+        return ""
+    }
+
+    private fun notificationUrlFromFlatMap(data: Map<String, String>): String? {
+        for (k in listOf("notification_url", "notificationUrl")) {
+            val raw = data[k]?.trim().orEmpty()
+            if (raw.isNotEmpty()) return NotificationPushTrack.normalizeTargetUrl(raw)
+        }
+        return null
+    }
+
+    private fun notificationUrlFromJsonObject(obj: JSONObject): String? {
+        for (k in listOf("notification_url", "notificationUrl")) {
+            val raw = obj.optString(k).trim()
+            if (raw.isNotEmpty()) return NotificationPushTrack.normalizeTargetUrl(raw)
+        }
+        return null
+    }
+
     fun extractCtaSpecs(data: Map<String, String>): List<CtaSpec> {
         val fromJson = parseCtaButtons(data["cta_buttons"])
         if (fromJson.isNotEmpty()) return fromJson
@@ -199,6 +262,43 @@ object NotificationCtaUtils {
     }
 
     fun buildOpenPendingIntent(context: Context, data: Map<String, String>): PendingIntent {
+        val notificationUrl = resolveNotificationUrl(data)
+        val stableNotifId = data["notification_id"].orEmpty().ifBlank {
+            data["notificationId"].orEmpty()
+        }
+        val requestKey = stableNotifId.ifBlank {
+            System.currentTimeMillis().toString()
+        }
+
+        if (notificationUrl.isNotEmpty()) {
+            val intent = Intent(context, NotificationCtaUrlActivity::class.java).apply {
+                putExtra(NotificationActionReceiver.EXTRA_ACTION_TYPE, "opened")
+                putExtra(NotificationActionReceiver.EXTRA_TARGET_URL, notificationUrl)
+                putExtra(
+                    NotificationActionReceiver.EXTRA_TRACK_BASE_URL,
+                    trackBaseUrl(context, data)
+                )
+                val messageId =
+                    data["messageId"].orEmpty().ifBlank { data["message_id"].orEmpty() }
+                val filterId =
+                    data["filterId"].orEmpty().ifBlank { data["filter_id"].orEmpty() }
+                putExtra(NotificationActionReceiver.EXTRA_MESSAGE_ID, messageId)
+                putExtra(NotificationActionReceiver.EXTRA_FILTER_ID, filterId)
+                putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, stableNotifId)
+                putExtra(NotificationActionReceiver.EXTRA_CTA_ID, "")
+                putExtra(
+                    NotificationActionReceiver.EXTRA_TRACK_TOKEN,
+                    trackClickToken(data)
+                )
+            }
+            return PendingIntent.getActivity(
+                context,
+                ("open_url_" + requestKey + "|" + notificationUrl).hashCode(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
         val intent = buildActionReceiverIntent(
             context = context,
             data = data,
@@ -208,7 +308,7 @@ object NotificationCtaUtils {
         )
         return PendingIntent.getBroadcast(
             context,
-            ("open_" + (data["notification_id"] ?: System.currentTimeMillis().toString())).hashCode(),
+            ("open_" + requestKey).hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

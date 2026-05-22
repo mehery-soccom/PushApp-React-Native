@@ -248,6 +248,36 @@ If you need a **`notification`** payload for iOS or other platforms, use **per-p
 - Single image: `image`, `imageUrl`, `image_url`
 - Carousel: `imageUrls`, `image_urls`, `carousel_images`, or `image1`, `image2`, ...
 
+### Body tap opens a link (`notification_url`) — Android and iOS
+
+When the push payload includes `notification_url` (or `notificationUrl`), tapping the **notification body** (title/message area) opens that URL in the system browser. CTA action buttons still use their own URLs (`cta_buttons` / `url1`–`url3` on Android; `buttons` array / action IDs on iOS). Without `notification_url`, body tap only launches the app (unchanged).
+
+The SDK resolves the body URL from the root payload and from Mehery template nests: `style.notification_url`, stringified `style`, `templateData`, and `template.style` / `template.data` (same shape as the template API `style` object).
+
+| Platform | Payload field | Body tap handler |
+| -------- | ------------- | ---------------- |
+| Android | FCM `data.notification_url` (or nested `style` / `templateData`) | Native `NotificationCtaUrlActivity` + foreground JS `Linking.openURL` |
+| iOS | APNS / FCM `data` (root or nested `style` / `templateData`) | Example [`AppDelegate.swift`](example/ios/MeheryEventSenderExample/AppDelegate.swift) `urlForNotificationBody` + JS `Linking.openURL` fallback |
+
+**Push server requirement:** `/send-notification` must include `notification_url` on the device payload (flattened in FCM `data` is best). If it only exists in the template `style` object, the send step must still forward that object (or flatten it) so iOS/Android can read it on tap. Mapping only `buttons` → `url1` / `title1` / `action1` is not enough.
+
+**iOS Live Activity:** The example app only starts a Live Activity when `activity_id` is set **and** the payload looks like a live template (`message1`–`message3`, `progressPercent`, `live_activity=true`, or a hero image URL). Simple templates with only `activity_id` no longer show an empty Live Activity before the banner.
+
+Example payload after correct server mapping:
+
+```json
+{
+  "title": "Hello",
+  "body": "World",
+  "notification_url": "https://example.com/article",
+  "url1": "https://mehery.com",
+  "title1": "Yes",
+  "action1": "PUSHAPP_YES"
+}
+```
+
+**iOS host apps:** The npm package does not ship `AppDelegate` — merge `urlForNotificationBody` and the default-action URL open from the example app into your target’s `AppDelegate` (see [Example app: iOS notification extensions](#example-app-ios-notification-extensions-reference)).
+
 ### iOS action category example
 
 To show 3 action buttons, send category `THREE_BUTTON_CATEGORY` in APNs payload.
