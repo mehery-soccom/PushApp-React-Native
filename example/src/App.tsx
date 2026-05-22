@@ -28,19 +28,6 @@ import { TooltipPollContainer } from 'react-native-mehery-event-sender';
 import DeviceInfo from 'react-native-device-info';
 import { setDeviceMetadata, setGeoIP } from 'react-native-mehery-event-sender';
 
-const toSeconds = (ms: number) => Math.floor(ms / 1000);
-
-const randomExpiryTimestampMoreThan5Years = () => {
-  const now = Date.now();
-  const fiveYearsMs = 1000 * 60 * 60 * 24 * 365 * 5;
-  return toSeconds(now + fiveYearsMs);
-};
-
-const randomGender = () => {
-  const genders = ['male', 'female'];
-  return genders[Math.floor(Math.random() * genders.length)];
-};
-
 function LoginPage({ onLogin }: { onLogin: (id: string) => void }) {
   const [userId, setUserId] = useState('');
 
@@ -88,30 +75,68 @@ function HomePage({
   userId: string;
   onLogout: () => void;
 }) {
-  // const handlePageOpen = () => OnPageOpen();
+  const [profileName, setProfileName] = useState('');
+  const [profileStatus, setProfileStatus] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       OnUserLogin(userId);
       console.log('OnUserLogin called', userId);
       OnAppOpen();
-      OnPageOpen('login');
-
-      // 🔥 SEND RANDOM PROFILE UPDATE
-      updateUserProfile({
-        expiry_date: randomExpiryTimestampMoreThan5Years(),
-        gender: randomGender(),
-      });
+      OnPageOpen('home');
     } catch (error) {
       console.log('error in opening page:', error);
     }
   }, [userId]);
+
+  const handleUpdateProfile = async () => {
+    const name = profileName.trim();
+    if (!name) {
+      setProfileStatus('Enter a name before updating.');
+      return;
+    }
+
+    setProfileStatus('Updating profile…');
+    try {
+      await updateUserProfile({ name });
+      setProfileStatus(
+        'updateUserProfile finished — check logs for API call vs skip.'
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setProfileStatus(`Profile update failed: ${message}`);
+      console.warn('[Example] updateUserProfile error', err);
+    }
+  };
 
   return (
     <View style={styles.container}>
       <InlinePollContainer placeholderId="login_banner" />
 
       <Text style={styles.txt}>User ID: {userId}</Text>
+
+      <View style={styles.profileSection}>
+        <Text style={styles.label}>Profile name</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="e.g. Jane Doe"
+          value={profileName}
+          onChangeText={setProfileName}
+          autoCapitalize="words"
+        />
+        <Button title="Update profile" onPress={handleUpdateProfile} />
+        <Text style={styles.profileHint}>
+          Tap again with the same name to test SDK skip (no API). Change the
+          name to trigger a new PUT.
+        </Text>
+        <Text style={styles.profileHint}>
+          This is not profile code profile code won't change once logged in
+          because that will be the contact id for that device.
+        </Text>
+        {profileStatus ? (
+          <Text style={styles.profileStatus}>{profileStatus}</Text>
+        ) : null}
+      </View>
       <View style={styles.customEventButtons}>
         <Button
           title="Button 1"
@@ -305,4 +330,22 @@ const styles = StyleSheet.create({
   },
   customEventButtonSpacer: { height: 12 },
   preLoginFormSpacer: { height: 28 },
+  profileSection: {
+    marginTop: 20,
+    width: '100%',
+    maxWidth: 320,
+    alignSelf: 'center',
+  },
+  profileHint: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 18,
+  },
+  profileStatus: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#333',
+    lineHeight: 18,
+  },
 });

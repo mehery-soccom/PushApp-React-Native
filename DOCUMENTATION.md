@@ -170,7 +170,7 @@ await OnUserLogOut('unique_user_id_123');
 ```
 
 ### **2. User Profile Enrichment**
-Sync user metadata to create targeted notification segments.
+Sync user metadata to create targeted notification segments. The SDK keeps the last successfully pushed profile locally and only calls `PUT /v1/customer/profile` when `additionalInfo` or `cohorts` change; the snapshot is cleared on logout.
 
 ```tsx
 import { updateUserProfile } from 'react-native-mehery-event-sender';

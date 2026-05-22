@@ -5,6 +5,7 @@ import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { extractChannelSegment, getApiBaseUrl } from '../helpers/tenantContext';
 import { getDeviceId } from './device';
 import { waitForGeoIp } from './geoIpContext';
+import { clearStoredProfileSnapshot } from './profileSnapshot';
 
 /** AsyncStorage key; also written by device/register on some platforms. */
 export const SESSION_ID_STORAGE_KEY = 'sessionId';
@@ -349,6 +350,8 @@ export async function OnUserLogOut(user_id: string) {
     console.warn('❌ Device ID not available.');
     return;
   }
+
+  await clearStoredProfileSnapshot(userID);
 
   await AsyncStorage.multiRemove([
     SESSION_ID_STORAGE_KEY,

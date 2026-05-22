@@ -1,14 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildCommonHeaders } from '../../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../../helpers/tenantContext';
+import {
+  buildProfileApiPayload,
+  loadLastProfileSnapshot,
+  profilePayloadsEqual,
+  saveLastProfileSnapshot,
+} from '../../utils/profileSnapshot';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const PROFILE_UPDATED_KEY = 'mehery_profile_updated';
 const DATE_FIELD_KEY_REGEX = /(dob|date|birth|expiry|expires|expir)/i;
 
+let profileUpdateInProgress = false;
+
 // Wait until UserLoggedIn is set in AsyncStorage, up to `timeoutMs`.
-// Falls back to a plain delay if the flag never appears.
 async function waitForUserLoggedIn(
   timeoutMs = 30_000,
   pollIntervalMs = 500
@@ -59,7 +65,6 @@ function parseDateLikeValue(value: unknown): Date | null {
   if (typeof value === 'string') {
     const trimmed = value.trim();
 
-    // Support common DOB inputs like DD/MM/YYYY or DD-MM-YYYY.
     const dateOnlyMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
     if (dateOnlyMatch) {
       const day = Number(dateOnlyMatch[1]);
@@ -86,8 +91,6 @@ function normalizeAdditionalInfoDates(
 
     const parsedDate = parseDateLikeValue(value);
     if (parsedDate) {
-      // Always send full ISO UTC string — backend isValidUTC requires
-      // the "YYYY-MM-DDTHH:mm:ss.sssZ" format; date-only strings fail.
       normalized[key] = parsedDate.toISOString();
       continue;
     }
@@ -123,41 +126,25 @@ async function attemptProfileUpdate(
   return { ok: res.ok, status: res.status, data };
 }
 
-// 📌 Updates customer profile (PUT) – runs only once per install
+// Updates customer profile (PUT) — skips API when payload matches last successful push.
 export async function updateUserProfile(
   info: Record<string, any> = {},
   cohorts: Record<string, any> = {}
 ) {
   console.log('🧩 [SDK][Profile] updateUserProfile called');
 
+  if (profileUpdateInProgress) {
+    console.log(
+      '⏭️ [SDK][Profile] Skipped: profile update already in progress (duplicate call).'
+    );
+    return;
+  }
+
+  profileUpdateInProgress = true;
+
   try {
-    // 🔒 ONE-TIME GUARD
-    const alreadyUpdated = await AsyncStorage.getItem(PROFILE_UPDATED_KEY);
-    if (alreadyUpdated === 'true') {
-      console.log(
-        '⏭️ [SDK][Profile] Profile already updated – skipping API call'
-      );
-      return;
-    }
-
-    // Wait for OnUserLogin to complete before hitting the profile endpoint.
-    // The server creates the profile record during /device/link; if we fire
-    // too early the backend returns "profile not found" → 500.
-    console.log('⏳ [SDK][Profile] Waiting for UserLoggedIn flag...');
-    const loggedIn = await waitForUserLoggedIn(30_000);
-    if (!loggedIn) {
-      console.warn(
-        '⚠️ [SDK][Profile] Timed out waiting for login – aborting profile update'
-      );
-      return;
-    }
-    console.log('✅ [SDK][Profile] User is logged in, proceeding');
-
     const channel_code = await AsyncStorage.getItem('mehery_channel_id');
-    const user_id = await AsyncStorage.getItem('user_id');
-
-    console.log('🏷️ [SDK][Profile] channel_code:', channel_code);
-    console.log('👤 [SDK][Profile] user_id:', user_id);
+    const user_id = (await AsyncStorage.getItem('user_id'))?.trim() ?? '';
 
     if (!channel_code) {
       console.warn('⚠️ [SDK][Profile] Aborting: channel_code is missing');
@@ -174,12 +161,32 @@ export async function updateUserProfile(
     );
     const normalizedCohorts = normalizeAdditionalInfoDates(cohorts, 'cohorts');
 
-    const payload = {
-      additionalInfo: normalizedAdditionalInfo,
-      ...(Object.keys(normalizedCohorts).length
-        ? { cohorts: normalizedCohorts }
-        : {}),
-    };
+    const payload = buildProfileApiPayload(
+      normalizedAdditionalInfo,
+      normalizedCohorts
+    );
+
+    const lastSnapshot = await loadLastProfileSnapshot(user_id);
+    if (lastSnapshot && profilePayloadsEqual(lastSnapshot, payload)) {
+      console.log(
+        '⏭️ [SDK][Profile] Skipped: same profile already pushed.',
+        JSON.stringify({ user_id })
+      );
+      return;
+    }
+
+    console.log('⏳ [SDK][Profile] Waiting for UserLoggedIn flag...');
+    const loggedIn = await waitForUserLoggedIn(30_000);
+    if (!loggedIn) {
+      console.warn(
+        '⚠️ [SDK][Profile] Timed out waiting for login – aborting profile update'
+      );
+      return;
+    }
+    console.log('✅ [SDK][Profile] User is logged in, proceeding');
+
+    console.log('🏷️ [SDK][Profile] channel_code:', channel_code);
+    console.log('👤 [SDK][Profile] user_id:', user_id);
 
     console.log(
       '📡 [SDK][Profile] PUT /customer/profile payload:',
@@ -192,8 +199,6 @@ export async function updateUserProfile(
 
     const commonHeaders = await buildCommonHeaders();
 
-    // Retry up to 3 times on 5xx — the profile record may still be
-    // propagating shortly after device registration completes.
     const MAX_RETRIES = 3;
     const RETRY_DELAYS = [2_000, 5_000, 10_000];
     let lastStatus = 0;
@@ -216,12 +221,11 @@ export async function updateUserProfile(
 
       if (ok) {
         console.log('✅ [SDK][Profile] Profile updated successfully:', data);
-        await AsyncStorage.setItem(PROFILE_UPDATED_KEY, 'true');
-        console.log('🔒 [SDK][Profile] Profile update flag saved');
+        await saveLastProfileSnapshot(user_id, payload);
+        console.log('🔒 [SDK][Profile] Profile snapshot saved locally');
         return data;
       }
 
-      // 4xx errors are data/auth problems — retrying won't help
       if (status >= 400 && status < 500) {
         console.error(
           `🚨 [SDK][Profile] Client error ${status}, not retrying`,
@@ -230,7 +234,6 @@ export async function updateUserProfile(
         throw new Error(`[SDK][Profile] HTTP ${status}`);
       }
 
-      // 5xx — retry after a back-off delay
       if (attempt < MAX_RETRIES) {
         const wait = RETRY_DELAYS[attempt - 1] ?? 5_000;
         console.warn(
@@ -247,6 +250,7 @@ export async function updateUserProfile(
     console.error('❌ [SDK][Profile] updateUserProfile failed', err);
     throw err;
   } finally {
+    profileUpdateInProgress = false;
     console.log('🏁 [SDK][Profile] updateUserProfile finished');
   }
 }

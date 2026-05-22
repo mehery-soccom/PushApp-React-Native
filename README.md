@@ -170,7 +170,7 @@ await OnUserLogin('user_123');
 ```tsx
 // Call after login when you have customer fields or cohorts to sync.
 // Uses `user_id` and channel from storage (set by init + login), PUTs `/v1/customer/profile`.
-// The SDK only performs this network update once per install (later calls are skipped).
+// The SDK stores the last successful push locally and only calls the API when profile data changed.
 await updateUserProfile(
   { name: 'Jane Doe', email: 'jane@example.com', city: 'Mumbai' },
   { segment: 'trial', plan: 'free' }
