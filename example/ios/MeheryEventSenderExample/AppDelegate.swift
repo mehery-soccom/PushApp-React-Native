@@ -85,6 +85,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     // the app (especially TestFlight / production) and the file never reaches the app group.
     if #available(iOS 16.1, *) {
       let merged = mergedNotificationFields(userInfo)
+      if isLiveActivityEndEvent(merged: merged, userInfo: userInfo) {
+        endLiveActivity {
+          completionHandler(.newData)
+        }
+        return
+      }
       if shouldStartLiveActivity(merged: merged) {
         startLiveActivity(userInfo: userInfo) {
           completionHandler(.newData)
@@ -476,6 +482,20 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
 
   // MARK: - Live Activity
 
+  private func isLiveActivityEndEvent(merged: [String: Any], userInfo: [AnyHashable: Any]) -> Bool {
+    let action = stringFromAny(merged["action"])?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+    if action == "end" {
+      return true
+    }
+    if let aps = userInfo["aps"] as? [String: Any] {
+      let event = stringFromAny(aps["event"])?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+      if event == "end" {
+        return true
+      }
+    }
+    return false
+  }
+
   /// Avoid blank Live Activity on simple pushes that only carry `activity_id` without live-template content.
   private func shouldStartLiveActivity(merged: [String: Any]) -> Bool {
     let activityId = stringFromAny(merged["activity_id"])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -504,14 +524,20 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   @available(iOS 16.1, *)
   func startLiveActivity(userInfo: [AnyHashable: Any], completion: (() -> Void)? = nil) {
     let merged = mergedNotificationFields(userInfo)
-    let progressPercent = parseDouble(merged["progressPercent"]) ?? 0
+    let progressPercent = normalizedProgressFraction(from: merged)
 
     DispatchQueue.global(qos: .userInitiated).async { [self] in
-      let imageFileName = saveLiveActivityImage(merged: merged)
+      let heroFileName = saveLiveActivityImage(fromMerged: merged, preferKeys: [
+        "imageUrl", "image_url", "image", "styled_image", "styledImage", "media-url"
+      ])
+      let logoFileName = saveLiveActivityImage(fromMerged: merged, preferKeys: [
+        "logoUrl", "logo_url", "logo", "iconUrl", "icon_url", "icon"
+      ])
       let state = buildLiveActivityState(
         userInfo: userInfo,
         progressPercent: progressPercent,
-        imageFileName: imageFileName
+        imageFileName: heroFileName,
+        logoFileName: logoFileName
       )
 
       Task { @MainActor in
@@ -521,6 +547,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
           if let activity = Activity<DeliveryActivityAttributes>.activities.first {
             await activity.update(ActivityContent(state: state, staleDate: nil))
             print("🟢 Updated Live Activity: \(activity.id)")
+            observeLiveActivityPushToken(for: activity)
             return
           }
         }
@@ -532,15 +559,33 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
             pushType: .token
           )
           print("🟢 Started Live Activity: \(activity.id)")
-
-          Task {
-            for await tokenData in activity.pushTokenUpdates {
-              let pushToken = tokenData.map { String(format: "%02x", $0) }.joined()
-              print("📡 Live Activity Push Token: \(pushToken)")
-            }
-          }
+          observeLiveActivityPushToken(for: activity)
         } catch {
           print("❌ Live Activity start error: \(error)")
+        }
+      }
+    }
+  }
+
+  @available(iOS 16.2, *)
+  private func observeLiveActivityPushToken(for activity: Activity<DeliveryActivityAttributes>) {
+    Task {
+      for await tokenData in activity.pushTokenUpdates {
+        let pushToken = tokenData.map { String(format: "%02x", $0) }.joined()
+        print("📡 Live Activity Push Token: \(pushToken)")
+        PushTokenManager.sendLiveActivityPushTokenEvent(pushToken)
+      }
+    }
+  }
+
+  @available(iOS 16.1, *)
+  func endLiveActivity(completion: (() -> Void)? = nil) {
+    Task { @MainActor in
+      defer { completion?() }
+      if #available(iOS 16.2, *) {
+        for activity in Activity<DeliveryActivityAttributes>.activities {
+          await activity.end(nil, dismissalPolicy: .immediate)
+          print("🛑 Ended Live Activity: \(activity.id)")
         }
       }
     }
@@ -550,14 +595,20 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   private func buildLiveActivityState(
     userInfo: [AnyHashable: Any],
     progressPercent: Double,
-    imageFileName: String?
+    imageFileName: String?,
+    logoFileName: String?
   ) -> DeliveryActivityAttributes.ContentState {
     let merged = mergedNotificationFields(userInfo)
     let imageUrlString = firstPushImageUrlString(fromMerged: merged)
+    let deliveryState = stringFromAny(merged["delivery_state"])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let deliveryUi = stringFromAny(merged["delivery_ui"])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? (deliveryState.isEmpty ? "v1" : "v2")
+    let milestoneStep = Int(stringFromAny(merged["milestone_step"]) ?? "") ?? milestoneStepFromDeliveryState(deliveryState)
+    let milestoneTotal = Int(stringFromAny(merged["milestone_total"]) ?? "") ?? 4
+
     return DeliveryActivityAttributes.ContentState(
-      message1: stringFromAny(merged["message1"]) ?? "",
-      message2: stringFromAny(merged["message2"]) ?? "",
-      message3: stringFromAny(merged["message3"]) ?? "",
+      message1: stringFromAny(merged["message1"]) ?? stringFromAny(merged["merchant_name"]) ?? "",
+      message2: stringFromAny(merged["message2"]) ?? stringFromAny(merged["status_subtitle"]) ?? "",
+      message3: stringFromAny(merged["message3"]) ?? stringFromAny(merged["eta_line"]) ?? "",
       message1FontSize: parseDouble(merged["message1FontSize"]) ?? 14,
       message1FontColorHex: stringFromAny(merged["message1FontColorHex"]) ?? "#000000",
       line1_font_text_styles: parseStringArray(merged["line1_text_styles"])
@@ -579,8 +630,32 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
       bg_color_gradient: stringFromAny(merged["bg_color_gradient"]) ?? "",
       bg_color_gradient_dir: stringFromAny(merged["bg_color_gradient_dir"]) ?? "",
       imageFileName: imageFileName,
-      imageUrl: imageUrlString
+      imageUrl: imageUrlString,
+      logoFileName: logoFileName,
+      deliveryState: deliveryState,
+      deliveryUi: deliveryUi,
+      milestoneStep: milestoneStep,
+      milestoneTotal: milestoneTotal,
+      logoUrl: stringFromAny(merged["logoUrl"]) ?? stringFromAny(merged["logo_url"])
     )
+  }
+
+  private func normalizedProgressFraction(from merged: [String: Any]) -> Double {
+    let raw = parseDouble(merged["progressPercent"])
+      ?? parseDouble(merged["progress_percent"])
+      ?? 0
+    if raw > 1 { return min(raw / 100, 1) }
+    return max(0, min(raw, 1))
+  }
+
+  private func milestoneStepFromDeliveryState(_ deliveryState: String) -> Int {
+    switch deliveryState.lowercased() {
+    case "preparing": return 1
+    case "on_the_way": return 2
+    case "arriving": return 3
+    case "arrived", "delivered": return 4
+    default: return 1
+    }
   }
 
   /// Prefer explicit `imageUrl` / `image_url`, then `logoUrl` / `logo_url` (matches RN live template).
@@ -749,14 +824,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     !data.isEmpty && UIImage(data: data) != nil
   }
 
-  private func saveLiveActivityImage(merged: [String: Any]) -> String? {
-    guard let imageUrl = firstPushImageUrlString(fromMerged: merged), !imageUrl.isEmpty,
+  private func saveLiveActivityImage(fromMerged merged: [String: Any], preferKeys: [String]) -> String? {
+    guard let imageUrl = urlStringFromMerged(merged, preferKeys: preferKeys), !imageUrl.isEmpty,
           let url = URL(string: imageUrl) else {
-      print("📷 Live Activity: no image URL in merged payload")
       return nil
     }
+    return saveLiveActivityImage(from: url)
+  }
 
-    // Release / TestFlight: ATS blocks plain HTTP unless you add exceptions (avoid HTTP image URLs).
+  private func urlStringFromMerged(_ merged: [String: Any], preferKeys: [String]) -> String? {
+    for key in preferKeys {
+      if let value = stringFromAny(merged[key])?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+        return value
+      }
+    }
+    return nil
+  }
+
+  private func saveLiveActivityImage(from url: URL) -> String? {
     if url.scheme?.lowercased() != "https" {
       print("📷 Live Activity: image URL must use https (scheme was \(url.scheme ?? "nil"))")
       return nil
@@ -803,7 +888,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     }.resume()
     _ = semaphore.wait(timeout: .now() + 35)
     if result == nil {
-      print("📷 Live Activity image: timed out or failed for URL \(imageUrl)")
+      print("📷 Live Activity image: timed out or failed for URL \(url.absoluteString)")
     }
     return result
   }

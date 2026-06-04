@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+import { postDeviceRegister } from '../helpers/deviceRegisterHttp';
 import { extractChannelSegment, getApiBaseUrl } from '../helpers/tenantContext';
 import { getDeviceId } from '../utils/device';
 import { waitForGeoIp } from '../utils/geoIpContext';
@@ -16,17 +17,7 @@ async function postDeviceRegistration(
   commonHeaders: Record<string, string>,
   payload: Record<string, unknown>
 ) {
-  const response = await fetch(`${apiBaseUrl}/device/register`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...commonHeaders,
-    },
-    body: JSON.stringify(payload),
-  });
-  const text = await response.text();
-
-  return { response, text };
+  return postDeviceRegister(apiBaseUrl, commonHeaders, payload);
 }
 
 async function persistRegistrationState(params: {
@@ -211,6 +202,9 @@ export async function registerDeviceWithAPNS(token: string) {
       (typeof resData?.device?.contact_id === 'string' &&
         resData.device.contact_id) ||
       '';
+    const serverUserId =
+      (typeof resData?.device?.user_id === 'string' && resData.device.user_id) ||
+      '';
 
     await persistRegistrationState({
       token,
@@ -219,6 +213,10 @@ export async function registerDeviceWithAPNS(token: string) {
       sessionId: newSessionId,
       contactId: newContactId,
     });
+
+    if (serverUserId) {
+      await AsyncStorage.setItem('server_user_id', serverUserId);
+    }
 
     return newSessionId;
   } catch (err) {

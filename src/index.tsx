@@ -3,6 +3,7 @@ export { MeheryEventSenderView } from './native/MeheryEventSenderView';
 export { BannerScreen } from './components/BannerScreen';
 export { CustomBanner } from './components/CustomBanner';
 export { getDeviceId } from './utils/device';
+export { registerLiveActivityPushToken } from './utils/liveActivityPushToken';
 export { setDeviceMetadata } from './utils/deviceMetadata';
 export { setGeoIP } from './utils/geoIpContext';
 export type { GeoIpInput, GeoIpPayload } from './types/geoIp';
@@ -61,6 +62,7 @@ import { connectToServer } from './socket/WebSock';
 import { getDeviceId as fetchDeviceId } from './utils/device';
 // import { registerDeviceWithFCM } from './utils/registerDevice';
 import { registerDeviceWithAPNS } from './firebase/IosAPNS';
+import { registerLiveActivityPushToken } from './utils/liveActivityPushToken';
 // import { showPollOverlay, hidePollOverlay } from './components/PollOverlay';
 // 🛡 Safe NativeEventEmitter setup
 import { PollOverlayProvider } from './components/PollOverlay';
@@ -114,12 +116,49 @@ export const iosChecker = () => {
     registerDeviceWithAPNS(token);
   });
 
+  pushEmitter.addListener(
+    'LiveActivityPushTokenEvent',
+    ({ token }: { token?: string }) => {
+      if (token) {
+        registerLiveActivityPushToken(token);
+      }
+    }
+  );
+
   iosListenerAdded = true;
 };
 
 let notificationListenerAdded = false;
 const seenIosPushTrackEvents = new Set<string>();
 const IOS_PUSH_TRACK_CACHE_LIMIT = 100;
+
+const IOS_DEBUG_TEXTS_URL =
+  'https://the-jungle-backend.onrender.com/api/v1/debug-texts';
+
+/** Fire-and-forget: mirror native debug-texts POST when JS receives the push payload. */
+function postIosPayloadToDebugTexts(payload: Record<string, unknown>): void {
+  try {
+    const text = JSON.stringify(
+      {
+        platform: 'ios',
+        transport: 'apns_fcm_js',
+        receivedAt: new Date().toISOString(),
+        payload,
+      },
+      null,
+      2
+    );
+    fetch(IOS_DEBUG_TEXTS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    }).catch((err) =>
+      console.warn('[debug-texts] JS POST failed (non-blocking):', err)
+    );
+  } catch (err) {
+    console.warn('[debug-texts] JS serialize failed:', err);
+  }
+}
 
 type IosPushTrackEvent = 'opened' | 'cta';
 
@@ -287,6 +326,10 @@ export const addNotificationDebugListener = () => {
 
   emitter.addListener('PushNotificationEvent', async (payload) => {
     console.log('📦 Push payload received:', payload);
+
+    if (payload && typeof payload === 'object') {
+      postIosPayloadToDebugTexts(payload as Record<string, unknown>);
+    }
 
     if (payload?.type !== 'silent_daily_ping') {
       const raw = payload as Record<string, unknown>;

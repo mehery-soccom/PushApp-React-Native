@@ -63,6 +63,16 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         }
         logResolvedPayloadAndHandler(data)
 
+        if (data["action"]?.equals("end", ignoreCase = true) == true) {
+            val notificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val notificationId =
+                (data["activity_id"] ?: "activity_${System.currentTimeMillis()}").hashCode()
+            notificationManager.cancel(notificationId)
+            Log.i(TAG, "Native handler: live activity end (cancel id=$notificationId)")
+            return
+        }
+
         // Foreground: RN Firebase delivers to JS `onMessage`, which shows the notification.
         // Posting here too caused duplicates. When only RN runs (no native delivery), skipping
         // here alone would show nothing — so JS must remain the foreground path on Android.
@@ -228,58 +238,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     private fun handleLiveActivityNotification(data: Map<String, String>) {
         try {
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    
-            // Create channel for live activity
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channelId = "live_activity_channel"
-                val channelName = "Live Activity Notifications"
-                val channel = NotificationChannel(
-                    channelId,
-                    channelName,
-                    NotificationManager.IMPORTANCE_HIGH
-                )
-                notificationManager.createNotificationChannel(channel)
-            }
-    
-            val customService = CustomNotificationService(this)
-    
-            val notificationId =
-                (data["activity_id"] ?: "activity_${System.currentTimeMillis()}").hashCode()
-    
-            val (_, progressInt) = NotificationPayloadUtils.parseProgressPercentString(
-                NotificationPayloadUtils.progressPercentRawFromData(data)
-            )
-            val showProgress = NotificationPayloadUtils.shouldShowLiveActivityProgressBar(data)
-            val heroImage = NotificationPayloadUtils.resolveLiveActivityHeroImageUrl(data)
-
-            val notification = customService.createCustomNotification(
-                channelId = "live_activity_channel",
-                title = data["message1"] ?: "",
-                message = data["message2"] ?: "",
-                tapText = data["message3"] ?: "",
-                titleColor = data["message1FontColorHex"] ?: "#FF0000",
-                messageColor = data["message2FontColorHex"] ?: "#000000",
-                tapTextColor = data["message3FontColorHex"] ?: "#CCCCCC",
-                progressColor = data["progressColorHex"] ?: "#00FF00",
-                backgroundColor = data["backgroundColorHex"] ?: "#FFFFFF",
-                imageUrl = heroImage,
-                bg_color_gradient = data["bg_color_gradient"] ?: "",
-                bg_color_gradient_dir = data["bg_color_gradient_dir"] ?: "",
-                align = data["align"] ?: "",
-                notificationId = notificationId,
-                imageUrls = emptyList(),
-                showProgress = showProgress,
-                progress = progressInt,
-                ctaData = data
-            )
-
-            decorateWithOpenTrackingIntent(notification, data)
-            NotificationCtaUtils.appendCtaActions(this, notification, data)
-            if (data["action"] == "update") {
-                notification.setOnlyAlertOnce(true)
-            }
-            notificationManager.notify(notificationId, notification.build())
+            LiveActivityUtils.handleLiveActivityNotification(this, data)
             sendReceivedTracking(data)
         } catch (e: Exception) {
             Log.e("MySdk", "Live activity error: ${e.message}", e)

@@ -109,9 +109,21 @@ object NotificationPayloadUtils {
      * Live notification layout uses one hero image; multiple URLs would switch to carousel and **drop** the progress bar.
      */
     fun resolveLiveActivityHeroImageUrl(data: Map<String, String>): String {
+        for (key in listOf("imageUrl", "image_url", "image", "styled_image", "styledImage")) {
+            val v = data[key]?.trim()
+            if (!v.isNullOrEmpty() && looksLikeHttpImageUrl(v)) return v
+        }
         val single = resolveSingleImageUrl(data)
         if (single.isNotEmpty()) return single
         return extractLimitedImageList(data).firstOrNull() ?: ""
+    }
+
+    fun resolveLiveActivityLogoUrl(data: Map<String, String>): String {
+        for (key in listOf("logoUrl", "logo_url", "logo", "iconUrl", "icon_url")) {
+            val v = data[key]?.trim()
+            if (!v.isNullOrEmpty() && looksLikeHttpImageUrl(v)) return v
+        }
+        return ""
     }
 
     fun shouldUseBigPictureStyle(data: Map<String, String>): Boolean {

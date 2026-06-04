@@ -101,7 +101,7 @@ async function recoverDeviceRegistration(
     payload.fcm_token = fcmToken;
   }
 
-  const response = await fetch(`${apiBaseUrl}/device/register`, {
+  let response = await fetch(`${apiBaseUrl}/device/register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -109,15 +109,51 @@ async function recoverDeviceRegistration(
     },
     body: JSON.stringify(payload),
   });
+  let text = await response.text();
+
+  const parsedChannelSegment = extractChannelSegment(channelId);
+  const shouldRetryRegisterWithParsedChannel =
+    !response.ok &&
+    response.status >= 500 &&
+    parsedChannelSegment &&
+    parsedChannelSegment !== channelId &&
+    /non-existent collection in transaction/i.test(text);
+
+  if (shouldRetryRegisterWithParsedChannel) {
+    console.warn(
+      `⚠️ Auto-register failed for full identifier, retrying with parsed channel segment: ${parsedChannelSegment}`
+    );
+    payload.channel_id = parsedChannelSegment;
+    response = await fetch(`${apiBaseUrl}/device/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
+      body: JSON.stringify(payload),
+    });
+    text = await response.text();
+  }
+
   if (!response.ok) {
-    const text = await response.text();
+    if (/device already exists/i.test(text)) {
+      console.warn(
+        'ℹ️ Device already exists on server. Proceeding with /device/link retry.'
+      );
+      await AsyncStorage.multiSet([
+        ['APNStoken', token],
+        ['fcmToken', fcmToken ?? ''],
+        ['lastRegisteredToken', token],
+        ['UserRegistered', 'true'],
+        ['isRegistered', 'true'],
+      ]);
+      return true;
+    }
     console.warn(
       `⚠️ Auto-register failed before relink. Status: ${response.status} - ${text}`
     );
     return false;
   }
-
-  const text = await response.text();
   let parsed: any = null;
   try {
     parsed = text ? JSON.parse(text) : null;
@@ -286,10 +322,31 @@ export async function OnUserLogin(user_id: string) {
           primaryChannelId
         );
         if (recovered) {
-          const retryResult = await linkDevice(primaryChannelId);
+          let retryResult = await linkDevice(primaryChannelId);
           response = retryResult.response;
           text = retryResult.text;
           console.log('Retry response text after auto-register:', text);
+
+          const parsedChannelSegment = extractChannelSegment(primaryChannelId);
+          const shouldRetryLinkWithParsedChannel =
+            !response.ok &&
+            response.status === 404 &&
+            /device not found/i.test(text) &&
+            parsedChannelSegment &&
+            parsedChannelSegment !== primaryChannelId;
+
+          if (shouldRetryLinkWithParsedChannel) {
+            console.warn(
+              `⚠️ /device/link still missing device for full identifier, retrying with parsed channel segment: ${parsedChannelSegment}`
+            );
+            retryResult = await linkDevice(parsedChannelSegment);
+            response = retryResult.response;
+            text = retryResult.text;
+            console.log(
+              'Retry response text after auto-register (parsed channel):',
+              text
+            );
+          }
         }
       }
 

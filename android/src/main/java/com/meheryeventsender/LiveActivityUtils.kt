@@ -11,6 +11,21 @@ object LiveActivityUtils {
 
     fun handleLiveActivityNotification(context: Context, data: Map<String, String>) {
         try {
+            if (DeliveryTrackingNotification.shouldUseDeliveryTrackingUi(data)) {
+                DeliveryTrackingNotification.handle(context, data)
+                return
+            }
+
+            if (data["action"]?.equals("end", ignoreCase = true) == true) {
+                val notificationManager =
+                    context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                val notificationId =
+                    (data["activity_id"] ?: "activity_${System.currentTimeMillis()}").hashCode()
+                notificationManager.cancel(notificationId)
+                Log.d("LiveActivityUtils", "Ended live activity notification id=$notificationId")
+                return
+            }
+
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -52,7 +67,8 @@ object LiveActivityUtils {
                 notificationId = notificationId,
                 imageUrls = emptyList(),
                 showProgress = showProgress,
-                ctaData = data
+                ctaData = data,
+                fullBleed = true
             )
 
             notification.setContentIntent(NotificationCtaUtils.buildOpenPendingIntent(context, data))

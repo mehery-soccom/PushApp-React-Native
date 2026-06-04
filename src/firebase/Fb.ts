@@ -5,6 +5,10 @@ import PushNotification from 'react-native-push-notification';
 import { getDeviceId } from '../utils/device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+import {
+  isDeviceAlreadyExistsResponse,
+  postDeviceRegister,
+} from '../helpers/deviceRegisterHttp';
 import { getApiBaseUrl } from '../helpers/tenantContext';
 import { waitForGeoIp } from '../utils/geoIpContext';
 import { SESSION_ID_STORAGE_KEY } from '../utils/user';
@@ -112,26 +116,36 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
     const commonHeaders = await buildCommonHeaders();
 
     const apiBaseUrl = await getApiBaseUrl();
-    const response = await fetch(`${apiBaseUrl}/device/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...commonHeaders,
-      },
-      body: JSON.stringify(payload),
-    });
-    // const response = await fetch(
-    //   'https://demo.pushapp.co.in/pushapp/api/register',
-    //   {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify(payload),
-    //   }
-    // );
+    const { response, text } = await postDeviceRegister(
+      apiBaseUrl,
+      commonHeaders,
+      payload
+    );
 
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      if (isDeviceAlreadyExistsResponse(text)) {
+        console.warn(
+          'ℹ️ Device already exists on server. Treating registration as valid.'
+        );
+        lastApiCallTime = Date.now();
+        await AsyncStorage.multiSet([
+          ['lastRegisteredToken', token],
+          ['lastRegisteredState', currentState],
+          ['isRegistered', 'true'],
+        ]);
+        return;
+      }
+      throw new Error(`HTTP ${response.status}${text ? ` - ${text.slice(0, 200)}` : ''}`);
+    }
 
-    const resData = await response.json();
+    let resData: Record<string, unknown> | null = null;
+    try {
+      resData = text ? JSON.parse(text) : null;
+    } catch {
+      throw new Error(
+        `Device register returned non-JSON: ${text.slice(0, 200)}`
+      );
+    }
     console.log('✅ Device registered/updated:', resData);
 
     lastApiCallTime = Date.now();

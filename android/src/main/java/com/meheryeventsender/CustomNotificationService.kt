@@ -52,7 +52,9 @@ class CustomNotificationService(private val context: Context) {
     showProgress: Boolean = false,
     progress: Int = 0,
     isRichMedia: Boolean = false,
-    ctaData: Map<String, String>? = null
+    ctaData: Map<String, String>? = null,
+    /** When true, custom RemoteViews fill the whole notification (no system white header strip). */
+    fullBleed: Boolean = false
 
 ): NotificationCompat.Builder {
 
@@ -63,18 +65,33 @@ class CustomNotificationService(private val context: Context) {
     }
     
     val customView = RemoteViews(context.packageName, layoutRes)
-    
-        // Background
+
+        var parsedBackgroundColor: Int? = null
         try {
-            if (bg_color_gradient.isNotEmpty() && bg_color_gradient_dir.isNotEmpty()) {
-                val startColor = Color.parseColor(backgroundColor)
-                val endColor = Color.parseColor(bg_color_gradient)
-                val isHorizontal = bg_color_gradient_dir.equals("horizontal", true)
-                customView.setImageViewBitmap(R.id.root_background, createGradientBitmap(startColor, endColor, isHorizontal))
-            } else {
-                customView.setImageViewBitmap(R.id.root_background, createSolidColorBitmap(Color.parseColor(backgroundColor)))
-            }
+            parsedBackgroundColor = Color.parseColor(backgroundColor)
         } catch (_: Exception) {}
+
+        // Background inside RemoteViews (skipped for colorized full-bleed — system tints the whole card)
+        if (!fullBleed) {
+            try {
+                if (bg_color_gradient.isNotEmpty() && bg_color_gradient_dir.isNotEmpty()) {
+                    val startColor = parsedBackgroundColor ?: Color.WHITE
+                    val endColor = Color.parseColor(bg_color_gradient)
+                    val isHorizontal = bg_color_gradient_dir.equals("horizontal", true)
+                    customView.setImageViewBitmap(
+                        R.id.root_background,
+                        createGradientBitmap(startColor, endColor, isHorizontal, false)
+                    )
+                } else if (parsedBackgroundColor != null) {
+                    customView.setImageViewBitmap(
+                        R.id.root_background,
+                        createSolidColorBitmap(parsedBackgroundColor, false)
+                    )
+                }
+            } catch (_: Exception) {}
+        } else {
+            customView.setViewVisibility(R.id.root_background, View.GONE)
+        }
 
         // Text
         customView.setTextViewText(R.id.title, title)
@@ -118,11 +135,18 @@ class CustomNotificationService(private val context: Context) {
             .setSmallIcon(R.mipmap.ic_launcher)
             .setCustomContentView(customView)
             .setCustomBigContentView(customView)
-            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomHeadsUpContentView(customView)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setOngoing(false)
             .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
+
+        if (fullBleed) {
+            applyColorizedFullBleed(builder, parsedBackgroundColor, bg_color_gradient)
+        } else {
+            builder
+                .setOngoing(false)
+                .setAutoCancel(true)
+                .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+        }
 
         if (imageUrl.isNotEmpty()) {
             downloadImage(imageUrl) { bitmap ->
@@ -142,6 +166,143 @@ class CustomNotificationService(private val context: Context) {
                     )
                 }
             }
+        }
+
+        return builder
+    }
+
+    /**
+     * Android 12+ always draws the app icon + label row for custom notifications.
+     * setColorized(true) tints that entire shell (header + body), including behind the app icon.
+     * Ongoing is required on many OEMs for colorization to apply outside foreground services.
+     */
+    private fun applyColorizedFullBleed(
+        builder: NotificationCompat.Builder,
+        backgroundColor: Int?,
+        gradientEnd: String
+    ) {
+        builder.setShowWhen(false)
+        builder.setStyle(NotificationCompat.DecoratedCustomViewStyle())
+        builder.setOngoing(true)
+        builder.setAutoCancel(false)
+        builder.setOnlyAlertOnce(true)
+        builder.setCategory(android.app.Notification.CATEGORY_PROGRESS)
+
+        val shellColor = backgroundColor ?: Color.parseColor("#1A1A1A")
+        builder.setColor(shellColor)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            builder.setColorized(true)
+        }
+
+        // Gradient templates: tint shell with start color; content gradient can be added in Phase 2 layout
+        if (gradientEnd.isNotBlank() && backgroundColor != null) {
+            Log.d(TAG, "Full-bleed colorized shell uses start color; gradient=$gradientEnd")
+        }
+    }
+
+    fun createDeliveryTrackingNotification(
+        channelId: String,
+        merchantName: String,
+        statusSubtitle: String,
+        etaLine: String,
+        merchantColor: String,
+        statusColor: String,
+        etaColor: String,
+        progressColor: String,
+        backgroundColor: String,
+        bg_color_gradient: String,
+        bg_color_gradient_dir: String,
+        logoUrl: String,
+        heroImageUrl: String,
+        milestoneStep: Int,
+        milestoneTotal: Int,
+        notificationId: Int,
+        ctaData: Map<String, String>? = null
+    ): NotificationCompat.Builder {
+        val customView = RemoteViews(context.packageName, R.layout.delivery_tracking_notification_layout)
+
+        var parsedBackgroundColor: Int? = null
+        try {
+            parsedBackgroundColor = Color.parseColor(backgroundColor)
+        } catch (_: Exception) {}
+
+        customView.setViewVisibility(R.id.root_background, View.GONE)
+
+        customView.setTextViewText(R.id.merchant_name, merchantName)
+        customView.setTextViewText(R.id.status_subtitle, statusSubtitle)
+        customView.setTextViewText(R.id.eta_line, etaLine)
+
+        try {
+            customView.setTextColor(R.id.merchant_name, Color.parseColor(merchantColor))
+            customView.setTextColor(R.id.status_subtitle, Color.parseColor(statusColor))
+            customView.setTextColor(R.id.eta_line, Color.parseColor(etaColor))
+        } catch (_: Exception) {}
+
+        val activeColor = try {
+            Color.parseColor(progressColor)
+        } catch (_: Exception) {
+            Color.WHITE
+        }
+        val inactiveColor = Color.argb(60, Color.red(activeColor), Color.green(activeColor), Color.blue(activeColor))
+        val milestoneBitmap = DeliveryTrackingNotification.createMilestoneBitmap(
+            widthPx = (context.resources.displayMetrics.density * 280).toInt().coerceAtLeast(200),
+            heightPx = (context.resources.displayMetrics.density * 8).toInt().coerceAtLeast(8),
+            step = milestoneStep,
+            total = milestoneTotal,
+            activeColor = activeColor,
+            inactiveColor = inactiveColor
+        )
+        customView.setImageViewBitmap(R.id.milestone_bar, milestoneBitmap)
+
+        customView.setImageViewResource(R.id.logo, R.mipmap.ic_launcher)
+
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        val pendingIntent = PendingIntent.getActivity(
+            context, 0, launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setCustomContentView(customView)
+            .setCustomBigContentView(customView)
+            .setCustomHeadsUpContentView(customView)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setContentIntent(pendingIntent)
+
+        applyColorizedFullBleed(builder, parsedBackgroundColor, bg_color_gradient)
+
+        var pendingImages = 0
+        fun maybeRefresh() {
+            if (pendingImages <= 0) {
+                val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                manager.notify(notificationId, builder.build())
+            }
+        }
+
+        if (logoUrl.isNotEmpty()) {
+            pendingImages++
+            downloadImage(logoUrl) { bitmap ->
+                if (bitmap != null) {
+                    customView.setImageViewBitmap(R.id.logo, bitmap)
+                }
+                pendingImages--
+                maybeRefresh()
+            }
+        }
+
+        if (heroImageUrl.isNotEmpty()) {
+            customView.setViewVisibility(R.id.hero_image, View.VISIBLE)
+            pendingImages++
+            downloadImage(heroImageUrl) { bitmap ->
+                if (bitmap != null) {
+                    customView.setImageViewBitmap(R.id.hero_image, bitmap)
+                }
+                pendingImages--
+                maybeRefresh()
+            }
+        } else {
+            customView.setViewVisibility(R.id.hero_image, View.GONE)
         }
 
         return builder
@@ -216,22 +377,29 @@ class CustomNotificationService(private val context: Context) {
     }
 
 
-    fun createGradientBitmap(startColor: Int, endColor: Int, isHorizontal: Boolean): Bitmap {
+    fun createGradientBitmap(
+        startColor: Int,
+        endColor: Int,
+        isHorizontal: Boolean,
+        tall: Boolean = false
+    ): Bitmap {
         val gradient = GradientDrawable(
             if (isHorizontal) GradientDrawable.Orientation.LEFT_RIGHT
             else GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(startColor, endColor)
         )
 
-        val bmp = Bitmap.createBitmap(1080, 350, Bitmap.Config.ARGB_8888)
+        val height = if (tall) 480 else 350
+        val bmp = Bitmap.createBitmap(1080, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
-        gradient.setBounds(0, 0, 1080, 350)
+        gradient.setBounds(0, 0, 1080, height)
         gradient.draw(canvas)
         return bmp
     }
 
-    fun createSolidColorBitmap(color: Int): Bitmap {
-        val bmp = Bitmap.createBitmap(1080, 350, Bitmap.Config.ARGB_8888)
+    fun createSolidColorBitmap(color: Int, tall: Boolean = false): Bitmap {
+        val height = if (tall) 480 else 350
+        val bmp = Bitmap.createBitmap(1080, height, Bitmap.Config.ARGB_8888)
         bmp.eraseColor(color)
         return bmp
     }
