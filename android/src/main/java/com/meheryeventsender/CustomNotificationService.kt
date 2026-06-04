@@ -216,6 +216,7 @@ class CustomNotificationService(private val context: Context) {
         heroImageUrl: String,
         milestoneStep: Int,
         milestoneTotal: Int,
+        milestoneLabels: List<String> = listOf("Placed", "Preparing", "On the way", "Delivered"),
         notificationId: Int,
         ctaData: Map<String, String>? = null
     ): NotificationCompat.Builder {
@@ -244,13 +245,20 @@ class CustomNotificationService(private val context: Context) {
             Color.WHITE
         }
         val inactiveColor = Color.argb(60, Color.red(activeColor), Color.green(activeColor), Color.blue(activeColor))
-        val milestoneBitmap = DeliveryTrackingNotification.createMilestoneBitmap(
+        val labelColor = try {
+            Color.parseColor(merchantColor)
+        } catch (_: Exception) {
+            Color.WHITE
+        }
+        val milestoneBitmap = DeliveryTrackingNotification.createMilestoneIconsBitmap(
+            context = context,
             widthPx = (context.resources.displayMetrics.density * 280).toInt().coerceAtLeast(200),
-            heightPx = (context.resources.displayMetrics.density * 8).toInt().coerceAtLeast(8),
             step = milestoneStep,
             total = milestoneTotal,
+            labels = milestoneLabels,
             activeColor = activeColor,
-            inactiveColor = inactiveColor
+            inactiveColor = inactiveColor,
+            labelColor = labelColor
         )
         customView.setImageViewBitmap(R.id.milestone_bar, milestoneBitmap)
 

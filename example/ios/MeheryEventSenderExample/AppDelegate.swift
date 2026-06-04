@@ -604,6 +604,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     let deliveryUi = stringFromAny(merged["delivery_ui"])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? (deliveryState.isEmpty ? "v1" : "v2")
     let milestoneStep = Int(stringFromAny(merged["milestone_step"]) ?? "") ?? milestoneStepFromDeliveryState(deliveryState)
     let milestoneTotal = Int(stringFromAny(merged["milestone_total"]) ?? "") ?? 4
+    let milestoneLabelsJson = stringFromAny(merged["milestone_labels"])
+      ?? stringFromAny(merged["milestoneLabels"])
+      ?? "[\"Placed\",\"Preparing\",\"On the way\",\"Delivered\"]"
 
     return DeliveryActivityAttributes.ContentState(
       message1: stringFromAny(merged["message1"]) ?? stringFromAny(merged["merchant_name"]) ?? "",
@@ -632,11 +635,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
       imageFileName: imageFileName,
       imageUrl: imageUrlString,
       logoFileName: logoFileName,
+      logoUrl: stringFromAny(merged["logoUrl"]) ?? stringFromAny(merged["logo_url"]),
       deliveryState: deliveryState,
       deliveryUi: deliveryUi,
       milestoneStep: milestoneStep,
       milestoneTotal: milestoneTotal,
-      logoUrl: stringFromAny(merged["logoUrl"]) ?? stringFromAny(merged["logo_url"])
+      milestoneLabelsJson: milestoneLabelsJson
     )
   }
 

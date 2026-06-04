@@ -9,9 +9,11 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.os.Build
 import android.util.Log
-import android.view.View
-import android.widget.RemoteViews
-import androidx.core.app.NotificationCompat
+import android.graphics.Typeface
+import android.graphics.drawable.Drawable
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
+import org.json.JSONArray
 
 /**
  * Zomato-style stacked delivery tracking notification (Phase 2).
@@ -68,6 +70,7 @@ object DeliveryTrackingNotification {
             val milestoneStep = data["milestone_step"]?.toIntOrNull()
                 ?: milestoneStepFromState(data["delivery_state"])
             val milestoneTotal = data["milestone_total"]?.toIntOrNull()?.coerceAtLeast(1) ?: 4
+            val milestoneLabels = parseMilestoneLabels(data["milestone_labels"] ?: data["milestoneLabels"])
 
             val notification = customService.createDeliveryTrackingNotification(
                 channelId = "live_activity_channel",
@@ -85,6 +88,7 @@ object DeliveryTrackingNotification {
                 heroImageUrl = heroUrl,
                 milestoneStep = milestoneStep,
                 milestoneTotal = milestoneTotal,
+                milestoneLabels = milestoneLabels,
                 notificationId = notificationId,
                 ctaData = data
             )
@@ -107,6 +111,87 @@ object DeliveryTrackingNotification {
             "arrived", "delivered" -> 4
             else -> 1
         }
+    }
+
+    private fun parseMilestoneLabels(raw: String?): List<String> {
+        val defaults = listOf("Placed", "Preparing", "On the way", "Delivered")
+        if (raw.isNullOrBlank()) return defaults
+        return try {
+            val arr = JSONArray(raw.trim())
+            (0 until arr.length()).map { arr.getString(it) }.ifEmpty { defaults }
+        } catch (_: Exception) {
+            raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { defaults }
+        }
+    }
+
+    fun createMilestoneIconsBitmap(
+        context: Context,
+        widthPx: Int,
+        step: Int,
+        total: Int,
+        labels: List<String>,
+        activeColor: Int,
+        inactiveColor: Int,
+        labelColor: Int
+    ): Bitmap {
+        val iconResIds = listOf(
+            R.drawable.ic_milestone_placed,
+            R.drawable.ic_milestone_preparing,
+            R.drawable.ic_milestone_delivery,
+            R.drawable.ic_milestone_home
+        )
+        val safeTotal = total.coerceAtLeast(1)
+        val safeStep = step.coerceIn(0, safeTotal)
+        val heightPx = (context.resources.displayMetrics.density * 44).toInt().coerceAtLeast(44)
+        val bitmap = Bitmap.createBitmap(widthPx.coerceAtLeast(1), heightPx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val iconSize = (heightPx * 0.42f).coerceAtLeast(18f)
+        val circleRadius = iconSize * 0.72f
+        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = labelColor
+            textSize = (heightPx * 0.18f).coerceAtLeast(9f)
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        }
+        val slotWidth = widthPx.toFloat() / safeTotal
+
+        for (index in 0 until safeTotal) {
+            val centerX = slotWidth * index + slotWidth / 2f
+            val circleY = circleRadius + 4f
+            val isActive = index < safeStep
+            paint.color = if (isActive) activeColor else inactiveColor
+            canvas.drawCircle(centerX, circleY, circleRadius, paint)
+
+            val iconRes = iconResIds.getOrElse(index) { iconResIds.last() }
+            val drawable: Drawable? = ContextCompat.getDrawable(context, iconRes)
+            if (drawable != null) {
+                val tinted = DrawableCompat.wrap(drawable.mutate())
+                DrawableCompat.setTint(tinted, if (isActive) Color.WHITE else Color.argb(180, 255, 255, 255))
+                val left = (centerX - iconSize / 2f).toInt()
+                val top = (circleY - iconSize / 2f).toInt()
+                tinted.setBounds(left, top, left + iconSize.toInt(), top + iconSize.toInt())
+                tinted.draw(canvas)
+            }
+
+            if (index < safeTotal - 1) {
+                val lineY = circleY
+                val lineStart = centerX + circleRadius + 4f
+                val nextCenterX = slotWidth * (index + 1) + slotWidth / 2f
+                val lineEnd = nextCenterX - circleRadius - 4f
+                paint.strokeWidth = 2f
+                paint.style = Paint.Style.STROKE
+                paint.color = if (index < safeStep - 1) activeColor else inactiveColor
+                canvas.drawLine(lineStart, lineY, lineEnd, lineY, paint)
+                paint.style = Paint.Style.FILL
+            }
+
+            val label = labels.getOrElse(index) { "" }
+            if (label.isNotEmpty()) {
+                canvas.drawText(label, centerX, heightPx - 4f, labelPaint)
+            }
+        }
+        return bitmap
     }
 
     fun createMilestoneBitmap(

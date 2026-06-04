@@ -66,10 +66,10 @@
         <ImageView
             android:id="@+id/milestone_bar"
             android:layout_width="match_parent"
-            android:layout_height="8dp"
+            android:layout_height="44dp"
             android:layout_marginTop="12dp"
             android:scaleType="fitXY"
-            android:contentDescription="Delivery progress" />
+            android:contentDescription="Delivery milestones" />
 
         <ImageView
             android:id="@+id/hero_image"

@@ -315,6 +315,7 @@ struct DeliveryActivityAttributes: ActivityAttributes {
         var deliveryUi: String
         var milestoneStep: Int
         var milestoneTotal: Int
+        var milestoneLabelsJson: String
 
         enum CodingKeys: String, CodingKey {
             case message1, message2, message3
@@ -326,6 +327,7 @@ struct DeliveryActivityAttributes: ActivityAttributes {
             case imageFileName, imageUrl, logoFileName, logoUrl
             case deliveryState, deliveryUi, milestoneStep, milestoneTotal
             case delivery_state, delivery_ui, milestone_step, milestone_total
+            case milestoneLabelsJson, milestone_labels, milestoneLabels
         }
 
         init(
@@ -336,7 +338,8 @@ struct DeliveryActivityAttributes: ActivityAttributes {
             backgroundColorHex: String, fontColorHex: String, progressColorHex: String, fontSize: Double,
             progressPercent: Double, align: String, bg_color_gradient: String, bg_color_gradient_dir: String,
             imageFileName: String?, imageUrl: String?, logoFileName: String?, logoUrl: String?,
-            deliveryState: String, deliveryUi: String, milestoneStep: Int, milestoneTotal: Int
+            deliveryState: String, deliveryUi: String, milestoneStep: Int, milestoneTotal: Int,
+            milestoneLabelsJson: String = "[\"Placed\",\"Preparing\",\"On the way\",\"Delivered\"]"
         ) {
             self.message1 = message1
             self.message2 = message2
@@ -366,6 +369,7 @@ struct DeliveryActivityAttributes: ActivityAttributes {
             self.deliveryUi = deliveryUi
             self.milestoneStep = milestoneStep
             self.milestoneTotal = milestoneTotal
+            self.milestoneLabelsJson = milestoneLabelsJson
         }
 
         init(from decoder: Decoder) throws {
@@ -402,6 +406,10 @@ struct DeliveryActivityAttributes: ActivityAttributes {
                 ?? c.decodeIfPresent(Int.self, forKey: .milestone_step) ?? 1
             milestoneTotal = try c.decodeIfPresent(Int.self, forKey: .milestoneTotal)
                 ?? c.decodeIfPresent(Int.self, forKey: .milestone_total) ?? 4
+            milestoneLabelsJson = try c.decodeIfPresent(String.self, forKey: .milestoneLabelsJson)
+                ?? c.decodeIfPresent(String.self, forKey: .milestone_labels)
+                ?? c.decodeIfPresent(String.self, forKey: .milestoneLabels)
+                ?? "[\"Placed\",\"Preparing\",\"On the way\",\"Delivered\"]"
         }
 
         func encode(to encoder: Encoder) throws {
@@ -434,6 +442,7 @@ struct DeliveryActivityAttributes: ActivityAttributes {
             try c.encode(deliveryUi, forKey: .deliveryUi)
             try c.encode(milestoneStep, forKey: .milestoneStep)
             try c.encode(milestoneTotal, forKey: .milestoneTotal)
+            try c.encode(milestoneLabelsJson, forKey: .milestoneLabelsJson)
         }
     }
 }
@@ -484,13 +493,15 @@ struct DeliveryActivityLiveActivity: Widget {
                 .foregroundColor(colorFromHex(context.state.message3FontColorHex))
                 .lineLimit(2)
 
-            MilestoneProgressView(
+            MilestoneIconRowView(
                 step: context.state.milestoneStep,
                 total: max(context.state.milestoneTotal, 1),
+                labels: parseMilestoneLabels(context.state.milestoneLabelsJson),
                 activeColor: colorFromHex(context.state.progressColorHex),
-                inactiveColor: colorFromHex(context.state.progressColorHex).opacity(0.25)
+                inactiveColor: colorFromHex(context.state.progressColorHex).opacity(0.25),
+                labelColor: colorFromHex(context.state.message2FontColorHex)
             )
-            .frame(height: 8)
+            .frame(height: 52)
 
             if appGroupImageExists(context.state.imageFileName),
                let img = loadImageFromAppGroup(named: context.state.imageFileName ?? "") {
@@ -648,13 +659,15 @@ struct DeliveryActivityLiveActivity: Widget {
                     Text(context.state.message2)
                         .font(.caption2)
                         .foregroundColor(colorFromHex(context.state.message2FontColorHex))
-                    MilestoneProgressView(
+                    MilestoneIconRowView(
                         step: context.state.milestoneStep,
                         total: max(context.state.milestoneTotal, 1),
+                        labels: parseMilestoneLabels(context.state.milestoneLabelsJson),
                         activeColor: colorFromHex(context.state.progressColorHex),
-                        inactiveColor: colorFromHex(context.state.progressColorHex).opacity(0.25)
+                        inactiveColor: colorFromHex(context.state.progressColorHex).opacity(0.25),
+                        labelColor: colorFromHex(context.state.message2FontColorHex)
                     )
-                    .frame(height: 6)
+                    .frame(height: 40)
                 }
             }
         } compactLeading: {
@@ -664,19 +677,98 @@ struct DeliveryActivityLiveActivity: Widget {
                 size: 22
             )
         } compactTrailing: {
-            Text("\(context.state.milestoneStep)/\(max(context.state.milestoneTotal, 1))")
-                .font(.caption2)
-                .fontWeight(.semibold)
-                .foregroundColor(colorFromHex(context.state.fontColorHex))
+            if shouldUseDeliveryTrackingUi(context.state) {
+                Text(parseMilestoneLabels(context.state.milestoneLabelsJson)[safe: context.state.milestoneStep - 1] ?? "Step \(context.state.milestoneStep)")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(colorFromHex(context.state.fontColorHex))
+                    .lineLimit(1)
+            } else {
+                Text("\(Int(context.state.progressPercent * 100))%")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(colorFromHex(context.state.fontColorHex))
+            }
         } minimal: {
-            Image(systemName: "shippingbox")
+            Image(systemName: milestoneIconName(at: max(context.state.milestoneStep - 1, 0)))
                 .foregroundColor(colorFromHex(context.state.fontColorHex))
         }
         .keylineTint(colorFromHex(context.state.progressColorHex))
     }
 }
 
-// MARK: - Milestone progress (Zomato-style segmented bar)
+// MARK: - Milestone icons (Phase 3)
+
+private let defaultMilestoneIcons = ["bag.fill", "fork.knife", "bicycle", "house.fill"]
+
+private func parseMilestoneLabels(_ json: String) -> [String] {
+    guard let data = json.data(using: .utf8),
+          let decoded = try? JSONDecoder().decode([String].self, from: data),
+          !decoded.isEmpty else {
+        return ["Placed", "Preparing", "On the way", "Delivered"]
+    }
+    return decoded
+}
+
+private func milestoneIconName(at index: Int) -> String {
+    guard index >= 0, index < defaultMilestoneIcons.count else {
+        return defaultMilestoneIcons.last ?? "house.fill"
+    }
+    return defaultMilestoneIcons[index]
+}
+
+private struct MilestoneIconRowView: View {
+    let step: Int
+    let total: Int
+    let labels: [String]
+    let activeColor: Color
+    let inactiveColor: Color
+    let labelColor: Color
+
+    var body: some View {
+        let safeTotal = max(total, 1)
+        let safeStep = min(max(step, 0), safeTotal)
+
+        HStack(spacing: 0) {
+            ForEach(0..<safeTotal, id: \.self) { index in
+                HStack(spacing: 0) {
+                    VStack(spacing: 4) {
+                        ZStack {
+                            Circle()
+                                .fill(index < safeStep ? activeColor : inactiveColor)
+                                .frame(width: 28, height: 28)
+                            Image(systemName: milestoneIconName(at: index))
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.white.opacity(index < safeStep ? 1 : 0.7))
+                        }
+                        Text(labels[safe: index] ?? "")
+                            .font(.system(size: 9))
+                            .foregroundColor(labelColor.opacity(index < safeStep ? 1 : 0.55))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    if index < safeTotal - 1 {
+                        Rectangle()
+                            .fill(index < safeStep - 1 ? activeColor : inactiveColor)
+                            .frame(height: 2)
+                            .frame(maxWidth: .infinity)
+                            .padding(.bottom, 14)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}
+
+// MARK: - Milestone progress (legacy segmented bar)
 
 private struct MilestoneProgressView: View {
     let step: Int
@@ -869,7 +961,8 @@ extension DeliveryActivityAttributes.ContentState {
             deliveryState: "preparing",
             deliveryUi: "v2",
             milestoneStep: 1,
-            milestoneTotal: 4
+            milestoneTotal: 4,
+            milestoneLabelsJson: "[\"Placed\",\"Preparing\",\"On the way\",\"Delivered\"]"
         )
     }
 }
