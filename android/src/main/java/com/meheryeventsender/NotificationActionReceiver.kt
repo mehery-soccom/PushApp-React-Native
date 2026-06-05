@@ -44,7 +44,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         // Prefer [NotificationCtaUrlActivity] (see [NotificationCtaUtils.createUrlPendingIntent]).
         if (targetUrl.isNotBlank()) {
             try {
-                val normalizedUrl = NotificationPushTrack.normalizeTargetUrl(targetUrl)
+                val normalizedUrl = NotificationLinkConfig.toInAppDeepLink(targetUrl)
                 val openIntent = Intent(Intent.ACTION_VIEW, Uri.parse(normalizedUrl)).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }

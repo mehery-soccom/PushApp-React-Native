@@ -15,4 +15,10 @@ class MeheryPushTrackModule(
     fun setApiBaseUrl(url: String) {
         MeheryPushTrackPrefs.setApiBaseUrl(reactContext, url)
     }
+
+    @ReactMethod
+    fun setNotificationLinkRewrite(httpsHost: String, appScheme: String) {
+        NotificationLinkConfig.httpsHost = httpsHost
+        NotificationLinkConfig.appScheme = appScheme
+    }
 }

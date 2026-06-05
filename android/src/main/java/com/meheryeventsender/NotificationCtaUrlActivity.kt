@@ -56,7 +56,7 @@ class NotificationCtaUrlActivity : Activity() {
 
         if (urlRaw.isNotBlank()) {
             try {
-                val normalized = NotificationPushTrack.normalizeTargetUrl(urlRaw)
+                val normalized = NotificationLinkConfig.toInAppDeepLink(urlRaw)
                 val parsed = Uri.parse(normalized)
                 val viewIntent = Intent(Intent.ACTION_VIEW, parsed).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

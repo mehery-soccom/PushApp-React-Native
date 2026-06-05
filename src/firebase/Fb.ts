@@ -1,6 +1,5 @@
 import messaging from '@react-native-firebase/messaging';
 import app from '@react-native-firebase/app';
-import { Linking } from 'react-native';
 import PushNotification from 'react-native-push-notification';
 import { getDeviceId } from '../utils/device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,6 +12,7 @@ import {
   mergeIosNotificationPayload,
   resolveNotificationUrl,
 } from '../utils/pushTrackPayload';
+import { openNotificationLink } from '../utils/notificationLink';
 
 import { NativeModules, Platform } from 'react-native';
 import { ensureAndroidNotificationPermission } from '../native/LiveActivity';
@@ -136,8 +136,9 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
 
     lastApiCallTime = Date.now();
 
-    const newSessionId =
-      (resData && (resData.session_id || resData.sessionId)) || '';
+    const newSessionId = String(
+      (resData && (resData.session_id || resData.sessionId)) || ''
+    );
     if (newSessionId) {
       await AsyncStorage.setItem(SESSION_ID_STORAGE_KEY, newSessionId);
     }
@@ -701,12 +702,12 @@ async function handlePushNotificationInteraction(raw: any) {
 
       const bodyUrl = resolveNotificationUrl(notificationData);
       if (bodyUrl) {
-        log('body tap notification_url — opening in browser', bodyUrl);
+        log('body tap notification_url — opening in app', bodyUrl);
         try {
-          await Linking.openURL(bodyUrl);
-          log('Linking.openURL (body tap) finished');
+          await openNotificationLink(bodyUrl);
+          log('openNotificationLink (body tap) finished');
         } catch (e) {
-          log('Linking.openURL (body tap) threw', e);
+          log('openNotificationLink (body tap) threw', e);
         }
       } else {
         log(
@@ -763,12 +764,12 @@ async function handlePushNotificationInteraction(raw: any) {
       }
 
       if (targetUrl) {
-        log('calling Linking.openURL', targetUrl);
+        log('calling openNotificationLink', targetUrl);
         try {
-          const opened = await Linking.openURL(targetUrl);
-          log('Linking.openURL returned', opened);
+          await openNotificationLink(targetUrl);
+          log('openNotificationLink finished');
         } catch (e) {
-          log('Linking.openURL threw', e);
+          log('openNotificationLink threw', e);
         }
       } else {
         log('no targetUrl — dump url/title/action fields from data', {
@@ -1017,10 +1018,10 @@ async function openIosNotificationBodyUrl(
     return;
   }
   try {
-    await Linking.openURL(bodyUrl);
+    await openNotificationLink(bodyUrl);
     pushCtaLog('iOS FCM open: opened notification_url', bodyUrl);
   } catch (e) {
-    pushCtaLog('iOS FCM open: Linking.openURL failed', e);
+    pushCtaLog('iOS FCM open: openNotificationLink failed', e);
   }
 }
 

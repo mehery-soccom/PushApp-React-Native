@@ -46,7 +46,6 @@ import {
   Platform,
   NativeModules,
   NativeEventEmitter,
-  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -67,6 +66,13 @@ import { PollOverlayProvider } from './components/PollOverlay';
 
 export { TooltipPollContainer } from './components/TooltipPollContainer';
 export { registerFcmBackgroundHandler } from './firebase/Fb';
+export {
+  setNotificationUrlHandler,
+  configureNotificationLinkRewrites,
+  openNotificationLink,
+  rewriteNotificationUrl,
+} from './utils/notificationLink';
+export type { NotificationLinkRewrite } from './utils/notificationLink';
 
 import { buildCommonHeaders } from './helpers/buildCommonHeaders';
 import {
@@ -82,6 +88,7 @@ import {
   resolveIosSemanticCtaId,
   resolveNotificationUrl,
 } from './utils/pushTrackPayload';
+import { openNotificationLink } from './utils/notificationLink';
 
 const { PushTokenManager } = NativeModules;
 // const pushEmitter = PushTokenManager
@@ -305,14 +312,14 @@ export const addNotificationDebugListener = () => {
         const bodyUrl = resolveNotificationUrl(merged);
         if (bodyUrl) {
           try {
-            await Linking.openURL(bodyUrl);
+            await openNotificationLink(bodyUrl);
             console.log(
               '[PushNotificationEvent] iOS body tap opened notification_url:',
               bodyUrl
             );
           } catch (e) {
             console.warn(
-              '[PushNotificationEvent] iOS Linking.openURL failed:',
+              '[PushNotificationEvent] iOS openNotificationLink failed:',
               e
             );
           }
