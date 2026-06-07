@@ -9,6 +9,8 @@ import {
 export {
   LEGACY_PROFILE_UPDATED_KEY,
   buildProfileApiPayload,
+  isLegacyProfileSnapshot,
+  prepareProfileUpdatePayload,
   profilePayloadsEqual,
   profileSnapshotStorageKey,
   stableStringify,
@@ -22,13 +24,14 @@ export async function loadLastProfileSnapshot(
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as ProfileApiPayload;
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      parsed.additionalInfo &&
-      typeof parsed.additionalInfo === 'object'
-    ) {
-      return parsed;
+    if (parsed && typeof parsed === 'object') {
+      const hasTopLevel =
+        'name' in parsed || 'phones' in parsed || 'emails' in parsed;
+      const hasAdditional =
+        parsed.additionalInfo && typeof parsed.additionalInfo === 'object';
+      if (hasTopLevel || hasAdditional || parsed.cohorts) {
+        return parsed;
+      }
     }
   } catch {
     // ignore corrupt snapshot

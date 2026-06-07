@@ -4,6 +4,7 @@ import { getApiBaseUrl } from '../../helpers/tenantContext';
 import {
   buildProfileApiPayload,
   loadLastProfileSnapshot,
+  prepareProfileUpdatePayload,
   profilePayloadsEqual,
   saveLastProfileSnapshot,
 } from '../../utils/profileSnapshot';
@@ -123,7 +124,32 @@ async function attemptProfileUpdate(
     // non-JSON body — keep data as null
   }
 
-  return { ok: res.ok, status: res.status, data };
+  return { ok: res.ok, status: res.status, data, rawText };
+}
+
+function extractProfileErrorMessage(data: unknown, rawText: string): string {
+  if (data && typeof data === 'object') {
+    const record = data as Record<string, unknown>;
+    if (typeof record.message === 'string' && record.message.trim()) {
+      return record.message.trim();
+    }
+    if (typeof record.error === 'string' && record.error.trim()) {
+      return record.error.trim();
+    }
+  }
+  return rawText.trim();
+}
+
+function isProfileNotFoundError(message: string): boolean {
+  return /profile not found/i.test(message);
+}
+
+function isMandatoryProfileFieldError(message: string): boolean {
+  return /mandatory fields/i.test(message);
+}
+
+function isDuplicateProfileFieldError(message: string): boolean {
+  return /already exists/i.test(message);
 }
 
 export type UpdateUserProfileResult = {
@@ -192,9 +218,11 @@ export async function updateUserProfile(
     console.log('🏷️ [SDK][Profile] channel_code:', channel_code);
     console.log('👤 [SDK][Profile] user_id:', user_id);
 
+    const requestPayload = prepareProfileUpdatePayload(payload, lastSnapshot);
+
     console.log(
       '📡 [SDK][Profile] PUT /customer/profile payload:',
-      JSON.stringify(payload, null, 2)
+      JSON.stringify(requestPayload, null, 2)
     );
 
     const baseUrl = await getApiBaseUrl();
@@ -211,12 +239,13 @@ export async function updateUserProfile(
       console.log(`🔄 [SDK][Profile] Attempt ${attempt}/${MAX_RETRIES}`);
       const startTime = Date.now();
 
-      const { ok, status, data } = await attemptProfileUpdate(
+      const { ok, status, data, rawText } = await attemptProfileUpdate(
         url,
-        payload,
+        requestPayload,
         commonHeaders
       );
       lastStatus = status;
+      const serverMessage = extractProfileErrorMessage(data, rawText);
 
       console.log(
         `⏱️ [SDK][Profile] Response in ${Date.now() - startTime}ms — status ${status}`
@@ -238,7 +267,27 @@ export async function updateUserProfile(
           `🚨 [SDK][Profile] Client error ${status}, not retrying`,
           data
         );
-        throw new Error(`[SDK][Profile] HTTP ${status}`);
+        throw new Error(
+          `[SDK][Profile] HTTP ${status}${serverMessage ? `: ${serverMessage}` : ''}`
+        );
+      }
+
+      if (isProfileNotFoundError(serverMessage)) {
+        throw new Error(
+          `[SDK][Profile] profile not found for user_id "${user_id}". OnUserLogin must complete /device/link for the current channel and environment before updateUserProfile. Log out and log in again if you changed initSdk settings.`
+        );
+      }
+
+      if (isMandatoryProfileFieldError(serverMessage)) {
+        throw new Error(
+          `[SDK][Profile] ${serverMessage}. Add the required channel field(s) to additionalInfo (not cohorts) before calling updateUserProfile.`
+        );
+      }
+
+      if (isDuplicateProfileFieldError(serverMessage)) {
+        throw new Error(
+          `[SDK][Profile] ${serverMessage}. Use a unique phone/email for this user, or omit unchanged phones on profile updates.`
+        );
       }
 
       if (attempt < MAX_RETRIES) {
@@ -251,7 +300,7 @@ export async function updateUserProfile(
     }
 
     throw new Error(
-      `[SDK][Profile] HTTP ${lastStatus} after ${MAX_RETRIES} attempts`
+      `[SDK][Profile] HTTP ${lastStatus} after ${MAX_RETRIES} attempts.`
     );
   } catch (err) {
     console.error('❌ [SDK][Profile] updateUserProfile failed', err);

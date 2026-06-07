@@ -1,5 +1,6 @@
 import {
   buildProfileApiPayload,
+  prepareProfileUpdatePayload,
   profilePayloadsEqual,
   profileSnapshotStorageKey,
   stableStringify,
@@ -18,13 +19,34 @@ describe('profileSnapshot', () => {
     expect(stableStringify(a)).toBe(stableStringify(b));
   });
 
+  it('buildProfileApiPayload maps identity to top-level profile fields', () => {
+    expect(
+      buildProfileApiPayload(
+        {
+          name: 'Jane Doe',
+          email: 'jane@example.com',
+          phones: ['+919876543210'],
+          city: 'Mumbai',
+        },
+        {}
+      )
+    ).toEqual({
+      name: 'Jane Doe',
+      phones: [{ phone: '+919876543210' }],
+      additionalInfo: {
+        email: 'jane@example.com',
+        city: 'Mumbai',
+      },
+    });
+  });
+
   it('profilePayloadsEqual treats reordered additionalInfo as equal', () => {
     const left = buildProfileApiPayload(
-      { city: 'Mumbai', name: 'Jane' },
+      { name: 'Jane', city: 'Mumbai', _h1_ajejik_h2_: 'static' },
       { plan: 'free' }
     );
     const right = buildProfileApiPayload(
-      { name: 'Jane', city: 'Mumbai' },
+      { name: 'Jane', _h1_ajejik_h2_: 'static', city: 'Mumbai' },
       { plan: 'free' }
     );
     expect(profilePayloadsEqual(left, right)).toBe(true);
@@ -39,9 +61,33 @@ describe('profileSnapshot', () => {
   it('buildProfileApiPayload omits empty cohorts consistently', () => {
     const withEmpty = buildProfileApiPayload({ name: 'Jane' }, {});
     const withoutCohorts = buildProfileApiPayload({ name: 'Jane' }, {});
-    expect(withEmpty).toEqual({ additionalInfo: { name: 'Jane' } });
+    expect(withEmpty).toEqual({ name: 'Jane' });
     expect(profilePayloadsEqual(withEmpty, withoutCohorts)).toBe(true);
     expect(stableStringify(withEmpty)).not.toContain('cohorts');
+  });
+
+  it('prepareProfileUpdatePayload omits unchanged phones on follow-up updates', () => {
+    const last = buildProfileApiPayload(
+      {
+        name: 'Jane Doe',
+        phones: ['+919876543210'],
+        _h1_ajejik_h2_: 'static',
+      },
+      {}
+    );
+    const desired = buildProfileApiPayload(
+      {
+        name: 'Jane Smith',
+        phones: ['+919876543210'],
+        _h1_ajejik_h2_: 'static',
+      },
+      {}
+    );
+
+    expect(prepareProfileUpdatePayload(desired, last)).toEqual({
+      name: 'Jane Smith',
+      additionalInfo: { _h1_ajejik_h2_: 'static' },
+    });
   });
 
   it('profilePayloadsEqual detects additionalInfo changes', () => {

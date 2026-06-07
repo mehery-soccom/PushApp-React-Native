@@ -28,6 +28,40 @@ import { TooltipPollContainer } from 'react-native-mehery-event-sender';
 import DeviceInfo from 'react-native-device-info';
 import { setDeviceMetadata, setGeoIP } from 'react-native-mehery-event-sender';
 
+// Server expects name/phones/email at top level; custom + commerce keys in additionalInfo.
+// Do not use cohorts for channel demo_1780031354415 — cohorts in PUT returns HTTP 500.
+// Mandatory dashboard field "<h1>ajejik</h2>" → additionalInfo._h1_ajejik_h2_
+const CHANNEL_REQUIRED_FIELDS = {
+  _h1_ajejik_h2_: 'static',
+};
+
+const STATIC_IDENTITY = {
+  name: 'Jane Doe',
+  email: 'jane@example.com',
+  phones: ['+919876543210'],
+};
+
+const STATIC_COMMERCE = {
+  lifetime_order_count: 12,
+  customer_segment: 'existing' as 'new' | 'existing',
+  days_since_last_order: 5,
+  active_store_tag: 'mumbai_central',
+  delivery_pincode: '400012',
+  cart_value: 2499,
+};
+
+function buildProfilePayload(nameOverride?: string, userId?: string) {
+  const name = nameOverride?.trim() || STATIC_IDENTITY.name;
+  const phoneSuffix = (userId ?? '0000').replace(/\D/g, '').slice(-4).padStart(4, '0');
+  return {
+    ...CHANNEL_REQUIRED_FIELDS,
+    ...STATIC_COMMERCE,
+    name,
+    email: STATIC_IDENTITY.email,
+    phones: [`+9198765${phoneSuffix}`],
+  };
+}
+
 function LoginPage({ onLogin }: { onLogin: (id: string) => void }) {
   const [userId, setUserId] = useState('');
 
@@ -79,26 +113,47 @@ function HomePage({
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      OnUserLogin(userId);
-      console.log('OnUserLogin called', userId);
-      OnAppOpen();
-      OnPageOpen('home');
-    } catch (error) {
-      console.log('error in opening page:', error);
-    }
+    let cancelled = false;
+
+    const bootstrapHome = async () => {
+      try {
+        await OnUserLogin(userId);
+        console.log('OnUserLogin called', userId);
+        OnAppOpen();
+        OnPageOpen('home');
+
+        if (cancelled) return;
+
+        setProfileStatus('Updating profile on home load…');
+        const result = await updateUserProfile(buildProfilePayload(undefined, userId));
+        if (cancelled) return;
+
+        setProfileStatus(
+          result.skipped
+            ? `Home profile sync — skipped. ${result.message}`
+            : `Home profile sync — sent. ${result.message}`
+        );
+      } catch (error) {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : String(error);
+        setProfileStatus(`Home profile sync failed: ${message}`);
+        console.log('error in opening page:', error);
+      }
+    };
+
+    bootstrapHome();
+
+    return () => {
+      cancelled = true;
+    };
   }, [userId]);
 
   const handleUpdateProfile = async () => {
-    const name = profileName.trim();
-    if (!name) {
-      setProfileStatus('Enter a name before updating.');
-      return;
-    }
-
     setProfileStatus('Updating profile…');
     try {
-      const result = await updateUserProfile({ name });
+      const result = await updateUserProfile(
+        buildProfilePayload(profileName, userId)
+      );
       setProfileStatus(
         result.skipped
           ? `updateUserProfile finished — skipped. ${result.message}`
@@ -128,8 +183,10 @@ function HomePage({
         />
         <Button title="Update profile" onPress={handleUpdateProfile} />
         <Text style={styles.profileHint}>
-          Tap again with the same name to test SDK skip (no API). Change the
-          name to trigger a new PUT.
+          Home load sends additionalInfo: name, email, phones, _h1_ajejik_h2_,
+          lifetime_order_count, customer_segment, days_since_last_order,
+          active_store_tag, delivery_pincode, cart_value. Tap Update to
+          override name only.
         </Text>
         <Text style={styles.profileHint}>
           This is not profile code profile code won't change once logged in
@@ -157,7 +214,7 @@ function HomePage({
       <View style={styles.customEventButtonSpacer} />
       {Platform.OS === 'android' && (
         <>
-          <Button
+          {/* <Button
             title="Test carousel notification"
             onPress={async () => {
               await triggerCarouselNotification({
@@ -170,7 +227,7 @@ function HomePage({
                 ],
               });
             }}
-          />
+          /> */}
           <View style={styles.customEventButtonSpacer} />
         </>
       )}
@@ -243,10 +300,13 @@ export default function App() {
 
       // 2️⃣ Initialize SDK (3rd arg: false=pushapp.ai, true=pushapp.xyz, 'development'=pushapp.in)
 
+      // let environment: SdkInitEnvironmentParam = 'development';
+      // await initSdk(null, 'demo_1754408042569', environment);
+      // console.log('SDK initialized with environment:', environment);
+      //prod
       let environment: SdkInitEnvironmentParam = 'development';
-      await initSdk(null, 'demo_1754408042569', environment);
-      console.log('SDK initialized with environment:', environment);
-
+      await initSdk(null, 'demo_1780031354415', false);
+      console.log('SDK initialized with environment:', 'false');
       // 3️⃣ Log FCM Token
       try {
         await messaging().requestPermission();

@@ -2,13 +2,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { OnAppOpen } from '../events/custom/CustomEvents';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
-import { extractChannelSegment, getApiBaseUrl } from '../helpers/tenantContext';
+import {
+  extractChannelSegment,
+  getApiBaseUrl,
+  MEHERY_PUSHAPP_HOST_ROOT_KEY,
+} from '../helpers/tenantContext';
 import { getDeviceId } from './device';
 import { waitForGeoIp } from './geoIpContext';
 import { clearStoredProfileSnapshot } from './profileSnapshot';
 
 /** AsyncStorage key; also written by device/register on some platforms. */
 export const SESSION_ID_STORAGE_KEY = 'sessionId';
+
+const LAST_LINKED_CHANNEL_KEY = 'mehery_last_linked_channel_id';
+const LAST_LINKED_HOST_KEY = 'mehery_last_linked_host_root';
 
 function extractSessionIdFromLinkResponse(data: unknown): string {
   if (!data || typeof data !== 'object') return '';
@@ -203,25 +210,48 @@ export async function OnUserLogin(user_id: string) {
     }
 
     const currentContactId = `${loginUserId}_${device_id}`;
-    const [storedContactId, userLoggedInFlag, storedSessionId] =
+    const channel_id = await AsyncStorage.getItem('mehery_channel_id');
+    const currentHostRoot =
+      (await AsyncStorage.getItem(MEHERY_PUSHAPP_HOST_ROOT_KEY))?.trim() ?? '';
+    const [storedContactId, userLoggedInFlag, storedSessionId, lastLinkedChannel, lastLinkedHost] =
       await AsyncStorage.multiGet([
         'contact_id',
         'UserLoggedIn',
         SESSION_ID_STORAGE_KEY,
+        LAST_LINKED_CHANNEL_KEY,
+        LAST_LINKED_HOST_KEY,
       ]).then((entries) => entries.map(([_, v]) => v || ''));
     const isUserLoggedIn = (userLoggedInFlag ?? '').toLowerCase() === 'true';
-    if (storedContactId === currentContactId && isUserLoggedIn) {
+    const loginContextMatches =
+      storedContactId === currentContactId &&
+      isUserLoggedIn &&
+      lastLinkedChannel === (channel_id ?? '') &&
+      lastLinkedHost === currentHostRoot;
+
+    if (loginContextMatches) {
       console.log(
         '⏭️ [SDK][OnUserLogin] Skipped: same contact already logged in.',
         JSON.stringify({
           contact_id: storedContactId,
           hasSession: Boolean(storedSessionId),
+          channel_id,
+          host: currentHostRoot,
         })
       );
       return;
     }
 
-    const channel_id = await AsyncStorage.getItem('mehery_channel_id');
+    if (isUserLoggedIn && !loginContextMatches) {
+      console.log(
+        '🔁 [SDK][OnUserLogin] Re-linking: channel or environment changed since last login.',
+        JSON.stringify({
+          lastLinkedChannel,
+          currentChannel: channel_id,
+          lastLinkedHost,
+          currentHost: currentHostRoot,
+        })
+      );
+    }
     console.log('channel id at custom:', channel_id);
 
     const commonHeaders = await buildCommonHeaders();
@@ -309,6 +339,8 @@ export async function OnUserLogin(user_id: string) {
       const valuesToStore: [string, string][] = [
         ['UserLoggedIn', 'true'],
         ['contact_id', finalContactId],
+        [LAST_LINKED_CHANNEL_KEY, primaryChannelId],
+        [LAST_LINKED_HOST_KEY, currentHostRoot],
       ];
 
       if (sessionFromLink) {
@@ -357,6 +389,8 @@ export async function OnUserLogOut(user_id: string) {
     SESSION_ID_STORAGE_KEY,
     'UserLoggedIn',
     'contact_id',
+    LAST_LINKED_CHANNEL_KEY,
+    LAST_LINKED_HOST_KEY,
   ]);
 
   console.log('✅ Device is being registered with ID:', device_id);
