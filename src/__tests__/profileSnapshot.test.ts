@@ -1,5 +1,6 @@
 import {
   buildProfileApiPayload,
+  isProfileUpdatePayloadEmpty,
   prepareProfileUpdatePayload,
   profilePayloadsEqual,
   profileSnapshotStorageKey,
@@ -88,6 +89,46 @@ describe('profileSnapshot', () => {
       name: 'Jane Smith',
       additionalInfo: { _h1_ajejik_h2_: 'static' },
     });
+  });
+
+  it('prepareProfileUpdatePayload omits phones from legacy additionalInfo snapshots', () => {
+    const last: ReturnType<typeof buildProfileApiPayload> = {
+      additionalInfo: {
+        name: 'Jane Doe',
+        phones: ['+919876543210'],
+        _h1_ajejik_h2_: 'static',
+      },
+    };
+    const desired = buildProfileApiPayload(
+      {
+        name: 'Jane Smith',
+        phones: ['+919876543210'],
+        _h1_ajejik_h2_: 'static',
+      },
+      {}
+    );
+
+    expect(prepareProfileUpdatePayload(desired, last)).toEqual({
+      name: 'Jane Smith',
+      additionalInfo: { _h1_ajejik_h2_: 'static' },
+    });
+  });
+
+  it('buildProfileApiPayload accepts mobile alias for phones', () => {
+    expect(buildProfileApiPayload({ mobile: '+919876543210' }, {})).toEqual({
+      phones: [{ phone: '+919876543210' }],
+    });
+  });
+
+  it('isProfileUpdatePayloadEmpty when unchanged phone was the only outbound field', () => {
+    const last = buildProfileApiPayload(
+      { phones: ['+919876543210'], city: 'Mumbai' },
+      {}
+    );
+    const desired = buildProfileApiPayload({ phones: ['+919876543210'] }, {});
+    expect(
+      isProfileUpdatePayloadEmpty(prepareProfileUpdatePayload(desired, last))
+    ).toBe(true);
   });
 
   it('profilePayloadsEqual detects additionalInfo changes', () => {

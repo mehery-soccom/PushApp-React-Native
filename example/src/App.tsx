@@ -52,7 +52,10 @@ const STATIC_COMMERCE = {
 
 function buildProfilePayload(nameOverride?: string, userId?: string) {
   const name = nameOverride?.trim() || STATIC_IDENTITY.name;
-  const phoneSuffix = (userId ?? '0000').replace(/\D/g, '').slice(-4).padStart(4, '0');
+  const phoneSuffix = (userId ?? '0000')
+    .replace(/\D/g, '')
+    .slice(-4)
+    .padStart(4, '0');
   return {
     ...CHANNEL_REQUIRED_FIELDS,
     ...STATIC_COMMERCE,
@@ -125,7 +128,9 @@ function HomePage({
         if (cancelled) return;
 
         setProfileStatus('Updating profile on home load…');
-        const result = await updateUserProfile(buildProfilePayload(undefined, userId));
+        const result = await updateUserProfile(
+          buildProfilePayload(undefined, userId)
+        );
         if (cancelled) return;
 
         setProfileStatus(
@@ -185,8 +190,8 @@ function HomePage({
         <Text style={styles.profileHint}>
           Home load sends additionalInfo: name, email, phones, _h1_ajejik_h2_,
           lifetime_order_count, customer_segment, days_since_last_order,
-          active_store_tag, delivery_pincode, cart_value. Tap Update to
-          override name only.
+          active_store_tag, delivery_pincode, cart_value. Tap Update to override
+          name only.
         </Text>
         <Text style={styles.profileHint}>
           This is not profile code profile code won't change once logged in

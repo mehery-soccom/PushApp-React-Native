@@ -10,6 +10,7 @@ export {
   LEGACY_PROFILE_UPDATED_KEY,
   buildProfileApiPayload,
   isLegacyProfileSnapshot,
+  isProfileUpdatePayloadEmpty,
   prepareProfileUpdatePayload,
   profilePayloadsEqual,
   profileSnapshotStorageKey,

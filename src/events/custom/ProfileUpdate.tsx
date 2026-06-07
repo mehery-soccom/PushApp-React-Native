@@ -3,6 +3,7 @@ import { buildCommonHeaders } from '../../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../../helpers/tenantContext';
 import {
   buildProfileApiPayload,
+  isProfileUpdatePayloadEmpty,
   loadLastProfileSnapshot,
   prepareProfileUpdatePayload,
   profilePayloadsEqual,
@@ -109,7 +110,7 @@ async function attemptProfileUpdate(
   url: string,
   payload: object,
   headers: Record<string, string>
-): Promise<{ ok: boolean; status: number; data: any }> {
+): Promise<{ ok: boolean; status: number; data: any; rawText: string }> {
   const res = await fetch(url, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...headers },
@@ -218,7 +219,15 @@ export async function updateUserProfile(
     console.log('🏷️ [SDK][Profile] channel_code:', channel_code);
     console.log('👤 [SDK][Profile] user_id:', user_id);
 
-    const requestPayload = prepareProfileUpdatePayload(payload, lastSnapshot);
+    let requestPayload = prepareProfileUpdatePayload(payload, lastSnapshot);
+
+    if (isProfileUpdatePayloadEmpty(requestPayload)) {
+      const message =
+        'Skipped: no changed profile fields to send (unchanged phone omitted).';
+      console.log(`⏭️ [SDK][Profile] ${message}`, JSON.stringify({ user_id }));
+      await saveLastProfileSnapshot(user_id, payload);
+      return { skipped: true, message };
+    }
 
     console.log(
       '📡 [SDK][Profile] PUT /customer/profile payload:',
@@ -234,6 +243,7 @@ export async function updateUserProfile(
     const MAX_RETRIES = 3;
     const RETRY_DELAYS = [2_000, 5_000, 10_000];
     let lastStatus = 0;
+    let strippedPhonesForDuplicate = false;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       console.log(`🔄 [SDK][Profile] Attempt ${attempt}/${MAX_RETRIES}`);
@@ -285,6 +295,23 @@ export async function updateUserProfile(
       }
 
       if (isDuplicateProfileFieldError(serverMessage)) {
+        if (requestPayload.phones?.length && !strippedPhonesForDuplicate) {
+          strippedPhonesForDuplicate = true;
+          delete requestPayload.phones;
+          console.warn(
+            '⚠️ [SDK][Profile] Phone already on profile — omitting phones and retrying update for other fields'
+          );
+          if (isProfileUpdatePayloadEmpty(requestPayload)) {
+            await saveLastProfileSnapshot(user_id, payload);
+            return {
+              skipped: true,
+              message:
+                'Skipped: phone unchanged on server; no other fields to update.',
+            };
+          }
+          attempt--;
+          continue;
+        }
         throw new Error(
           `[SDK][Profile] ${serverMessage}. Use a unique phone/email for this user, or omit unchanged phones on profile updates.`
         );

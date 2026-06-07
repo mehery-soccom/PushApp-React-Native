@@ -15,7 +15,14 @@ export type ProfileApiPayload = {
 };
 
 // `email` stays in additionalInfo — pushapp backend throws on top-level emails add.
-const RESERVED_INFO_KEYS = new Set(['name', 'phones', 'emails', 'devices']);
+const RESERVED_INFO_KEYS = new Set([
+  'name',
+  'phones',
+  'mobile',
+  'phone',
+  'emails',
+  'devices',
+]);
 
 function normalizePhones(value: unknown): ProfilePhone[] | undefined {
   if (value == null) return undefined;
@@ -25,7 +32,10 @@ function normalizePhones(value: unknown): ProfilePhone[] | undefined {
     const first = value[0];
     if (typeof first === 'string') {
       return value
-        .filter((item): item is string => typeof item === 'string' && item.trim())
+        .filter(
+          (item): item is string =>
+            typeof item === 'string' && item.trim().length > 0
+        )
         .map((phone) => ({ phone: phone.trim() }));
     }
     if (first && typeof first === 'object' && 'phone' in first) {
@@ -89,6 +99,33 @@ function phoneNumbersEqual(
   return normalize(a) === normalize(b);
 }
 
+function extractPhonesFromSnapshot(
+  snapshot: ProfileApiPayload
+): ProfilePhone[] | undefined {
+  if (snapshot.phones?.length) {
+    return snapshot.phones;
+  }
+  const additionalInfo = snapshot.additionalInfo;
+  if (!additionalInfo) return undefined;
+  return normalizePhones(
+    additionalInfo.phones ?? additionalInfo.mobile ?? additionalInfo.phone
+  );
+}
+
+export function isProfileUpdatePayloadEmpty(
+  payload: ProfileApiPayload
+): boolean {
+  return (
+    payload.name === undefined &&
+    payload.phones === undefined &&
+    payload.emails === undefined &&
+    payload.devices === undefined &&
+    (!payload.additionalInfo ||
+      Object.keys(payload.additionalInfo).length === 0) &&
+    (!payload.cohorts || Object.keys(payload.cohorts).length === 0)
+  );
+}
+
 /** Old SDK snapshots stored name/phones inside additionalInfo only. */
 export function isLegacyProfileSnapshot(snapshot: ProfileApiPayload): boolean {
   const additionalInfo = snapshot.additionalInfo;
@@ -112,16 +149,17 @@ export function prepareProfileUpdatePayload(
   desired: ProfileApiPayload,
   lastSuccessful?: ProfileApiPayload | null
 ): ProfileApiPayload {
-  if (!lastSuccessful || isLegacyProfileSnapshot(lastSuccessful)) {
+  if (!lastSuccessful) {
     return desired;
   }
 
   const outbound: ProfileApiPayload = { ...desired };
+  const lastPhones = extractPhonesFromSnapshot(lastSuccessful);
 
   if (
     outbound.phones &&
-    lastSuccessful.phones &&
-    phoneNumbersEqual(outbound.phones, lastSuccessful.phones)
+    lastPhones &&
+    phoneNumbersEqual(outbound.phones, lastPhones)
   ) {
     delete outbound.phones;
   }
@@ -145,11 +183,17 @@ export function buildProfileApiPayload(
   const additionalInfo: Record<string, unknown> = {};
   const payload: ProfileApiPayload = {};
 
-  if (info.name !== undefined) {
-    payload.name = info.name;
+  if (info.name !== undefined && info.name !== null) {
+    const name = info.name;
+    if (
+      typeof name === 'string' ||
+      (typeof name === 'object' && !Array.isArray(name))
+    ) {
+      payload.name = name as string | Record<string, unknown>;
+    }
   }
 
-  const phones = normalizePhones(info.phones);
+  const phones = normalizePhones(info.phones ?? info.mobile ?? info.phone);
   if (phones) {
     payload.phones = phones;
   }
@@ -158,7 +202,7 @@ export function buildProfileApiPayload(
     payload.emails = info.emails as ProfileEmail[];
   }
 
-  if (info.devices !== undefined) {
+  if (Array.isArray(info.devices)) {
     payload.devices = info.devices;
   }
 
