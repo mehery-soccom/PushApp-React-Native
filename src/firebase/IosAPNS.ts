@@ -10,6 +10,65 @@ import messaging from '@react-native-firebase/messaging';
 let deviceRegistrationInProgress = false;
 let lastApiCallTime = 0;
 const API_CALL_COOLDOWN_MS = 15000; // 15 seconds
+const MAX_DEVICE_REGISTER_RETRIES = 4;
+const DEVICE_REGISTER_RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 15_000];
+const SCHEDULED_REGISTER_RETRY_DELAYS_MS = [30_000, 60_000, 120_000];
+
+let scheduledRegisterRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let scheduledRegisterRetryAttempt = 0;
+
+const registerDelay = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function isRetryableRegisterHttpStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function clearScheduledRegisterRetry() {
+  if (scheduledRegisterRetryTimer) {
+    clearTimeout(scheduledRegisterRetryTimer);
+    scheduledRegisterRetryTimer = null;
+  }
+  scheduledRegisterRetryAttempt = 0;
+}
+
+function scheduleRegisterRetry(token: string) {
+  if (
+    scheduledRegisterRetryAttempt >= SCHEDULED_REGISTER_RETRY_DELAYS_MS.length
+  ) {
+    console.warn(
+      '[SDK][Register][iOS] Giving up after scheduled background retries.'
+    );
+    return;
+  }
+
+  const delayMs =
+    SCHEDULED_REGISTER_RETRY_DELAYS_MS[scheduledRegisterRetryAttempt] ??
+    120_000;
+  scheduledRegisterRetryAttempt += 1;
+
+  if (scheduledRegisterRetryTimer) {
+    clearTimeout(scheduledRegisterRetryTimer);
+  }
+
+  console.warn(
+    `[SDK][Register][iOS] Scheduling background retry ${scheduledRegisterRetryAttempt}/${SCHEDULED_REGISTER_RETRY_DELAYS_MS.length} in ${Math.round(delayMs / 1000)}s`
+  );
+
+  scheduledRegisterRetryTimer = setTimeout(() => {
+    scheduledRegisterRetryTimer = null;
+    (async () => {
+      const isRegistered = await AsyncStorage.getItem('isRegistered');
+      if (isRegistered === 'true') {
+        clearScheduledRegisterRetry();
+        return;
+      }
+      await registerDeviceWithAPNS(token, { fromScheduledRetry: true });
+    })().catch((err) => {
+      console.warn('[SDK][Register][iOS] Scheduled retry failed', err);
+    });
+  }, delayMs);
+}
 
 async function postDeviceRegistration(
   apiBaseUrl: string,
@@ -70,7 +129,10 @@ async function cacheRegistrationTokens(params: {
  * Registers the device with APNS / push server.
  * Ensures registration only happens when needed and not repeatedly.
  */
-export async function registerDeviceWithAPNS(token: string) {
+export async function registerDeviceWithAPNS(
+  token: string,
+  options?: { fromScheduledRetry?: boolean }
+) {
   if (!token) {
     console.warn('⚠️ No token provided, skipping registration.');
     return;
@@ -86,13 +148,15 @@ export async function registerDeviceWithAPNS(token: string) {
   deviceRegistrationInProgress = true;
 
   try {
-    const now = Date.now();
-    if (lastApiCallTime && now - lastApiCallTime < API_CALL_COOLDOWN_MS) {
-      const waitTime = Math.ceil(
-        (API_CALL_COOLDOWN_MS - (now - lastApiCallTime)) / 1000
-      );
-      console.log(`⏳ Cooldown active. Wait ${waitTime}s before retrying.`);
-      return;
+    if (!options?.fromScheduledRetry) {
+      const now = Date.now();
+      if (lastApiCallTime && now - lastApiCallTime < API_CALL_COOLDOWN_MS) {
+        const waitTime = Math.ceil(
+          (API_CALL_COOLDOWN_MS - (now - lastApiCallTime)) / 1000
+        );
+        console.log(`⏳ Cooldown active. Wait ${waitTime}s before retrying.`);
+        return;
+      }
     }
 
     const [, , lastServerToken, lastRegisteredState] =
@@ -132,6 +196,7 @@ export async function registerDeviceWithAPNS(token: string) {
 
     if (lastRegisteredState === currentState) {
       console.log('✅ Registration already valid. Skipping re-register.');
+      clearScheduledRegisterRetry();
       return;
     }
 
@@ -148,36 +213,53 @@ export async function registerDeviceWithAPNS(token: string) {
     console.log('📡 Registering/updating device...', payload);
     const commonHeaders = await buildCommonHeaders();
     const apiBaseUrl = await getApiBaseUrl();
-    let { response, text } = await postDeviceRegistration(
-      apiBaseUrl,
-      commonHeaders,
-      payload
-    );
 
-    const parsedChannelSegment = extractChannelSegment(channel_id);
-    const shouldRetryWithParsedChannel =
-      !response.ok &&
-      response.status >= 500 &&
-      parsedChannelSegment &&
-      parsedChannelSegment !== channel_id &&
-      /non-existent collection in transaction/i.test(text);
+    let response: Response | null = null;
+    let text = '';
+    let lastStatus = 0;
 
-    if (shouldRetryWithParsedChannel) {
-      console.warn(
-        `⚠️ /device/register failed for full identifier, retrying with parsed channel segment: ${parsedChannelSegment}`
+    for (let attempt = 1; attempt <= MAX_DEVICE_REGISTER_RETRIES; attempt++) {
+      console.log(
+        `[SDK][Register][iOS] Attempt ${attempt}/${MAX_DEVICE_REGISTER_RETRIES}`
       );
-      payload.channel_id = parsedChannelSegment;
-      const retryResult = await postDeviceRegistration(
+
+      const attemptResult = await postDeviceRegistration(
         apiBaseUrl,
         commonHeaders,
         payload
       );
-      response = retryResult.response;
-      text = retryResult.text;
-      console.log('Retry response text:', text);
-    }
+      response = attemptResult.response;
+      text = attemptResult.text;
+      lastStatus = response.status;
 
-    if (!response.ok) {
+      const parsedChannelSegment = extractChannelSegment(channel_id);
+      const shouldRetryWithParsedChannel =
+        !response.ok &&
+        response.status >= 500 &&
+        parsedChannelSegment &&
+        parsedChannelSegment !== channel_id &&
+        /non-existent collection in transaction/i.test(text);
+
+      if (shouldRetryWithParsedChannel) {
+        console.warn(
+          `⚠️ /device/register failed for full identifier, retrying with parsed channel segment: ${parsedChannelSegment}`
+        );
+        payload.channel_id = parsedChannelSegment;
+        const retryResult = await postDeviceRegistration(
+          apiBaseUrl,
+          commonHeaders,
+          payload
+        );
+        response = retryResult.response;
+        text = retryResult.text;
+        lastStatus = response.status;
+        console.log('Retry response text:', text);
+      }
+
+      if (response.ok) {
+        break;
+      }
+
       if (/device already exists/i.test(text)) {
         console.warn(
           'ℹ️ Device already exists on server. Treating registration as valid.'
@@ -188,9 +270,31 @@ export async function registerDeviceWithAPNS(token: string) {
           currentState,
         });
         lastApiCallTime = Date.now();
+        clearScheduledRegisterRetry();
         return;
       }
-      throw new Error(`HTTP ${response.status}${text ? ` - ${text}` : ''}`);
+
+      if (
+        isRetryableRegisterHttpStatus(response.status) &&
+        attempt < MAX_DEVICE_REGISTER_RETRIES
+      ) {
+        const waitMs = DEVICE_REGISTER_RETRY_DELAYS_MS[attempt - 1] ?? 15_000;
+        console.warn(
+          `[SDK][Register][iOS] HTTP ${response.status}, retrying in ${waitMs}ms...`
+        );
+        await registerDelay(waitMs);
+        continue;
+      }
+
+      throw new Error(
+        `HTTP ${response.status}${text ? ` - ${text.slice(0, 200)}` : ''}`
+      );
+    }
+
+    if (!response?.ok) {
+      throw new Error(
+        `HTTP ${lastStatus}${text ? ` - ${text.slice(0, 200)}` : ''} after ${MAX_DEVICE_REGISTER_RETRIES} attempts`
+      );
     }
 
     let resData: any = null;
@@ -220,6 +324,7 @@ export async function registerDeviceWithAPNS(token: string) {
       contactId: newContactId,
     });
 
+    clearScheduledRegisterRetry();
     return newSessionId;
   } catch (err) {
     console.error('❌ Failed to register/update device:', err);
@@ -227,6 +332,7 @@ export async function registerDeviceWithAPNS(token: string) {
       ['isRegistered', 'false'],
       ['UserRegistered', 'false'],
     ]);
+    scheduleRegisterRetry(token);
   } finally {
     deviceRegistrationInProgress = false;
   }

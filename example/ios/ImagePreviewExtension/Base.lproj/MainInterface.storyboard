@@ -39,7 +39,7 @@
                 secondItem="ContainerView" secondAttribute="leading" constant="16" id="logoLeading"/>
 
     <constraint firstItem="LogoImageView" firstAttribute="top"
-                secondItem="ContainerView" secondAttribute="top" constant="16" id="logoTop"/>
+                secondItem="ContainerView" secondAttribute="top" constant="12" id="logoTop"/>
 
     <constraint firstItem="LogoImageView" firstAttribute="width"
                 constant="36" id="logoWidth"/>
@@ -61,7 +61,7 @@
 
     <!-- BODY BELOW TITLE -->
     <constraint firstItem="TextLabel" firstAttribute="top"
-                secondItem="TitleLabel" secondAttribute="bottom" constant="4" id="bodyBelowTitle"/>
+                secondItem="TitleLabel" secondAttribute="bottom" constant="2" id="bodyBelowTitle"/>
 
     <constraint firstItem="TextLabel" firstAttribute="leading"
                 secondItem="TitleLabel" secondAttribute="leading" id="bodyLeadingToTitle"/>

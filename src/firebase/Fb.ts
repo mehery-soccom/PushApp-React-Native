@@ -25,11 +25,101 @@ const pushCtaLog = (msg: string, extra?: unknown) => {
   }
 };
 
-const { LiveActivityModule } = NativeModules;
+const { LiveActivityModule, PushTokenManager } = NativeModules;
 
 let deviceRegistrationInProgress = false;
 let lastApiCallTime: number | null = null;
 const API_CALL_COOLDOWN_MS = 5000; // 5s cooldown
+const MAX_DEVICE_REGISTER_RETRIES = 4;
+const DEVICE_REGISTER_RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 15_000];
+const SCHEDULED_REGISTER_RETRY_DELAYS_MS = [30_000, 60_000, 120_000];
+
+let scheduledRegisterRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let scheduledRegisterRetryAttempt = 0;
+
+const registerDelay = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function isRetryableRegisterHttpStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function isRetryableRegisterError(error: unknown): boolean {
+  const msg = String(
+    (error as { message?: string })?.message ?? error ?? ''
+  ).toLowerCase();
+  return (
+    msg.includes('network') ||
+    msg.includes('fetch') ||
+    msg.includes('timeout') ||
+    msg.includes('failed to fetch')
+  );
+}
+
+function clearScheduledRegisterRetry() {
+  if (scheduledRegisterRetryTimer) {
+    clearTimeout(scheduledRegisterRetryTimer);
+    scheduledRegisterRetryTimer = null;
+  }
+  scheduledRegisterRetryAttempt = 0;
+}
+
+function scheduleRegisterRetry(token: string, deviceId: string) {
+  if (
+    scheduledRegisterRetryAttempt >= SCHEDULED_REGISTER_RETRY_DELAYS_MS.length
+  ) {
+    console.warn(
+      '[SDK][Register] Giving up after scheduled background retries.'
+    );
+    return;
+  }
+
+  const delayMs =
+    SCHEDULED_REGISTER_RETRY_DELAYS_MS[scheduledRegisterRetryAttempt] ??
+    120_000;
+  scheduledRegisterRetryAttempt += 1;
+
+  if (scheduledRegisterRetryTimer) {
+    clearTimeout(scheduledRegisterRetryTimer);
+  }
+
+  console.warn(
+    `[SDK][Register] Scheduling background retry ${scheduledRegisterRetryAttempt}/${SCHEDULED_REGISTER_RETRY_DELAYS_MS.length} in ${Math.round(delayMs / 1000)}s`
+  );
+
+  scheduledRegisterRetryTimer = setTimeout(() => {
+    scheduledRegisterRetryTimer = null;
+    (async () => {
+      const isRegistered = await AsyncStorage.getItem('isRegistered');
+      if (isRegistered === 'true') {
+        clearScheduledRegisterRetry();
+        return;
+      }
+      await registerDeviceWithFCM(token, deviceId, {
+        fromScheduledRetry: true,
+      });
+    })().catch((err) => {
+      console.warn('[SDK][Register] Scheduled retry failed', err);
+    });
+  }, delayMs);
+}
+
+async function postAndroidDeviceRegistration(
+  apiBaseUrl: string,
+  commonHeaders: Record<string, string>,
+  payload: Record<string, unknown>
+) {
+  const response = await fetch(`${apiBaseUrl}/device/register`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...commonHeaders,
+    },
+    body: JSON.stringify(payload),
+  });
+  const text = await response.text().catch(() => '');
+  return { response, text };
+}
 let foregroundUnsubscribe: null | (() => void) = null;
 let openTrackingUnsubscribe: null | (() => void) = null;
 let backgroundHandlerRegistered = false;
@@ -41,10 +131,14 @@ const BACKGROUND_MESSAGE_CACHE_LIMIT = 50;
 console.log('💬 Firebase messaging:', messaging);
 console.log('📦 Firebase app exists:', app ? 'Yes' : 'No');
 
-export async function registerDeviceWithFCM(token: string, deviceId: string) {
+export async function registerDeviceWithFCM(
+  token: string,
+  deviceId: string,
+  options?: { fromScheduledRetry?: boolean }
+) {
   if (!token) {
     console.warn('⚠️ No FCM token provided. Skipping registration.');
-    return;
+    return false;
   }
 
   // 🧠 Skip if registration already in progress
@@ -52,17 +146,19 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
     console.log(
       'ℹ️ Registration already in progress — skipping duplicate call.'
     );
-    return;
+    return false;
   }
 
-  // 🧊 Cooldown logic to avoid spamming
-  const now = Date.now();
-  if (lastApiCallTime && now - lastApiCallTime < API_CALL_COOLDOWN_MS) {
-    const waitTime = Math.ceil(
-      (API_CALL_COOLDOWN_MS - (now - lastApiCallTime)) / 1000
-    );
-    console.log(`⏳ Cooldown active. Wait ${waitTime}s before retrying.`);
-    return;
+  // 🧊 Cooldown logic to avoid spamming (skip for scheduled background retries)
+  if (!options?.fromScheduledRetry) {
+    const now = Date.now();
+    if (lastApiCallTime && now - lastApiCallTime < API_CALL_COOLDOWN_MS) {
+      const waitTime = Math.ceil(
+        (API_CALL_COOLDOWN_MS - (now - lastApiCallTime)) / 1000
+      );
+      console.log(`⏳ Cooldown active. Wait ${waitTime}s before retrying.`);
+      return false;
+    }
   }
 
   deviceRegistrationInProgress = true;
@@ -93,8 +189,8 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
     // 🔁 Skip if last registration is identical
     if (lastRegisteredState === currentState) {
       console.log('✅ Registration already valid. Skipping re-register.');
-      deviceRegistrationInProgress = false;
-      return;
+      clearScheduledRegisterRetry();
+      return true;
     }
 
     const channel_id = await AsyncStorage.getItem('mehery_channel_id');
@@ -110,48 +206,109 @@ export async function registerDeviceWithFCM(token: string, deviceId: string) {
 
     console.log('📡 Registering device with payload:', payload);
     const commonHeaders = await buildCommonHeaders();
-
     const apiBaseUrl = await getApiBaseUrl();
-    const response = await fetch(`${apiBaseUrl}/device/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...commonHeaders,
-      },
-      body: JSON.stringify(payload),
-    });
-    // const response = await fetch(
-    //   'https://demo.pushapp.co.in/pushapp/api/register',
-    //   {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify(payload),
-    //   }
-    // );
 
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    let lastStatus = 0;
+    let lastErrorText = '';
 
-    const resData = await response.json();
-    console.log('✅ Device registered/updated:', resData);
+    for (let attempt = 1; attempt <= MAX_DEVICE_REGISTER_RETRIES; attempt++) {
+      try {
+        console.log(
+          `[SDK][Register] Attempt ${attempt}/${MAX_DEVICE_REGISTER_RETRIES}`
+        );
+        const { response, text } = await postAndroidDeviceRegistration(
+          apiBaseUrl,
+          commonHeaders,
+          payload
+        );
+        lastStatus = response.status;
+        lastErrorText = text;
 
-    lastApiCallTime = Date.now();
+        if (!response.ok) {
+          if (/device already exists/i.test(text)) {
+            console.warn(
+              'ℹ️ Device already exists on server. Treating registration as valid.'
+            );
+            lastApiCallTime = Date.now();
+            await AsyncStorage.multiSet([
+              ['lastRegisteredToken', token],
+              ['lastRegisteredState', currentState],
+              ['isRegistered', 'true'],
+            ]);
+            clearScheduledRegisterRetry();
+            return true;
+          }
 
-    const newSessionId = String(
-      (resData && (resData.session_id || resData.sessionId)) || ''
-    );
-    if (newSessionId) {
-      await AsyncStorage.setItem(SESSION_ID_STORAGE_KEY, newSessionId);
+          if (
+            isRetryableRegisterHttpStatus(response.status) &&
+            attempt < MAX_DEVICE_REGISTER_RETRIES
+          ) {
+            const waitMs =
+              DEVICE_REGISTER_RETRY_DELAYS_MS[attempt - 1] ?? 15_000;
+            console.warn(
+              `[SDK][Register] HTTP ${response.status}, retrying in ${waitMs}ms...`
+            );
+            await registerDelay(waitMs);
+            continue;
+          }
+
+          throw new Error(
+            `HTTP ${response.status}${text ? ` - ${text.slice(0, 200)}` : ''}`
+          );
+        }
+
+        let resData: Record<string, unknown> | null = null;
+        try {
+          resData = text ? JSON.parse(text) : null;
+        } catch {
+          throw new Error(
+            `Device register returned a non-JSON success response: ${text.slice(0, 200)}`
+          );
+        }
+        console.log('✅ Device registered/updated:', resData);
+
+        lastApiCallTime = Date.now();
+
+        const newSessionId = String(
+          (resData &&
+            ((resData.session_id as string) ||
+              (resData.sessionId as string))) ||
+            ''
+        );
+        if (newSessionId) {
+          await AsyncStorage.setItem(SESSION_ID_STORAGE_KEY, newSessionId);
+        }
+
+        await AsyncStorage.multiSet([
+          ['lastRegisteredToken', token],
+          ['lastRegisteredState', currentState],
+          ['isRegistered', 'true'],
+        ]);
+        clearScheduledRegisterRetry();
+        return true;
+      } catch (err) {
+        const retryable = isRetryableRegisterError(err);
+        if (attempt < MAX_DEVICE_REGISTER_RETRIES && retryable) {
+          const waitMs = DEVICE_REGISTER_RETRY_DELAYS_MS[attempt - 1] ?? 15_000;
+          console.warn(
+            `[SDK][Register] Network error, retrying in ${waitMs}ms...`,
+            err
+          );
+          await registerDelay(waitMs);
+          continue;
+        }
+        throw err;
+      }
     }
 
-    // 🧩 Save new registration state
-    await AsyncStorage.multiSet([
-      ['lastRegisteredToken', token],
-      ['lastRegisteredState', currentState],
-      ['isRegistered', 'true'],
-    ]);
+    throw new Error(
+      `HTTP ${lastStatus}${lastErrorText ? ` - ${lastErrorText.slice(0, 200)}` : ''} after ${MAX_DEVICE_REGISTER_RETRIES} attempts`
+    );
   } catch (err) {
     console.error('❌ Failed to register/update device:', err);
     await AsyncStorage.setItem('isRegistered', 'false');
+    scheduleRegisterRetry(token, deviceId || (await getDeviceId()));
+    return false;
   } finally {
     deviceRegistrationInProgress = false;
   }
@@ -216,23 +373,47 @@ function resolveSingleImageFromData(data: Record<string, any>): string | null {
   return best ?? values[0] ?? null;
 }
 
-function resolveImageListFromData(data: Record<string, any>): string[] {
-  const listKeys = ['imageUrls', 'image_urls', 'carousel_images'];
-  for (const key of listKeys) {
-    const raw = data?.[key];
-    if (!raw) continue;
+function parseImageListRaw(raw: unknown): string[] {
+  if (raw == null) {
+    return [];
+  }
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter(Boolean);
+  }
+  if (typeof raw !== 'string') {
     try {
-      const rawString = typeof raw === 'string' ? raw : JSON.stringify(raw);
-      const parsed = JSON.parse(rawString);
-      if (Array.isArray(parsed)) {
-        const normalized = parsed
-          .map((item) => (typeof item === 'string' ? item.trim() : ''))
-          .filter(Boolean);
-        if (normalized.length > 0) {
-          return normalized;
-        }
-      }
-    } catch (_err) {}
+      return parseImageListRaw(JSON.stringify(raw));
+    } catch {
+      return [];
+    }
+  }
+  const input = raw.trim();
+  if (!input) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(input);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean);
+    }
+  } catch (_err) {}
+  return input
+    .split(',')
+    .map((item) => item.trim().replace(/^["']|["']$/g, ''))
+    .filter(Boolean);
+}
+
+function resolveImageListFromData(data: Record<string, any>): string[] {
+  const listKeys = ['imageUrls', 'image_urls', 'carousel_images', 'images'];
+  for (const key of listKeys) {
+    const normalized = parseImageListRaw(data?.[key]);
+    if (normalized.length > 0) {
+      return normalized;
+    }
   }
 
   const indexed: string[] = [];
@@ -877,7 +1058,13 @@ export function setupForegroundNotificationListener(): () => void {
       }
     }
 
-    const data = remoteMessage.data || {};
+    const rawData = remoteMessage.data || {};
+    const data =
+      Platform.OS === 'ios'
+        ? (mergeIosNotificationPayload(
+            rawData as Record<string, unknown>
+          ) as Record<string, any>)
+        : rawData;
     if (Platform.OS === 'android' && !resolveNotificationUrl(data)) {
       pushCtaLog(
         'FCM data has no notification_url — body tap will open the app, not a browser link',
@@ -906,15 +1093,40 @@ export function setupForegroundNotificationListener(): () => void {
       console.log('🖼️ Carousel images parsed:', carouselImages);
     }
 
-    if (carouselImages.length > 1) {
-      console.log('🚀 Triggering Android carousel notification...');
+    const category = normalizedString(data.category);
+    const isCarouselCategory = /CAROUSEL/i.test(category);
+    const isCarouselPayload =
+      carouselImages.length > 1 ||
+      (isCarouselCategory && carouselImages.length > 0);
+
+    if (isCarouselPayload) {
       if (Platform.OS === 'android' && LiveActivityModule?.triggerCarousel) {
+        console.log('🚀 Triggering Android carousel notification...');
         LiveActivityModule.triggerCarousel({
           ...(data as Record<string, string>),
           title,
           body: message,
           message,
           images: carouselImages,
+        });
+        return;
+      }
+
+      if (
+        Platform.OS === 'ios' &&
+        PushTokenManager?.showForegroundNotification
+      ) {
+        console.log('🚀 Triggering iOS foreground carousel notification...');
+        PushTokenManager.showForegroundNotification({
+          title,
+          body: message,
+          category: category || 'CAROUSEL_CATEGORY',
+          data: {
+            ...data,
+            image_urls: carouselImages,
+            imageUrls: carouselImages,
+            images: carouselImages,
+          },
         });
         return;
       }
@@ -988,6 +1200,39 @@ export function setupForegroundNotificationListener(): () => void {
       localNotif.bigPictureUrl = image;
       localNotif.picture = image;
       localNotif.largeIconUrl = image;
+    }
+
+    if (Platform.OS === 'ios' && PushTokenManager?.showForegroundNotification) {
+      console.log(
+        '📲 Displaying iOS foreground notification via PushTokenManager (plain payload path).'
+      );
+      const imageList =
+        carouselImages.length > 0 ? carouselImages : image ? [image] : [];
+      const iosData: Record<string, unknown> = { ...data };
+      if (image) {
+        iosData.image = image;
+        iosData.image_url = image;
+        iosData.imageUrl = image;
+      }
+      if (imageList.length > 0) {
+        iosData.image_urls = imageList;
+        iosData.imageUrls = imageList;
+        iosData.images = imageList;
+      }
+      if (actionPairs.length > 0) {
+        iosData.__actionMap = JSON.stringify(buildForegroundActionUrlMap(data));
+      }
+      PushTokenManager.showForegroundNotification({
+        title,
+        body: message,
+        category:
+          category ||
+          (actionPairs.length > 0
+            ? 'THREE_BUTTON_CATEGORY'
+            : 'CAROUSEL_CATEGORY'),
+        data: iosData,
+      });
+      return;
     }
 
     if (Platform.OS === 'android') {

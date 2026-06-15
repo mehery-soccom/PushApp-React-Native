@@ -8,6 +8,9 @@ import {
   Button,
   Text,
   Platform,
+  ScrollView,
+  NativeModules,
+  NativeEventEmitter,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -18,7 +21,6 @@ import {
   OnAppOpen,
   updateUserProfile,
   sendCustomEvent,
-  triggerCarouselNotification,
   type SdkInitEnvironmentParam,
 } from 'react-native-mehery-event-sender';
 import { PollOverlayProvider } from 'react-native-mehery-event-sender';
@@ -28,7 +30,7 @@ import { TooltipPollContainer } from 'react-native-mehery-event-sender';
 import DeviceInfo from 'react-native-device-info';
 import { setDeviceMetadata, setGeoIP } from 'react-native-mehery-event-sender';
 
-// Server expects name/phones/email at top level; custom + commerce keys in additionalInfo.
+// Server expects name/email at top level; custom + commerce keys in additionalInfo.
 // Do not use cohorts for channel demo_1780031354415 — cohorts in PUT returns HTTP 500.
 // Mandatory dashboard field "<h1>ajejik</h2>" → additionalInfo._h1_ajejik_h2_
 const CHANNEL_REQUIRED_FIELDS = {
@@ -38,7 +40,6 @@ const CHANNEL_REQUIRED_FIELDS = {
 const STATIC_IDENTITY = {
   name: 'Jane Doe',
   email: 'jane@example.com',
-  phones: ['+919876543210'],
 };
 
 const STATIC_COMMERCE = {
@@ -50,18 +51,13 @@ const STATIC_COMMERCE = {
   cart_value: 2499,
 };
 
-function buildProfilePayload(nameOverride?: string, userId?: string) {
+function buildProfilePayload(nameOverride?: string) {
   const name = nameOverride?.trim() || STATIC_IDENTITY.name;
-  const phoneSuffix = (userId ?? '0000')
-    .replace(/\D/g, '')
-    .slice(-4)
-    .padStart(4, '0');
   return {
     ...CHANNEL_REQUIRED_FIELDS,
     ...STATIC_COMMERCE,
     name,
     email: STATIC_IDENTITY.email,
-    phones: [`+9198765${phoneSuffix}`],
   };
 }
 
@@ -105,6 +101,31 @@ function LoginPage({ onLogin }: { onLogin: (id: string) => void }) {
     </View>
   );
 }
+async function loadPushTokens(): Promise<{
+  apnsToken: string;
+  fcmToken: string;
+}> {
+  const [storedApns, storedFcm] = await AsyncStorage.multiGet([
+    'APNStoken',
+    'fcmToken',
+  ]).then((entries) => entries.map(([, value]) => value ?? ''));
+
+  let fcmToken = storedFcm;
+  try {
+    const liveFcm = await messaging().getToken();
+    if (liveFcm) {
+      fcmToken = liveFcm;
+    }
+  } catch (error) {
+    console.warn('[Example] Failed to read FCM token', error);
+  }
+
+  return {
+    apnsToken: Platform.OS === 'ios' ? (storedApns ?? '') : '',
+    fcmToken: fcmToken ?? '',
+  };
+}
+
 function HomePage({
   userId,
   onLogout,
@@ -114,6 +135,50 @@ function HomePage({
 }) {
   const [profileName, setProfileName] = useState('');
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
+  const [apnsToken, setApnsToken] = useState('');
+  const [fcmToken, setFcmToken] = useState('');
+  const [tokensLoading, setTokensLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const { PushTokenManager } = NativeModules;
+    let pushSubscription: { remove: () => void } | null = null;
+
+    const refreshTokens = async () => {
+      const tokens = await loadPushTokens();
+      if (cancelled) return;
+      setApnsToken(tokens.apnsToken);
+      setFcmToken(tokens.fcmToken);
+      setTokensLoading(false);
+    };
+
+    refreshTokens();
+
+    if (Platform.OS === 'ios' && PushTokenManager) {
+      const pushEmitter = new NativeEventEmitter(PushTokenManager);
+      pushSubscription = pushEmitter.addListener(
+        'PushTokenEvent',
+        ({ type, token }: { type: string; token: string }) => {
+          if (type === 'apns') {
+            setApnsToken(token);
+          } else if (type === 'fcm') {
+            setFcmToken(token);
+          }
+          setTokensLoading(false);
+        }
+      );
+    }
+
+    const pollInterval = setInterval(refreshTokens, 1500);
+    const stopPolling = setTimeout(() => clearInterval(pollInterval), 15000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(pollInterval);
+      clearTimeout(stopPolling);
+      pushSubscription?.remove();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,9 +193,7 @@ function HomePage({
         if (cancelled) return;
 
         setProfileStatus('Updating profile on home load…');
-        const result = await updateUserProfile(
-          buildProfilePayload(undefined, userId)
-        );
+        const result = await updateUserProfile(buildProfilePayload());
         if (cancelled) return;
 
         setProfileStatus(
@@ -156,9 +219,7 @@ function HomePage({
   const handleUpdateProfile = async () => {
     setProfileStatus('Updating profile…');
     try {
-      const result = await updateUserProfile(
-        buildProfilePayload(profileName, userId)
-      );
+      const result = await updateUserProfile(buildProfilePayload(profileName));
       setProfileStatus(
         result.skipped
           ? `updateUserProfile finished — skipped. ${result.message}`
@@ -172,10 +233,54 @@ function HomePage({
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+    >
       <InlinePollContainer placeholderId="login_banner" />
 
       <Text style={styles.txt}>User ID: {userId}</Text>
+
+      <View style={styles.tokenSection}>
+        <Text style={styles.label}>Push tokens</Text>
+        <Text style={styles.tokenHint}>
+          Tap a field, select all, then copy. Values refresh for ~15s after
+          login.
+        </Text>
+
+        {Platform.OS === 'ios' ? (
+          <>
+            <Text style={styles.tokenLabel}>APNS token</Text>
+            <TextInput
+              style={styles.tokenInput}
+              value={
+                tokensLoading && !apnsToken
+                  ? 'Waiting for APNS token…'
+                  : apnsToken || 'APNS token not available'
+              }
+              editable={false}
+              multiline
+              selectTextOnFocus
+            />
+          </>
+        ) : (
+          <Text style={styles.tokenHint}>APNS token: N/A on Android</Text>
+        )}
+
+        <Text style={styles.tokenLabel}>FCM token</Text>
+        <TextInput
+          style={styles.tokenInput}
+          value={
+            tokensLoading && !fcmToken
+              ? 'Waiting for FCM token…'
+              : fcmToken || 'FCM token not available'
+          }
+          editable={false}
+          multiline
+          selectTextOnFocus
+        />
+      </View>
 
       <View style={styles.profileSection}>
         <Text style={styles.label}>Profile name</Text>
@@ -188,7 +293,7 @@ function HomePage({
         />
         <Button title="Update profile" onPress={handleUpdateProfile} />
         <Text style={styles.profileHint}>
-          Home load sends additionalInfo: name, email, phones, _h1_ajejik_h2_,
+          Home load sends additionalInfo: name, email, _h1_ajejik_h2_,
           lifetime_order_count, customer_segment, days_since_last_order,
           active_store_tag, delivery_pincode, cart_value. Tap Update to override
           name only.
@@ -243,7 +348,7 @@ function HomePage({
           {/* <Button title="+" /> */}
         </TooltipPollContainer>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -305,13 +410,13 @@ export default function App() {
 
       // 2️⃣ Initialize SDK (3rd arg: false=pushapp.ai, true=pushapp.xyz, 'development'=pushapp.in)
 
-      // let environment: SdkInitEnvironmentParam = 'development';
-      // await initSdk(null, 'demo_1754408042569', environment);
-      // console.log('SDK initialized with environment:', environment);
-      //prod
       let environment: SdkInitEnvironmentParam = 'development';
-      await initSdk(null, 'demo_1780031354415', false);
-      console.log('SDK initialized with environment:', 'false');
+      await initSdk(null, 'demo_1754408042569', environment);
+      console.log('SDK initialized with environment:', environment);
+      //prod
+      // let environment: SdkInitEnvironmentParam = 'development';
+      // await initSdk(null, 'demo_1780031354415', false);
+      // console.log('SDK initialized with environment:', 'false');
       // 3️⃣ Log FCM Token
       try {
         await messaging().requestPermission();
@@ -370,6 +475,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'blue',
     borderRadius: 50,
   },
+  scroll: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 20,
+    paddingTop: 150,
+    paddingBottom: 40,
+  },
   container: {
     flex: 1,
     padding: 20,
@@ -397,6 +512,36 @@ const styles = StyleSheet.create({
   },
   customEventButtonSpacer: { height: 12 },
   preLoginFormSpacer: { height: 28 },
+  tokenSection: {
+    marginTop: 16,
+    width: '100%',
+    maxWidth: 320,
+    alignSelf: 'center',
+  },
+  tokenLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 10,
+    marginBottom: 4,
+    color: '#222',
+  },
+  tokenHint: {
+    fontSize: 12,
+    color: '#666',
+    lineHeight: 16,
+    marginBottom: 4,
+  },
+  tokenInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    backgroundColor: '#f8f8f8',
+    padding: 10,
+    borderRadius: 5,
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    minHeight: 72,
+    textAlignVertical: 'top',
+  },
   profileSection: {
     marginTop: 20,
     width: '100%',

@@ -1,5 +1,6 @@
 import Foundation
 import React
+import UserNotifications
 
 @objc(PushTokenManager)
 class PushTokenManager: RCTEventEmitter {
@@ -122,6 +123,237 @@ class PushTokenManager: RCTEventEmitter {
         )
       }
     }
+  }
+
+  /// Schedules a local notification (foreground FCM data-only / background data-only without `aps.alert`).
+  /// Carousel templates rely on `category` + normalized `image_urls` for ImagePreviewExtension.
+  @objc static func scheduleDisplayNotification(
+    title: String,
+    body: String,
+    category: String,
+    data: [String: Any],
+    identifierPrefix: String = "mehery",
+    deliverToJs: Bool = true
+  ) {
+    let content = UNMutableNotificationContent()
+    content.title = title
+    content.body = body
+    content.sound = .default
+    content.categoryIdentifier = category
+
+    var userInfo: [AnyHashable: Any] = [:]
+    for (key, value) in data {
+      userInfo[AnyHashable(key)] = value
+    }
+
+    let imageUrls = extractImageUrlStrings(from: data)
+    if !imageUrls.isEmpty {
+      userInfo[AnyHashable("image_urls")] = imageUrls
+      userInfo[AnyHashable("imageUrls")] = imageUrls
+      userInfo[AnyHashable("images")] = imageUrls
+      userInfo[AnyHashable("media-url")] = imageUrls
+    }
+
+    var aps = (userInfo[AnyHashable("aps")] as? [String: Any]) ?? [:]
+    aps["mutable-content"] = 1
+    userInfo[AnyHashable("aps")] = aps
+    userInfo[AnyHashable("mutable-content")] = 1
+    content.userInfo = userInfo
+
+    let requestId = (data["id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let identifier = "\(identifierPrefix)-\(requestId?.isEmpty == false ? requestId! : UUID().uuidString)"
+
+    let deliver: (UNMutableNotificationContent) -> Void = { finalContent in
+      let request = UNNotificationRequest(
+        identifier: identifier,
+        content: finalContent,
+        trigger: nil
+      )
+
+      UNUserNotificationCenter.current().add(request) { error in
+        if let error = error {
+          print("❌ Local notification failed: \(error.localizedDescription)")
+        } else {
+          print(
+            "✅ Local notification scheduled (\(finalContent.attachments.count) attachment(s), " +
+            "\(imageUrls.count) image URL(s), category=\(category))"
+          )
+        }
+      }
+
+      if deliverToJs {
+        sendNotificationEventOrQueue(userInfo)
+      }
+    }
+
+    if imageUrls.isEmpty {
+      deliver(content)
+      return
+    }
+
+    attachDownloadedImages(urlStrings: imageUrls, to: content) { updatedContent in
+      DispatchQueue.main.async {
+        deliver(updatedContent)
+      }
+    }
+  }
+
+  private static func attachDownloadedImages(
+    urlStrings: [String],
+    to content: UNMutableNotificationContent,
+    completion: @escaping (UNMutableNotificationContent) -> Void
+  ) {
+    var attachments = Array<UNNotificationAttachment?>(repeating: nil, count: urlStrings.count)
+    let group = DispatchGroup()
+
+    for (index, urlString) in urlStrings.enumerated() {
+      guard let url = URL(string: urlString) else { continue }
+
+      group.enter()
+      downloadTempFile(url: url) { tempUrl in
+        defer { group.leave() }
+
+        guard let tempUrl = tempUrl,
+              let attachment = try? UNNotificationAttachment(
+                identifier: "image_\(index)",
+                url: tempUrl
+              ) else {
+          return
+        }
+
+        attachments[index] = attachment
+      }
+    }
+
+    group.notify(queue: .global(qos: .userInitiated)) {
+      let validAttachments = attachments.compactMap { $0 }
+      if !validAttachments.isEmpty {
+        content.attachments = validAttachments
+      }
+      completion(content)
+    }
+  }
+
+  private static func downloadTempFile(
+    url: URL,
+    completion: @escaping (URL?) -> Void
+  ) {
+    let config = URLSessionConfiguration.ephemeral
+    config.timeoutIntervalForRequest = 12
+    config.timeoutIntervalForResource = 12
+
+    URLSession(configuration: config).downloadTask(with: url) { location, response, error in
+      guard error == nil, let location = location else {
+        completion(nil)
+        return
+      }
+
+      let tempDir = NSTemporaryDirectory()
+      let ext = fileExtension(for: response, fallbackURL: url)
+      let fileUrl = URL(fileURLWithPath: tempDir)
+        .appendingPathComponent("mehery_img_\(UUID().uuidString)\(ext)")
+
+      do {
+        try FileManager.default.moveItem(at: location, to: fileUrl)
+        completion(fileUrl)
+      } catch {
+        completion(nil)
+      }
+    }.resume()
+  }
+
+  private static func fileExtension(for response: URLResponse?, fallbackURL: URL) -> String {
+    if let mime = (response as? HTTPURLResponse)?.mimeType?.lowercased() {
+      if mime.contains("jpeg") || mime.contains("jpg") { return ".jpg" }
+      if mime.contains("png") { return ".png" }
+      if mime.contains("gif") { return ".gif" }
+      if mime.contains("webp") { return ".webp" }
+    }
+    let pathExt = fallbackURL.pathExtension.lowercased()
+    switch pathExt {
+    case "jpg", "jpeg": return ".jpg"
+    case "png", "gif", "webp": return ".\(pathExt)"
+    default: return ".jpg"
+    }
+  }
+
+  @objc func showForegroundNotification(_ payload: NSDictionary) {
+    DispatchQueue.main.async {
+      let title = (payload["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Notification"
+      let body = (payload["body"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      let category = (payload["category"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        ?? "CAROUSEL_CATEGORY"
+      let data = payload["data"] as? [String: Any] ?? [:]
+
+      PushTokenManager.scheduleDisplayNotification(
+        title: title,
+        body: body,
+        category: category,
+        data: data,
+        identifierPrefix: "mehery-fg"
+      )
+    }
+  }
+
+  private static func extractImageUrlStrings(from data: [String: Any]) -> [String] {
+    let listKeys = ["image_urls", "imageUrls", "carousel_images", "images", "media-url"]
+    for key in listKeys {
+      if let values = parseStringList(data[key]), !values.isEmpty {
+        return values
+      }
+    }
+
+    var indexed: [String] = []
+    var index = 1
+    while index <= 32 {
+      let key = "image\(index)"
+      guard let value = parseSingleString(data[key]), !value.isEmpty else { break }
+      indexed.append(value)
+      index += 1
+    }
+    if !indexed.isEmpty {
+      return indexed
+    }
+
+    for key in ["image_url", "imageUrl", "image"] {
+      if let value = parseSingleString(data[key]), !value.isEmpty {
+        return [value]
+      }
+    }
+    return []
+  }
+
+  private static func parseSingleString(_ value: Any?) -> String? {
+    if let str = value as? String {
+      return str.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    if let str = value as? NSString {
+      return str.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    return nil
+  }
+
+  private static func parseStringList(_ value: Any?) -> [String]? {
+    if let arr = value as? [String] {
+      return arr.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    }
+    if let arr = value as? [Any] {
+      let mapped = arr.compactMap { parseSingleString($0) }.filter { !$0.isEmpty }
+      return mapped.isEmpty ? nil : mapped
+    }
+    if let str = parseSingleString(value), !str.isEmpty {
+      if let data = str.data(using: .utf8),
+         let parsed = try? JSONSerialization.jsonObject(with: data) as? [Any] {
+        let mapped = parsed.compactMap { parseSingleString($0) }.filter { !$0.isEmpty }
+        if !mapped.isEmpty { return mapped }
+      }
+      let split = str
+        .split(separator: ",")
+        .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\"'")) }
+        .filter { !$0.isEmpty }
+      return split.isEmpty ? nil : split
+    }
+    return nil
   }
 
   @objc func getLastToken(

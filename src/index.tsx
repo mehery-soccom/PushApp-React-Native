@@ -42,11 +42,7 @@ export type { TriggerCarouselNotificationParams } from './native/LiveActivity';
 import { AppRegistry } from 'react-native';
 
 // 🛠 Imports
-import {
-  Platform,
-  NativeModules,
-  NativeEventEmitter,
-} from 'react-native';
+import { Platform, NativeModules, NativeEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   requestUserPermission,
@@ -429,7 +425,10 @@ export const initSdk = async (
     // ✅ iOS specific setup
     if (Platform.OS === 'ios') {
       iosChecker();
-      addNotificationDebugListener(); // 👈 ADD THIS
+      addNotificationDebugListener();
+      // FCM does not show banners in foreground on iOS; onMessage must schedule a local notification.
+      setupForegroundNotificationListener();
+      setupNotificationOpenTracking();
     }
 
     // ✅ Connect to the socket server

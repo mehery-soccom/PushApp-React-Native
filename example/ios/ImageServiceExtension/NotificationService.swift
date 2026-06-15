@@ -171,9 +171,14 @@ class NotificationService: UNNotificationServiceExtension {
         if let str = parseSingleString(value), !str.isEmpty {
             if let data = str.data(using: .utf8),
                let parsed = try? JSONSerialization.jsonObject(with: data) as? [Any] {
-                return parsed.compactMap { parseSingleString($0) }
+                let mapped = parsed.compactMap { parseSingleString($0) }.filter { !$0.isEmpty }
+                if !mapped.isEmpty { return mapped }
             }
-            return [str]
+            let split = str
+                .split(separator: ",")
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\"'")) }
+                .filter { !$0.isEmpty }
+            return split.isEmpty ? nil : split
         }
         return nil
     }

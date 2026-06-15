@@ -272,16 +272,6 @@ export async function updateUserProfile(
         };
       }
 
-      if (status >= 400 && status < 500) {
-        console.error(
-          `🚨 [SDK][Profile] Client error ${status}, not retrying`,
-          data
-        );
-        throw new Error(
-          `[SDK][Profile] HTTP ${status}${serverMessage ? `: ${serverMessage}` : ''}`
-        );
-      }
-
       if (isProfileNotFoundError(serverMessage)) {
         throw new Error(
           `[SDK][Profile] profile not found for user_id "${user_id}". OnUserLogin must complete /device/link for the current channel and environment before updateUserProfile. Log out and log in again if you changed initSdk settings.`
@@ -314,6 +304,16 @@ export async function updateUserProfile(
         }
         throw new Error(
           `[SDK][Profile] ${serverMessage}. Use a unique phone/email for this user, or omit unchanged phones on profile updates.`
+        );
+      }
+
+      if (status >= 400 && status < 500) {
+        console.error(
+          `🚨 [SDK][Profile] Client error ${status}, not retrying`,
+          data
+        );
+        throw new Error(
+          `[SDK][Profile] HTTP ${status}${serverMessage ? `: ${serverMessage}` : ''}`
         );
       }
 

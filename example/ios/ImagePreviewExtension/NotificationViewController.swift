@@ -2,29 +2,39 @@ import UIKit
 import UserNotifications
 import UserNotificationsUI
 
-class NotificationViewController: UIViewController, UNNotificationContentExtension, UIScrollViewDelegate {
+private enum CarouselLayout {
+    static let aspectRatio: CGFloat = 9.0 / 16.0
+    static let headerToCarouselGap: CGFloat = 8
+    static let pageScrimHeight: CGFloat = 32
+    static let pageControlBottomPadding: CGFloat = 8
+    static let autoScrollInterval: TimeInterval = 3.0
+    static let autoScrollResumeDelay: TimeInterval = 5.0
+}
+
+class NotificationViewController: UIViewController, UNNotificationContentExtension, UIScrollViewDelegate, UIGestureRecognizerDelegate {
 
     // MARK: - Outlets
     @IBOutlet weak var containerView: UIView!
     @IBOutlet weak var titleLabel: UILabel!
     @IBOutlet weak var textLabel: UILabel!
-    @IBOutlet weak var logoImageView: UIImageView! // New outlet for logo
+    @IBOutlet weak var logoImageView: UIImageView!
 
     // MARK: - Properties
     private var images: [UIImage] = []
     private var currentIndex: Int = 0
     private var autoScrollTimer: Timer?
+    private var autoScrollResumeWorkItem: DispatchWorkItem?
     private var notification: UNNotification?
     private var carouselNeedsBuild = false
     private var fallbackImageLoadInProgress = false
 
-    // NEW VIEWS (carousel with partial peek)
     private let carouselView = UIView()
     private let carouselScrollView = UIScrollView()
     private var carouselImageViews: [UIImageView] = []
+    private let pageScrimView = UIView()
     private let pageControl = UIPageControl()
+    private let pageScrimGradient = CAGradientLayer()
 
-    // Constraints for dynamic updating
     private var carouselLeadingConstraint: NSLayoutConstraint?
     private var carouselTrailingConstraint: NSLayoutConstraint?
     private var carouselTopConstraint: NSLayoutConstraint?
@@ -65,240 +75,243 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
         logoImageView.layer.masksToBounds = true
 
         setupCarouselViews()
-        setupGestures()
+        setupCarouselGestures()
     }
 
-   // ---------------------------------------------------------
-// MARK: - Layout Size (Optimized)
-// ---------------------------------------------------------
-override func viewDidLayoutSubviews() {
-    super.viewDidLayoutSubviews()
+    // ---------------------------------------------------------
+    // MARK: - Layout Size
+    // ---------------------------------------------------------
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
 
-    if carouselNeedsBuild, !images.isEmpty, carouselView.bounds.width > 0 {
-        carouselNeedsBuild = false
-        buildCarouselScrollContent()
-    }
+        if carouselNeedsBuild, !images.isEmpty, carouselScrollView.bounds.width > 0 {
+            carouselNeedsBuild = false
+            buildCarouselScrollContent()
+        }
 
-    view.layoutIfNeeded()
+        pageScrimGradient.frame = pageScrimView.bounds
 
-    let width = max(view.bounds.width, 1)
+        view.layoutIfNeeded()
 
-    // Ensure multiline labels have an explicit wrapping width before measuring.
-    let textMaxWidth = max(textLabel.bounds.width, containerView.bounds.width - 64)
-    titleLabel.preferredMaxLayoutWidth = textMaxWidth
-    textLabel.preferredMaxLayoutWidth = textMaxWidth
-    titleLabel.layoutIfNeeded()
-    textLabel.layoutIfNeeded()
+        let width = max(view.bounds.width, 1)
 
-    let headerBottom = max(
-        logoImageView.frame.maxY,
-        textLabel.isHidden ? titleLabel.frame.maxY : textLabel.frame.maxY
-    )
-    let headerBottomInView = containerView.convert(
-        CGPoint(x: 0, y: headerBottom),
-        to: view
-    ).y
+        let textMaxWidth = max(textLabel.bounds.width, containerView.bounds.width - 64)
+        titleLabel.preferredMaxLayoutWidth = textMaxWidth
+        textLabel.preferredMaxLayoutWidth = textMaxWidth
+        titleLabel.layoutIfNeeded()
+        textLabel.layoutIfNeeded()
 
-    var height = max(headerBottomInView + 12, 1)
-    if !images.isEmpty, carouselView.superview != nil, carouselView.bounds.width > 0 {
-        // Include media area when rich attachments are present.
-        let carouselBottomInView = containerView.convert(
-            CGPoint(x: 0, y: carouselView.frame.maxY),
+        let headerBottom = max(
+            logoImageView.frame.maxY,
+            textLabel.isHidden ? titleLabel.frame.maxY : textLabel.frame.maxY
+        )
+        let headerBottomInView = containerView.convert(
+            CGPoint(x: 0, y: headerBottom),
             to: view
         ).y
-        let mediaBottom = floor(carouselBottomInView * UIScreen.main.scale) / UIScreen.main.scale
-        height = max(height, mediaBottom)
+
+        var height = max(headerBottomInView + CarouselLayout.headerToCarouselGap, 1)
+        if !images.isEmpty, carouselView.superview != nil, carouselView.bounds.width > 0 {
+            let carouselBottomInView = containerView.convert(
+                CGPoint(x: 0, y: carouselView.frame.maxY),
+                to: view
+            ).y
+            let mediaBottom = floor(carouselBottomInView * UIScreen.main.scale) / UIScreen.main.scale
+            height = max(height, mediaBottom)
+        }
+
+        preferredContentSize = CGSize(width: width, height: height)
     }
 
-    preferredContentSize = CGSize(width: width, height: height)
-}
-
-
-private var isCarouselEnabled: Bool {
-    return images.count > 1
-}
-
+    private var isCarouselEnabled: Bool {
+        return images.count > 1
+    }
 
     // ---------------------------------------------------------
     // MARK: - Receive Notification
     // ---------------------------------------------------------
     func didReceive(_ notification: UNNotification) {
-    self.notification = notification
-    let userInfo = notification.request.content.userInfo
+        self.notification = notification
+        let userInfo = notification.request.content.userInfo
 
-    titleLabel.text = preferredText(
-        keys: styledTitleKeys,
-        userInfo: userInfo,
-        fallback: notification.request.content.title
-    )
-    textLabel.text = preferredText(
-        keys: styledBodyKeys,
-        userInfo: userInfo,
-        fallback: notification.request.content.body
-    )
+        titleLabel.text = preferredText(
+            keys: styledTitleKeys,
+            userInfo: userInfo,
+            fallback: notification.request.content.title
+        )
+        textLabel.text = preferredText(
+            keys: styledBodyKeys,
+            userInfo: userInfo,
+            fallback: notification.request.content.body
+        )
 
-    // ---------------------------------------------------------
-    // ✅ 1. LOAD LOGO FROM ATTACHMENT (if exists)
-    // ---------------------------------------------------------
-    if let logoAttachment = notification.request.content.attachments.first(where: { $0.identifier == "logo" }) {
-    _ = logoAttachment.url.startAccessingSecurityScopedResource()
-    if let data = try? Data(contentsOf: logoAttachment.url) {
-        logoImageView.image = UIImage(data: data)
-        print("🟦 Loaded remote logo")
-    }
-    logoAttachment.url.stopAccessingSecurityScopedResource()
-}
-
-// (B) Fallback to local asset
-if logoImageView.image == nil {
-    if let styledLogoUrl = preferredUrl(keys: styledLogoKeys, userInfo: userInfo) {
-        URLSession.shared.dataTask(with: styledLogoUrl) { [weak self] data, _, _ in
-            guard let self = self,
-                  let data = data,
-                  let image = UIImage(data: data) else { return }
-            DispatchQueue.main.async {
-                self.logoImageView.image = image
-                self.logoImageView.contentMode = .scaleAspectFit
-                self.logoImageView.backgroundColor = .clear
+        if let logoAttachment = notification.request.content.attachments.first(where: { $0.identifier == "logo" }) {
+            _ = logoAttachment.url.startAccessingSecurityScopedResource()
+            if let data = try? Data(contentsOf: logoAttachment.url) {
+                logoImageView.image = UIImage(data: data)
             }
-        }.resume()
-    } else {
-        logoImageView.image = UIImage(named: "logo")
-        print("🔵 Fallback local logo loaded:", UIImage(named: "logo") != nil)
-    }
-    
-    // (C) Final Fallback to system icon
-    if logoImageView.image == nil {
-        logoImageView.image = UIImage(systemName: "app.badge") ?? UIImage(systemName: "bell.fill")
-        logoImageView.tintColor = .white
-        logoImageView.contentMode = .center
-        logoImageView.backgroundColor = UIColor(white: 0.2, alpha: 1)
-        print("⚪️ Used system fallback for logo")
-    }
-}
-    // Hide body label if empty
-    let isBodyEmpty = (textLabel.text ?? "")
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-        .isEmpty
-    textLabel.isHidden = isBodyEmpty
-
-    // Apply layout update
-    view.setNeedsLayout()
-    view.layoutIfNeeded()
-
-    // ---------------------------------------------------------
-    // ---------------------------------------------------------
-    // ✅ 2. LOAD CAROUSEL IMAGES (Asynchronously)
-    // ---------------------------------------------------------
-    images.removeAll()
-    
-    let attachments = notification.request.content.attachments
-
-    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-        var loadedImages: [UIImage] = []
-        
-        for attachment in attachments {
-            // Skip the logo (identifier == "logo")
-            if attachment.identifier == "logo" { continue }
-
-            _ = attachment.url.startAccessingSecurityScopedResource()
-            if let data = try? Data(contentsOf: attachment.url),
-               let img = UIImage(data: data) {
-                loadedImages.append(img)
-            }
-            attachment.url.stopAccessingSecurityScopedResource()
+            logoAttachment.url.stopAccessingSecurityScopedResource()
         }
-        
-        DispatchQueue.main.async {
-            guard let self = self else { return }
-            self.images = loadedImages
-            
-            // ---------------------------------------------------------
-            // ✅ 3. START CAROUSEL IF IMAGES EXIST
-            // ---------------------------------------------------------
-            if !self.images.isEmpty {
-                self.currentIndex = 0
-                self.carouselNeedsBuild = true
-                self.pageControl.numberOfPages = self.images.count
-                self.pageControl.currentPage = 0
-                self.pageControl.isHidden = !self.isCarouselEnabled
 
-                // Update constraints based on new count
-                let hPadding: CGFloat = self.isCarouselEnabled ? 16 : 0
-                self.carouselLeadingConstraint?.constant = hPadding
-                self.carouselTrailingConstraint?.constant = -hPadding
-                self.carouselTopConstraint?.constant = hPadding > 0 ? 16 : 20
-
-                self.updateCarouselHeightConstraintForLoadedImages()
-
-                if self.isCarouselEnabled {
-                    self.startAutoScroll()
-                    self.carouselView.isUserInteractionEnabled = true
-                } else {
-                    self.autoScrollTimer?.invalidate()
-                    self.carouselView.isUserInteractionEnabled = false
-                }
-                
-                // Final layout pass after images are loaded
-                self.view.setNeedsLayout()
-                self.view.layoutIfNeeded()
+        if logoImageView.image == nil {
+            if let styledLogoUrl = preferredUrl(keys: styledLogoKeys, userInfo: userInfo) {
+                URLSession.shared.dataTask(with: styledLogoUrl) { [weak self] data, _, _ in
+                    guard let self = self,
+                          let data = data,
+                          let image = UIImage(data: data) else { return }
+                    DispatchQueue.main.async {
+                        self.logoImageView.image = image
+                        self.logoImageView.contentMode = .scaleAspectFit
+                        self.logoImageView.backgroundColor = .clear
+                    }
+                }.resume()
             } else {
-                self.loadFallbackImageFromUserInfoIfNeeded(userInfo: userInfo)
-                if self.firstMediaUrl(from: userInfo) != nil {
-                    self.carouselView.isHidden = true
-                    self.pageControl.isHidden = true
-                } else {
-                    self.carouselHeightConstraint = nil
-                    self.carouselView.removeFromSuperview()
-                    self.pageControl.removeFromSuperview()
-                }
+                logoImageView.image = UIImage(named: "logo")
+            }
 
-                // Layout again to shrink height correctly
-                self.view.setNeedsLayout()
-                self.view.layoutIfNeeded()
+            if logoImageView.image == nil {
+                logoImageView.image = UIImage(systemName: "app.badge") ?? UIImage(systemName: "bell.fill")
+                logoImageView.tintColor = .white
+                logoImageView.contentMode = .center
+                logoImageView.backgroundColor = UIColor(white: 0.2, alpha: 1)
+            }
+        }
+
+        let isBodyEmpty = (textLabel.text ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty
+        textLabel.isHidden = isBodyEmpty
+
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+
+        images.removeAll()
+
+        let attachments = notification.request.content.attachments
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            var loadedImages: [UIImage] = []
+
+            for attachment in attachments {
+                if attachment.identifier == "logo" { continue }
+
+                _ = attachment.url.startAccessingSecurityScopedResource()
+                if let data = try? Data(contentsOf: attachment.url),
+                   let img = UIImage(data: data) {
+                    loadedImages.append(img)
+                }
+                attachment.url.stopAccessingSecurityScopedResource()
+            }
+
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.images = loadedImages
+
+                if !self.images.isEmpty {
+                    self.currentIndex = 0
+                    self.carouselNeedsBuild = true
+                    self.pageControl.numberOfPages = self.images.count
+                    self.pageControl.currentPage = 0
+                    self.pageControl.isHidden = !self.isCarouselEnabled
+                    self.pageScrimView.isHidden = !self.isCarouselEnabled
+
+                    self.applyCarouselEdgeConstraints()
+                    self.updateCarouselHeightConstraintForLoadedImages()
+
+                    self.carouselScrollView.isScrollEnabled = self.isCarouselEnabled
+                    self.carouselScrollView.bounces = self.isCarouselEnabled
+
+                    if self.isCarouselEnabled {
+                        self.startAutoScroll()
+                        self.carouselView.isUserInteractionEnabled = true
+                    } else {
+                        self.stopAutoScroll()
+                        self.carouselView.isUserInteractionEnabled = true
+                    }
+
+                    self.view.setNeedsLayout()
+                    self.view.layoutIfNeeded()
+                } else {
+                    self.loadCarouselImagesFromUserInfoIfNeeded(userInfo: userInfo)
+                    if self.allMediaUrls(from: userInfo) != nil {
+                        self.carouselView.isHidden = true
+                        self.pageControl.isHidden = true
+                        self.pageScrimView.isHidden = true
+                    } else {
+                        self.carouselHeightConstraint = nil
+                        self.carouselView.removeFromSuperview()
+                        self.pageScrimView.removeFromSuperview()
+                        self.pageControl.removeFromSuperview()
+                    }
+
+                    self.view.setNeedsLayout()
+                    self.view.layoutIfNeeded()
+                }
             }
         }
     }
-}
 
-    private func loadFallbackImageFromUserInfoIfNeeded(userInfo: [AnyHashable: Any]) {
+    private func applyCarouselEdgeConstraints() {
+        carouselLeadingConstraint?.constant = 0
+        carouselTrailingConstraint?.constant = 0
+        carouselTopConstraint?.constant = CarouselLayout.headerToCarouselGap
+    }
+
+    private func loadCarouselImagesFromUserInfoIfNeeded(userInfo: [AnyHashable: Any]) {
         guard images.isEmpty, !fallbackImageLoadInProgress else { return }
-        guard let fallbackUrl = firstMediaUrl(from: userInfo) else { return }
+        guard let urls = allMediaUrls(from: userInfo), !urls.isEmpty else { return }
         fallbackImageLoadInProgress = true
 
-        URLSession.shared.dataTask(with: fallbackUrl) { [weak self] data, _, _ in
+        let group = DispatchGroup()
+        var loadedImages = Array<UIImage?>(repeating: nil, count: urls.count)
+
+        for (index, url) in urls.enumerated() {
+            group.enter()
+            URLSession.shared.dataTask(with: url) { data, _, _ in
+                defer { group.leave() }
+                guard let data = data, let image = UIImage(data: data) else { return }
+                loadedImages[index] = image
+            }.resume()
+        }
+
+        group.notify(queue: .main) { [weak self] in
             guard let self = self else { return }
             defer { self.fallbackImageLoadInProgress = false }
-            guard let data = data, let image = UIImage(data: data) else { return }
 
-            DispatchQueue.main.async {
-                self.images = [image]
-                self.currentIndex = 0
-                self.carouselView.isHidden = false
-                self.pageControl.numberOfPages = 1
-                self.pageControl.currentPage = 0
-                self.pageControl.isHidden = true
+            let resolved = loadedImages.compactMap { $0 }
+            guard !resolved.isEmpty else { return }
 
-                let hPadding: CGFloat = 0
-                self.carouselLeadingConstraint?.constant = hPadding
-                self.carouselTrailingConstraint?.constant = -hPadding
-                self.carouselTopConstraint?.constant = 20
+            self.images = resolved
+            self.currentIndex = 0
+            self.carouselView.isHidden = false
+            self.pageControl.numberOfPages = resolved.count
+            self.pageControl.currentPage = 0
+            self.pageControl.isHidden = !self.isCarouselEnabled
+            self.pageScrimView.isHidden = !self.isCarouselEnabled
 
-                self.carouselNeedsBuild = true
-                self.updateCarouselHeightConstraintForLoadedImages()
-                self.view.setNeedsLayout()
-                self.view.layoutIfNeeded()
+            self.applyCarouselEdgeConstraints()
+            self.carouselNeedsBuild = true
+            self.updateCarouselHeightConstraintForLoadedImages()
+            self.carouselScrollView.isScrollEnabled = self.isCarouselEnabled
+            self.carouselScrollView.bounces = self.isCarouselEnabled
+
+            if self.isCarouselEnabled {
+                self.startAutoScroll()
+            } else {
+                self.stopAutoScroll()
             }
-        }.resume()
+
+            self.view.setNeedsLayout()
+            self.view.layoutIfNeeded()
+        }
     }
 
-    private func firstMediaUrl(from userInfo: [AnyHashable: Any]) -> URL? {
+    private func allMediaUrls(from userInfo: [AnyHashable: Any]) -> [URL]? {
         let keys = ["media-url", "images", "image_urls", "imageUrls", "image_url", "imageUrl", "image"]
         for key in keys {
-            if let values = stringListValue(for: key, userInfo: userInfo),
-               let first = values.first,
-               let url = URL(string: first) {
-                return url
+            if let values = stringListValue(for: key, userInfo: userInfo) {
+                let urls = values.compactMap { URL(string: $0) }
+                if !urls.isEmpty { return urls }
             }
         }
         return nil
@@ -326,35 +339,30 @@ if logoImageView.image == nil {
                 }.filter { !$0.isEmpty }
                 if !mapped.isEmpty { return mapped }
             }
-            return [raw]
+            let split = raw
+                .split(separator: ",")
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\"'")) }
+                .filter { !$0.isEmpty }
+            return split.isEmpty ? nil : split
         }
         return nil
     }
 
-    /// Replaces the fixed 0.7 height with the image aspect ratio so `scaleAspectFit` does not
-    /// letterbox (dark band) above/below the photo inside the carousel.
     private func updateCarouselHeightConstraintForLoadedImages() {
         guard !images.isEmpty, carouselView.superview != nil else { return }
 
-        let ratio: CGFloat
-        if images.count == 1 {
-            let img = images[0]
-            let iw = max(img.size.width, 1)
-            ratio = min(max(img.size.height / iw, 0.28), 1.3)
-        } else {
-            let maxR = images.map { $0.size.height / max($0.size.width, 1) }.max() ?? 0.7
-            ratio = min(max(maxR, 0.34), 0.95)
-        }
-
         carouselHeightConstraint?.isActive = false
-        let next = carouselView.heightAnchor.constraint(equalTo: carouselView.widthAnchor, multiplier: ratio)
+        let next = carouselView.heightAnchor.constraint(
+            equalTo: carouselView.widthAnchor,
+            multiplier: CarouselLayout.aspectRatio
+        )
         next.priority = .required
         next.isActive = true
         carouselHeightConstraint = next
     }
 
     // ---------------------------------------------------------
-    // MARK: - Build Carousel Scroll (partial peek)
+    // MARK: - Build Carousel Scroll (full-bleed paging)
     // ---------------------------------------------------------
     private func buildCarouselScrollContent() {
         carouselImageViews.forEach { $0.removeFromSuperview() }
@@ -362,13 +370,9 @@ if logoImageView.image == nil {
 
         guard !images.isEmpty else { return }
 
-        let isCarousel = images.count > 1
-        let pageWidthRatio: CGFloat = isCarousel ? 0.85 : 1.0
-        let peekRatio: CGFloat = isCarousel ? (1 - pageWidthRatio) / 2 : 0.0
-        
-        let w = max(carouselView.bounds.width, containerView.bounds.width, 1)
-        let pageWidth = w * pageWidthRatio
-        
+        let pageWidth = max(carouselScrollView.bounds.width, 1)
+        let pageHeight = max(carouselScrollView.bounds.height, pageWidth * CarouselLayout.aspectRatio)
+
         for (index, img) in images.enumerated() {
             let iv = UIImageView(image: img)
             iv.contentMode = .scaleAspectFill
@@ -378,13 +382,11 @@ if logoImageView.image == nil {
             carouselScrollView.addSubview(iv)
             carouselImageViews.append(iv)
 
-            let isLast = index == images.count - 1
-            let thisWidth = (isCarousel && isLast) ? w : pageWidth
-
             NSLayoutConstraint.activate([
                 iv.topAnchor.constraint(equalTo: carouselScrollView.topAnchor),
                 iv.bottomAnchor.constraint(equalTo: carouselScrollView.bottomAnchor),
-                iv.widthAnchor.constraint(equalToConstant: thisWidth),
+                iv.widthAnchor.constraint(equalToConstant: pageWidth),
+                iv.heightAnchor.constraint(equalToConstant: pageHeight),
                 iv.leadingAnchor.constraint(
                     equalTo: index == 0 ? carouselScrollView.leadingAnchor : carouselImageViews[index - 1].trailingAnchor,
                     constant: 0
@@ -392,12 +394,11 @@ if logoImageView.image == nil {
             ])
         }
 
-        view.layoutIfNeeded()
-
-        let totalWidth = isCarousel ? (CGFloat(images.count - 1) * pageWidth + w) : w
-        let inset = w * peekRatio
-        carouselScrollView.contentInset = UIEdgeInsets(top: 0, left: inset, bottom: 0, right: inset)
-        carouselScrollView.contentSize = CGSize(width: totalWidth, height: carouselView.bounds.height > 0 ? carouselView.bounds.height : w * 0.7)
+        carouselScrollView.contentInset = .zero
+        carouselScrollView.contentSize = CGSize(
+            width: pageWidth * CGFloat(images.count),
+            height: pageHeight
+        )
         scrollToPage(currentIndex, animated: false)
     }
 
@@ -434,57 +435,75 @@ if logoImageView.image == nil {
         return nil
     }
 
+    private func pageWidth() -> CGFloat {
+        max(carouselScrollView.bounds.width, 1)
+    }
+
     private func scrollToPage(_ index: Int, animated: Bool) {
         guard index >= 0, index < images.count else { return }
-        let isCarousel = images.count > 1
-        let w = max(carouselView.bounds.width, containerView.bounds.width, 1)
-        let pageWidth = isCarousel ? w * 0.85 : w
-        let inset = isCarousel ? w * 0.075 : 0.0
-        let offset = CGFloat(index) * pageWidth - inset
-        carouselScrollView.setContentOffset(CGPoint(x: max(-inset, offset), y: 0), animated: animated)
+        let width = pageWidth()
+        guard width > 0 else { return }
+        carouselScrollView.setContentOffset(
+            CGPoint(x: CGFloat(index) * width, y: 0),
+            animated: animated
+        )
         currentIndex = index
         pageControl.currentPage = index
     }
 
-
     // ---------------------------------------------------------
-    // MARK: - Setup Carousel Views (with partial peek of adjacent images)
+    // MARK: - Setup Carousel Views
     // ---------------------------------------------------------
     private func setupCarouselViews() {
         carouselView.translatesAutoresizingMaskIntoConstraints = false
-        carouselView.clipsToBounds = false
-        containerView.addSubview(carouselView)
-
-        carouselView.layer.cornerRadius = 14
         carouselView.clipsToBounds = true
-        carouselView.layer.cornerCurve = .continuous
+        carouselView.backgroundColor = .clear
+        containerView.addSubview(carouselView)
 
         carouselScrollView.translatesAutoresizingMaskIntoConstraints = false
         carouselScrollView.showsHorizontalScrollIndicator = false
-        carouselScrollView.isPagingEnabled = false
+        carouselScrollView.isPagingEnabled = true
+        carouselScrollView.decelerationRate = .fast
         carouselScrollView.delegate = self
         carouselScrollView.clipsToBounds = true
         carouselView.addSubview(carouselScrollView)
 
+        pageScrimView.translatesAutoresizingMaskIntoConstraints = false
+        pageScrimView.isUserInteractionEnabled = false
+        pageScrimView.backgroundColor = .clear
+        carouselView.addSubview(pageScrimView)
+
+        pageScrimGradient.colors = [
+            UIColor.black.withAlphaComponent(0).cgColor,
+            UIColor.black.withAlphaComponent(0.45).cgColor
+        ]
+        pageScrimGradient.startPoint = CGPoint(x: 0.5, y: 0)
+        pageScrimGradient.endPoint = CGPoint(x: 0.5, y: 1)
+        pageScrimView.layer.addSublayer(pageScrimGradient)
+
         pageControl.translatesAutoresizingMaskIntoConstraints = false
         pageControl.currentPageIndicatorTintColor = .white
-        pageControl.pageIndicatorTintColor = UIColor.white.withAlphaComponent(0.35)
+        pageControl.pageIndicatorTintColor = UIColor.white.withAlphaComponent(0.4)
         pageControl.hidesForSinglePage = true
         pageControl.isUserInteractionEnabled = false
-        containerView.addSubview(pageControl)
+        pageControl.transform = CGAffineTransform(scaleX: 0.85, y: 0.85)
+        carouselView.addSubview(pageControl)
 
-        // Dynamic padding: 0 for single image (full bleeds to container), 16 for carousel
-        let hPadding: CGFloat = 0 // Default to 0, will update in didReceive
-        
-        let leading = carouselView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: hPadding)
-        let trailing = carouselView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -hPadding)
-        let top = carouselView.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: 20)
-        
+        let leading = carouselView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 0)
+        let trailing = carouselView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: 0)
+        let top = carouselView.topAnchor.constraint(
+            equalTo: textLabel.bottomAnchor,
+            constant: CarouselLayout.headerToCarouselGap
+        )
+
         carouselLeadingConstraint = leading
         carouselTrailingConstraint = trailing
         carouselTopConstraint = top
-        
-        let heightC = carouselView.heightAnchor.constraint(equalTo: carouselView.widthAnchor, multiplier: 0.7)
+
+        let heightC = carouselView.heightAnchor.constraint(
+            equalTo: carouselView.widthAnchor,
+            multiplier: CarouselLayout.aspectRatio
+        )
         carouselHeightConstraint = heightC
 
         NSLayoutConstraint.activate([
@@ -496,32 +515,87 @@ if logoImageView.image == nil {
             carouselScrollView.topAnchor.constraint(equalTo: carouselView.topAnchor),
             carouselScrollView.bottomAnchor.constraint(equalTo: carouselView.bottomAnchor),
 
-            pageControl.bottomAnchor.constraint(equalTo: carouselView.bottomAnchor, constant: -4),
+            pageScrimView.leadingAnchor.constraint(equalTo: carouselView.leadingAnchor),
+            pageScrimView.trailingAnchor.constraint(equalTo: carouselView.trailingAnchor),
+            pageScrimView.bottomAnchor.constraint(equalTo: carouselView.bottomAnchor),
+            pageScrimView.heightAnchor.constraint(equalToConstant: CarouselLayout.pageScrimHeight),
+
+            pageControl.bottomAnchor.constraint(
+                equalTo: carouselView.bottomAnchor,
+                constant: -CarouselLayout.pageControlBottomPadding
+            ),
             pageControl.centerXAnchor.constraint(equalTo: carouselView.centerXAnchor)
         ])
     }
 
-    // ---------------------------------------------------------
-    // MARK: - Gestures
-    // ---------------------------------------------------------
-    private func setupGestures() {
-        let left = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipe(_:)))
+    // Notification Center often steals horizontal pans from UIScrollView; swipes work reliably.
+    private func setupCarouselGestures() {
+        let left = UISwipeGestureRecognizer(target: self, action: #selector(handleCarouselSwipe(_:)))
         left.direction = .left
-        let right = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipe(_:)))
-        right.direction = .right
+        left.delegate = self
         carouselView.addGestureRecognizer(left)
+
+        let right = UISwipeGestureRecognizer(target: self, action: #selector(handleCarouselSwipe(_:)))
+        right.direction = .right
+        right.delegate = self
         carouselView.addGestureRecognizer(right)
+
         carouselView.isUserInteractionEnabled = false
+    }
+
+    @objc private func handleCarouselSwipe(_ gesture: UISwipeGestureRecognizer) {
+        guard isCarouselEnabled else { return }
+        pauseAutoScrollForUserInteraction()
+        if gesture.direction == .left {
+            animateForward()
+        } else if gesture.direction == .right {
+            animateBackward()
+        }
+    }
+
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        true
     }
 
     // ---------------------------------------------------------
     // MARK: - Auto Scroll
     // ---------------------------------------------------------
     private func startAutoScroll() {
+        guard isCarouselEnabled else { return }
         autoScrollTimer?.invalidate()
-        autoScrollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+        autoScrollTimer = Timer.scheduledTimer(
+            withTimeInterval: CarouselLayout.autoScrollInterval,
+            repeats: true
+        ) { [weak self] _ in
             self?.animateForward()
         }
+    }
+
+    private func stopAutoScroll() {
+        autoScrollTimer?.invalidate()
+        autoScrollTimer = nil
+        autoScrollResumeWorkItem?.cancel()
+        autoScrollResumeWorkItem = nil
+    }
+
+    private func scheduleAutoScrollResume() {
+        autoScrollResumeWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.startAutoScroll()
+        }
+        autoScrollResumeWorkItem = work
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + CarouselLayout.autoScrollResumeDelay,
+            execute: work
+        )
+    }
+
+    private func pauseAutoScrollForUserInteraction() {
+        stopAutoScroll()
+        scheduleAutoScrollResume()
     }
 
     private func animateForward() {
@@ -536,32 +610,41 @@ if logoImageView.image == nil {
         scrollToPage(prevIndex, animated: true)
     }
 
-    @objc private func handleSwipe(_ gesture: UISwipeGestureRecognizer) {
-        guard isCarouselEnabled else { return }
-        autoScrollTimer?.invalidate()
-        if gesture.direction == .left { animateForward() }
-        else if gesture.direction == .right { animateBackward() }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.startAutoScroll() }
+    // MARK: - UIScrollViewDelegate
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        guard scrollView === carouselScrollView else { return }
+        pauseAutoScrollForUserInteraction()
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard scrollView === carouselScrollView, isCarouselEnabled else { return }
+        let width = pageWidth()
+        guard width > 0 else { return }
+        let page = Int(round(scrollView.contentOffset.x / width))
+        let clamped = max(0, min(page, images.count - 1))
+        if clamped != pageControl.currentPage {
+            pageControl.currentPage = clamped
+        }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        let w = max(carouselView.bounds.width, containerView.bounds.width, 1)
-        let pageWidth = w * 0.85
-        let inset = w * 0.075
-        let page = Int(round((scrollView.contentOffset.x + inset) / pageWidth))
-        currentIndex = max(0, min(page, images.count - 1))
-        pageControl.currentPage = currentIndex
-        autoScrollTimer?.invalidate()
-        startAutoScroll()
+        guard scrollView === carouselScrollView else { return }
+        syncCurrentPageFromScrollView(scrollView)
+        pauseAutoScrollForUserInteraction()
     }
 
-    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
-        let w = max(carouselView.bounds.width, containerView.bounds.width, 1)
-        let pageWidth = w * 0.85
-        let inset = w * 0.075
-        let page = Int(round((targetContentOffset.pointee.x + inset) / pageWidth))
-        let clamped = max(0, min(page, images.count - 1))
-        targetContentOffset.pointee.x = CGFloat(clamped) * pageWidth - inset
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        guard scrollView === carouselScrollView else { return }
+        syncCurrentPageFromScrollView(scrollView)
+    }
+
+    private func syncCurrentPageFromScrollView(_ scrollView: UIScrollView) {
+        let width = pageWidth()
+        guard width > 0 else { return }
+        let page = Int(round(scrollView.contentOffset.x / width))
+        currentIndex = max(0, min(page, images.count - 1))
+        pageControl.currentPage = currentIndex
     }
 
     // ---------------------------------------------------------
@@ -576,17 +659,16 @@ if logoImageView.image == nil {
 
         switch actionId {
         case "PUSHAPP_NEXT":
-            autoScrollTimer?.invalidate()
+            pauseAutoScrollForUserInteraction()
             animateForward()
             completion(.doNotDismiss)
 
         case "PUSHAPP_PREVIOUS":
-            autoScrollTimer?.invalidate()
+            pauseAutoScrollForUserInteraction()
             animateBackward()
             completion(.doNotDismiss)
 
         default:
-            // Keep URL handling + JS forwarding in AppDelegate for consistent behavior.
             _ = urlForAction(actionId, userInfo: userInfo)
             completion(.dismissAndForwardAction)
         }

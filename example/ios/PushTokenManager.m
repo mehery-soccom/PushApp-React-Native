@@ -10,4 +10,5 @@
 
 @interface RCT_EXTERN_MODULE(PushTokenManager, RCTEventEmitter)
 RCT_EXTERN_METHOD(sendPushToken:(NSString *)type token:(NSString *)token)
+RCT_EXTERN_METHOD(showForegroundNotification:(NSDictionary *)payload)
 @end

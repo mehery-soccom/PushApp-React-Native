@@ -79,7 +79,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     completionHandler(.newData)
     return
   }
-    PushTokenManager.sendNotificationEventOrQueue(dictToAnyHashable(mergedNotificationFields(userInfo)))
+    let merged = mergedNotificationFields(userInfo)
+    PushTokenManager.sendNotificationEventOrQueue(dictToAnyHashable(merged))
+
+    // Data-only FCM (no `aps.alert`) reaches the app but iOS never draws a banner — schedule one.
+    if UIApplication.shared.applicationState != .active,
+       !apnsPayloadIncludesVisibleAlert(userInfo) {
+      let title = stringFromAny(merged["title"])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Notification"
+      let body = stringFromAny(merged["body"])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      let category = stringFromAny(merged["category"])?.trimmingCharacters(in: .whitespacesAndNewlines)
+        ?? "CAROUSEL_CATEGORY"
+      PushTokenManager.scheduleDisplayNotification(
+        title: title,
+        body: body,
+        category: category,
+        data: merged,
+        identifierPrefix: "mehery-bg",
+        deliverToJs: false
+      )
+    }
 
     // Live Activity + image download must finish before background completion, or iOS suspends
     // the app (especially TestFlight / production) and the file never reaches the app group.
@@ -211,6 +229,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         for (k, v) in obj { merged[k] = v }
       }
     }
+  }
+
+  /// When FCM is data-only, APNs often has only `content-available` — no system banner unless we schedule locally.
+  private func apnsPayloadIncludesVisibleAlert(_ userInfo: [AnyHashable: Any]) -> Bool {
+    guard let aps = userInfo["aps"] as? [String: Any] else { return false }
+    if let alert = aps["alert"] as? String, !alert.isEmpty { return true }
+    if let alert = aps["alert"] as? [String: Any] {
+      let title = stringFromAny(alert["title"])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      let body = stringFromAny(alert["body"])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      if !title.isEmpty || !body.isEmpty { return true }
+    }
+    return false
   }
 
   private func dictToAnyHashable(_ dict: [String: Any]) -> [AnyHashable: Any] {
@@ -649,9 +679,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
       if let s = parseSingleString(value), !s.isEmpty {
         if let data = s.data(using: .utf8),
            let parsed = try? JSONSerialization.jsonObject(with: data) as? [Any] {
-          return parsed.compactMap { parseSingleString($0) }
+          let mapped = parsed.compactMap { parseSingleString($0) }.filter { !$0.isEmpty }
+          if !mapped.isEmpty { return mapped }
         }
-        return [s]
+        let split = s
+          .split(separator: ",")
+          .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\"'")) }
+          .filter { !$0.isEmpty }
+        return split.isEmpty ? nil : split
       }
       return nil
     }
