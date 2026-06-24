@@ -6,7 +6,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
 import { waitForGeoIp } from '../utils/geoIpContext';
-import { SESSION_ID_STORAGE_KEY } from '../utils/user';
+import {
+  getEffectiveUserId,
+  isAcceptableEventUserId,
+  persistRegisterIdentity,
+} from '../utils/user';
+import { tryParseRegisterResponse } from '../utils/registerResponse';
 import {
   extractClickTrackToken,
   mergeIosNotificationPayload,
@@ -186,11 +191,18 @@ export async function registerDeviceWithFCM(
       platform: Platform.OS,
     });
 
-    // 🔁 Skip if last registration is identical
+    // Skip re-register only when state is unchanged and guest user id is stored.
     if (lastRegisteredState === currentState) {
-      console.log('✅ Registration already valid. Skipping re-register.');
-      clearScheduledRegisterRetry();
-      return true;
+      const userId = await getEffectiveUserId();
+      if (isAcceptableEventUserId(userId)) {
+        console.log('✅ Registration already valid. Skipping re-register.');
+        await AsyncStorage.setItem('isRegistered', 'true');
+        clearScheduledRegisterRetry();
+        return true;
+      }
+      console.log(
+        '[SDK][Register] Re-registering: registered_user_id missing from storage.'
+      );
     }
 
     const channel_id = await AsyncStorage.getItem('mehery_channel_id');
@@ -229,6 +241,10 @@ export async function registerDeviceWithFCM(
             console.warn(
               'ℹ️ Device already exists on server. Treating registration as valid.'
             );
+            const parsed = tryParseRegisterResponse(text);
+            if (parsed) {
+              await persistRegisterIdentity(parsed);
+            }
             lastApiCallTime = Date.now();
             await AsyncStorage.multiSet([
               ['lastRegisteredToken', token],
@@ -269,15 +285,7 @@ export async function registerDeviceWithFCM(
 
         lastApiCallTime = Date.now();
 
-        const newSessionId = String(
-          (resData &&
-            ((resData.session_id as string) ||
-              (resData.sessionId as string))) ||
-            ''
-        );
-        if (newSessionId) {
-          await AsyncStorage.setItem(SESSION_ID_STORAGE_KEY, newSessionId);
-        }
+        await persistRegisterIdentity(resData);
 
         await AsyncStorage.multiSet([
           ['lastRegisteredToken', token],

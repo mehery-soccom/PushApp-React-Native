@@ -9,8 +9,13 @@ import { renderTooltipPoll } from '../../components/TooltipPollManager';
 import Floater from '../../components/FloaterPoll';
 import { buildCommonHeaders } from '../../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../../helpers/tenantContext';
+import { SDK_EVENT_NAMES } from '../default/eventNames';
 import { getDeviceId } from '../../utils/device';
 import { waitForGeoIp } from '../../utils/geoIpContext';
+import {
+  getEffectiveContactId,
+  waitForEffectiveUserId,
+} from '../../utils/user';
 
 export type SendCustomEventOptions = {
   eventType?: 'INTERACTIVE' | 'LOG';
@@ -70,9 +75,14 @@ export async function sendCustomEvent(
   event_name: string,
   event_data: object,
   options?: SendCustomEventOptions
-) {
-  const stored_user_id = await AsyncStorage.getItem('user_id');
-  const user_id = stored_user_id || 'guest';
+): Promise<boolean> {
+  const user_id = await waitForEffectiveUserId();
+  if (!user_id) {
+    console.warn(
+      `[SDK] Skipping ${event_name} event: server user_id unavailable (wait for /device/register).`
+    );
+    return false;
+  }
   const device_id = await getDeviceId();
   console.log('device id:', device_id);
 
@@ -113,8 +123,10 @@ export async function sendCustomEvent(
 
     // Always fetch poll after event
     await sendPollEvent();
+    return true;
   } catch (err) {
     console.error(`❌ Failed to log ${event_name} event:`, err);
+    return false;
   }
 }
 
@@ -259,14 +271,19 @@ let showingPoll: boolean; // no initial value
 // }
 
 export async function sendPollEvent() {
-  const user_id = await AsyncStorage.getItem('user_id');
   const device_id = await AsyncStorage.getItem('device_id');
   if (!device_id) return;
 
-  const final_user_id = user_id || 'guest';
+  const contact_id = await getEffectiveContactId(device_id);
+  if (!contact_id) {
+    console.warn(
+      '[SDK] Skipping poll fetch: contact_id unavailable (registration may not be complete).'
+    );
+    return;
+  }
 
   console.log('showing poll:', showingPoll);
-  const payload = { contact_id: `${final_user_id}_${device_id}` };
+  const payload = { contact_id };
   const commonHeaders = await buildCommonHeaders();
   const apiBaseUrl = await getApiBaseUrl();
 
@@ -514,7 +531,7 @@ export function OnAppOpen() {
   setTimeout(() => {
     try {
       console.log('🚀 Triggering app_open event');
-      sendCustomEvent('app_open', {}, { eventType: 'LOG' });
+      sendCustomEvent(SDK_EVENT_NAMES.APP_OPEN, {}, { eventType: 'LOG' });
     } catch (error) {
       console.error('❌ Error during OnAppOpen:', error);
     }
@@ -522,7 +539,7 @@ export function OnAppOpen() {
 }
 
 export function OnAppClose() {
-  sendCustomEvent('app_close', {}, { eventType: 'LOG' });
+  sendCustomEvent(SDK_EVENT_NAMES.APP_CLOSE, {}, { eventType: 'LOG' });
 }
 
 /**

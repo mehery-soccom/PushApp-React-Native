@@ -4,7 +4,13 @@ import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { extractChannelSegment, getApiBaseUrl } from '../helpers/tenantContext';
 import { getDeviceId } from '../utils/device';
 import { waitForGeoIp } from '../utils/geoIpContext';
-import { SESSION_ID_STORAGE_KEY } from '../utils/user';
+import {
+  getEffectiveUserId,
+  isAcceptableEventUserId,
+  persistRegisterIdentity,
+  SESSION_ID_STORAGE_KEY,
+} from '../utils/user';
+import { tryParseRegisterResponse } from '../utils/registerResponse';
 import messaging from '@react-native-firebase/messaging';
 
 let deviceRegistrationInProgress = false;
@@ -92,8 +98,6 @@ async function persistRegistrationState(params: {
   token: string;
   fcmToken: string | null;
   currentState: string;
-  sessionId?: string;
-  contactId?: string;
 }) {
   const valuesToStore: [string, string][] = [
     ['APNStoken', params.token],
@@ -103,14 +107,6 @@ async function persistRegistrationState(params: {
     ['UserRegistered', 'true'],
     ['isRegistered', 'true'],
   ];
-
-  if (params.sessionId) {
-    valuesToStore.push([SESSION_ID_STORAGE_KEY, params.sessionId]);
-  }
-
-  if (params.contactId) {
-    valuesToStore.push(['contact_id', params.contactId]);
-  }
 
   await AsyncStorage.multiSet(valuesToStore);
 }
@@ -195,9 +191,16 @@ export async function registerDeviceWithAPNS(
     });
 
     if (lastRegisteredState === currentState) {
-      console.log('✅ Registration already valid. Skipping re-register.');
-      clearScheduledRegisterRetry();
-      return;
+      const userId = await getEffectiveUserId();
+      if (isAcceptableEventUserId(userId)) {
+        console.log('✅ Registration already valid. Skipping re-register.');
+        await AsyncStorage.setItem('isRegistered', 'true');
+        clearScheduledRegisterRetry();
+        return;
+      }
+      console.log(
+        '[SDK][Register][iOS] Re-registering: registered_user_id missing from storage.'
+      );
     }
 
     const geoIP = await waitForGeoIp();
@@ -264,6 +267,10 @@ export async function registerDeviceWithAPNS(
         console.warn(
           'ℹ️ Device already exists on server. Treating registration as valid.'
         );
+        const parsed = tryParseRegisterResponse(text);
+        if (parsed) {
+          await persistRegisterIdentity(parsed);
+        }
         await persistRegistrationState({
           token,
           fcmToken,
@@ -309,23 +316,16 @@ export async function registerDeviceWithAPNS(
 
     lastApiCallTime = Date.now();
 
-    const newSessionId =
-      (typeof resData?.session_id === 'string' && resData.session_id) || '';
-    const newContactId =
-      (typeof resData?.device?.contact_id === 'string' &&
-        resData.device.contact_id) ||
-      '';
+    await persistRegisterIdentity(resData);
 
     await persistRegistrationState({
       token,
       fcmToken,
       currentState,
-      sessionId: newSessionId,
-      contactId: newContactId,
     });
 
     clearScheduledRegisterRetry();
-    return newSessionId;
+    return;
   } catch (err) {
     console.error('❌ Failed to register/update device:', err);
     await AsyncStorage.multiSet([

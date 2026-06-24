@@ -18,7 +18,6 @@ import {
   OnUserLogin,
   OnUserLogOut,
   OnPageOpen,
-  OnAppOpen,
   updateUserProfile,
   sendCustomEvent,
   type SdkInitEnvironmentParam,
@@ -29,78 +28,135 @@ import { TooltipPollContainer } from 'react-native-mehery-event-sender';
 
 import DeviceInfo from 'react-native-device-info';
 import { setDeviceMetadata, setGeoIP } from 'react-native-mehery-event-sender';
+import { EVENT_NAMES } from './constants/events';
+import {
+  buildProfilePayload,
+  clearCommerceStorage,
+  getProfileName,
+  setProfileName,
+  setRegistrationCompleted,
+} from './utils/cartStorage';
+import { CartSection } from './components/CartSection';
+import { EventTester } from './components/EventTester';
 
-// Server expects name/email at top level; custom + commerce keys in additionalInfo.
-// Do not use cohorts for channel demo_1780031354415 — cohorts in PUT returns HTTP 500.
-// Mandatory dashboard field "<h1>ajejik</h2>" → additionalInfo._h1_ajejik_h2_
-const CHANNEL_REQUIRED_FIELDS = {
-  _h1_ajejik_h2_: 'static',
-};
+function LoginPage({
+  onSignIn,
+  onSignUp,
+}: {
+  onSignIn: (code: string) => Promise<void>;
+  onSignUp: (code: string, name: string) => Promise<void>;
+}) {
+  const [code, setCode] = useState('');
+  const [name, setName] = useState('');
+  const [showNameInput, setShowNameInput] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-const STATIC_IDENTITY = {
-  name: 'Jane Doe',
-  email: 'jane@example.com',
-};
+  const handleSignIn = async () => {
+    const trimmedCode = code.trim();
+    if (!trimmedCode || loading) return;
 
-const STATIC_COMMERCE = {
-  lifetime_order_count: 12,
-  customer_segment: 'existing' as 'new' | 'existing',
-  days_since_last_order: 5,
-  active_store_tag: 'mumbai_central',
-  delivery_pincode: '400012',
-  cart_value: 2499,
-};
-
-function buildProfilePayload(nameOverride?: string) {
-  const name = nameOverride?.trim() || STATIC_IDENTITY.name;
-  return {
-    ...CHANNEL_REQUIRED_FIELDS,
-    ...STATIC_COMMERCE,
-    name,
-    email: STATIC_IDENTITY.email,
+    setLoading(true);
+    try {
+      await onSignIn(trimmedCode);
+    } finally {
+      setLoading(false);
+    }
   };
-}
 
-function LoginPage({ onLogin }: { onLogin: (id: string) => void }) {
-  const [userId, setUserId] = useState('');
+  const handleSignUpPress = () => {
+    setShowNameInput(true);
+    setNameError(null);
+  };
 
-  const handleSubmit = async () => {
-    const trimmedId = userId.trim();
-    if (!trimmedId) return;
+  const handleSignUp = async () => {
+    const trimmedCode = code.trim();
+    const trimmedName = name.trim();
+    if (!trimmedCode || loading) return;
 
-    await AsyncStorage.setItem('user_id', trimmedId);
-    onLogin(trimmedId); // switch to HomePage
+    if (!trimmedName) {
+      setNameError('Name is required for Sign Up');
+      setShowNameInput(true);
+      return;
+    }
+
+    setNameError(null);
+    setLoading(true);
+    try {
+      await onSignUp(trimmedCode, trimmedName);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePreLoginButton = async (eventName: string) => {
+    if (loading) return;
+    await sendCustomEvent(eventName, {});
   };
 
   return (
     <View style={styles.container}>
-      <View style={styles.customEventButtons}>
-        <Button
-          title="Pre-login event 1"
-          onPress={() => {
-            sendCustomEvent('pre_login_button_1', { screen: 'login' });
-          }}
-        />
-        <View style={styles.customEventButtonSpacer} />
-        <Button
-          title="Pre-login event 2"
-          onPress={() => {
-            sendCustomEvent('pre_login_button_2', { screen: 'login' });
-          }}
-        />
-      </View>
-      <View style={styles.preLoginFormSpacer} />
-      <Text style={styles.label}>Enter User ID:</Text>
+      <Text style={styles.label}>Enter code:</Text>
       <TextInput
         style={styles.input}
         placeholder="user123"
-        value={userId}
-        onChangeText={setUserId}
+        value={code}
+        onChangeText={setCode}
+        autoCapitalize="none"
       />
-      <Button title="Submit" onPress={handleSubmit} />
+
+      {showNameInput ? (
+        <>
+          <Text style={styles.label}>Your name (Sign Up):</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Jane Doe"
+            value={name}
+            onChangeText={(text) => {
+              setName(text);
+              if (text.trim()) setNameError(null);
+            }}
+            autoCapitalize="words"
+          />
+          {nameError ? (
+            <Text style={styles.errorText}>{nameError}</Text>
+          ) : null}
+        </>
+      ) : null}
+
+      <View style={styles.customEventButtons}>
+        <Button
+          title={loading ? 'Signing in…' : 'Sign In'}
+          onPress={handleSignIn}
+          disabled={loading}
+        />
+        <View style={styles.customEventButtonSpacer} />
+        {!showNameInput ? (
+          <Button title="Sign Up" onPress={handleSignUpPress} disabled={loading} />
+        ) : (
+          <Button
+            title={loading ? 'Signing up…' : 'Complete Sign Up'}
+            onPress={handleSignUp}
+            disabled={loading}
+          />
+        )}
+        <View style={styles.customEventButtonSpacer} />
+        <Button
+          title="jr_pre_login_button_1"
+          onPress={() => handlePreLoginButton(EVENT_NAMES.preLoginButton1)}
+          disabled={loading}
+        />
+        <View style={styles.customEventButtonSpacer} />
+        <Button
+          title="jr_pre_login_button_2"
+          onPress={() => handlePreLoginButton(EVENT_NAMES.preLoginButton2)}
+          disabled={loading}
+        />
+      </View>
     </View>
   );
 }
+
 async function loadPushTokens(): Promise<{
   apnsToken: string;
   fcmToken: string;
@@ -133,7 +189,7 @@ function HomePage({
   userId: string;
   onLogout: () => void;
 }) {
-  const [profileName, setProfileName] = useState('');
+  const [storedName, setStoredName] = useState('');
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [apnsToken, setApnsToken] = useState('');
   const [fcmToken, setFcmToken] = useState('');
@@ -186,14 +242,15 @@ function HomePage({
     const bootstrapHome = async () => {
       try {
         await OnUserLogin(userId);
-        console.log('OnUserLogin called', userId);
-        OnAppOpen();
         OnPageOpen('home');
 
         if (cancelled) return;
 
+        const name = await getProfileName();
+        if (!cancelled) setStoredName(name);
+
         setProfileStatus('Updating profile on home load…');
-        const result = await updateUserProfile(buildProfilePayload());
+        const result = await updateUserProfile(await buildProfilePayload());
         if (cancelled) return;
 
         setProfileStatus(
@@ -216,22 +273,6 @@ function HomePage({
     };
   }, [userId]);
 
-  const handleUpdateProfile = async () => {
-    setProfileStatus('Updating profile…');
-    try {
-      const result = await updateUserProfile(buildProfilePayload(profileName));
-      setProfileStatus(
-        result.skipped
-          ? `updateUserProfile finished — skipped. ${result.message}`
-          : `updateUserProfile finished — sent. ${result.message}`
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setProfileStatus(`Profile update failed: ${message}`);
-      console.warn('[Example] updateUserProfile error', err);
-    }
-  };
-
   return (
     <ScrollView
       style={styles.scroll}
@@ -241,6 +282,10 @@ function HomePage({
       <InlinePollContainer placeholderId="login_banner" />
 
       <Text style={styles.txt}>User ID: {userId}</Text>
+
+      <CartSection onProfileSync={setProfileStatus} />
+
+      <EventTester />
 
       <View style={styles.tokenSection}>
         <Text style={styles.label}>Push tokens</Text>
@@ -283,29 +328,19 @@ function HomePage({
       </View>
 
       <View style={styles.profileSection}>
-        <Text style={styles.label}>Profile name</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. Jane Doe"
-          value={profileName}
-          onChangeText={setProfileName}
-          autoCapitalize="words"
-        />
-        <Button title="Update profile" onPress={handleUpdateProfile} />
+        <Text style={styles.label}>Profile</Text>
         <Text style={styles.profileHint}>
-          Home load sends additionalInfo: name, email, _h1_ajejik_h2_,
-          lifetime_order_count, customer_segment, days_since_last_order,
-          active_store_tag, delivery_pincode, cart_value. Tap Update to override
-          name only.
+          Name: {storedName.trim() ? storedName : 'No name set'}
         </Text>
         <Text style={styles.profileHint}>
-          This is not profile code profile code won't change once logged in
-          because that will be the contact id for that device.
+          Profile syncs automatically on home load and after Place Order with
+          registration_completed, total_orders, and latest-cart-value.
         </Text>
         {profileStatus ? (
           <Text style={styles.profileStatus}>{profileStatus}</Text>
         ) : null}
       </View>
+
       <View style={styles.customEventButtons}>
         <Button
           title="Button 1"
@@ -323,40 +358,18 @@ function HomePage({
       </View>
       <View style={styles.customEventButtonSpacer} />
       {Platform.OS === 'android' && (
-        <>
-          {/* <Button
-            title="Test carousel notification"
-            onPress={async () => {
-              await triggerCarouselNotification({
-                title: 'Summer Sale',
-                body: 'Tap Prev / Next to browse',
-                images: [
-                  'https://picsum.photos/seed/a/600/300',
-                  'https://picsum.photos/seed/b/600/300',
-                  'https://picsum.photos/seed/c/600/300',
-                ],
-              });
-            }}
-          /> */}
-          <View style={styles.customEventButtonSpacer} />
-        </>
+        <View style={styles.customEventButtonSpacer} />
       )}
       <Button title="Logout" onPress={onLogout} />
       <View style={styles.ve}>
         <TooltipPollContainer placeholderId="center">
           <View style={styles.vex} />
-          {/* <Button title="+" /> */}
         </TooltipPollContainer>
       </View>
     </ScrollView>
   );
 }
 
-// import React, { useState, useEffect } from 'react';
-// import AsyncStorage from '@react-native-async-storage/async-storage';
-// import { PollOverlayProvider } from './PollOverlayProvider';
-// import LoginPage from './LoginPage';
-// import HomePage from './HomePage';
 async function initDeviceMetadata() {
   try {
     const metadata: Record<string, string> = {
@@ -365,7 +378,6 @@ async function initDeviceMetadata() {
       'X-OS-Version': DeviceInfo.getSystemVersion?.() || 'unknown',
     };
 
-    // 🔹 Android-only
     if (Platform.OS === 'android') {
       metadata['X-Manufacturer'] =
         (await DeviceInfo.getManufacturer()) || 'unknown';
@@ -377,7 +389,6 @@ async function initDeviceMetadata() {
         (await DeviceInfo.supportedAbis()).join(', ') || 'unknown';
     }
 
-    // 🔹 iOS-only
     if (Platform.OS === 'ios') {
       metadata['X-Device-Name'] =
         (await DeviceInfo.getDeviceName()) || 'unknown';
@@ -395,10 +406,8 @@ export default function App() {
 
   useEffect(() => {
     const init = async () => {
-      // 1️⃣ Inject device metadata FIRST
       await initDeviceMetadata();
 
-      // Example geoIP (host app should set from location / geo-IP service before register/login)
       setGeoIP({
         ip: '103.21.244.0',
         location: { lat: 19.076, lng: 72.8777 },
@@ -408,16 +417,10 @@ export default function App() {
         area: { name: 'Parel' },
       });
 
-      // 2️⃣ Initialize SDK (3rd arg: false=pushapp.ai, true=pushapp.xyz, 'development'=pushapp.in)
-
       let environment: SdkInitEnvironmentParam = 'development';
       await initSdk(null, 'demo_1754408042569', environment);
       console.log('SDK initialized with environment:', environment);
-      //prod
-      // let environment: SdkInitEnvironmentParam = 'development';
-      // await initSdk(null, 'demo_1780031354415', false);
-      // console.log('SDK initialized with environment:', 'false');
-      // 3️⃣ Log FCM Token
+
       try {
         await messaging().requestPermission();
         const token = await messaging().getToken();
@@ -441,16 +444,32 @@ export default function App() {
     checkStoredUser();
   }, []);
 
-  const handleLogin = async (id: string) => {
+  const navigateHome = (id: string) => {
     setUserId(id);
-    await AsyncStorage.setItem('user_id', id);
     setCurrentPage('home');
+  };
+
+  const handleSignIn = async (code: string) => {
+    await AsyncStorage.setItem('user_id', code);
+    await OnUserLogin(code);
+    sendCustomEvent(EVENT_NAMES.logIn, { code });
+    navigateHome(code);
+  };
+
+  const handleSignUp = async (code: string, name: string) => {
+    await AsyncStorage.setItem('user_id', code);
+    await setProfileName(name);
+    await OnUserLogin(code);
+    sendCustomEvent(EVENT_NAMES.signUp, { code, name });
+    await setRegistrationCompleted(1);
+    navigateHome(code);
   };
 
   const handleLogout = async () => {
     if (!userId) return;
     await OnUserLogOut(userId);
     await AsyncStorage.removeItem('user_id');
+    await clearCommerceStorage();
     setUserId('');
     setCurrentPage('login');
   };
@@ -458,7 +477,7 @@ export default function App() {
   return (
     <>
       {currentPage === 'login' ? (
-        <LoginPage onLogin={handleLogin} />
+        <LoginPage onSignIn={handleSignIn} onSignUp={handleSignUp} />
       ) : (
         <HomePage userId={userId} onLogout={handleLogout} />
       )}
@@ -500,6 +519,11 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     marginBottom: 12,
   },
+  errorText: {
+    color: '#c00',
+    fontSize: 13,
+    marginBottom: 12,
+  },
   txt: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -511,7 +535,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   customEventButtonSpacer: { height: 12 },
-  preLoginFormSpacer: { height: 28 },
   tokenSection: {
     marginTop: 16,
     width: '100%',

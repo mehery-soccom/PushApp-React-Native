@@ -10,12 +10,96 @@ import {
 import { getDeviceId } from './device';
 import { waitForGeoIp } from './geoIpContext';
 import { clearStoredProfileSnapshot } from './profileSnapshot';
+import {
+  extractContactIdFromRegisterResponse,
+  extractSessionIdFromRegisterResponse,
+  extractUserIdFromRegisterResponse,
+  isAcceptableEventUserId,
+} from './registerResponse';
+
+export {
+  extractContactIdFromRegisterResponse,
+  extractSessionIdFromRegisterResponse,
+  extractUserIdFromRegisterResponse,
+  isAcceptableEventUserId,
+  tryParseRegisterResponse,
+} from './registerResponse';
 
 /** AsyncStorage key; also written by device/register on some platforms. */
 export const SESSION_ID_STORAGE_KEY = 'sessionId';
 
+/** Server-assigned guest id from `/device/register` (`device.user_id`). */
+export const REGISTERED_USER_ID_STORAGE_KEY = 'registered_user_id';
+
+const USER_ID_POLL_MS = 400;
+export const DEFAULT_USER_ID_WAIT_MS = 15_000;
+
 const LAST_LINKED_CHANNEL_KEY = 'mehery_last_linked_channel_id';
 const LAST_LINKED_HOST_KEY = 'mehery_last_linked_host_root';
+
+export async function persistRegisterIdentity(data: unknown): Promise<void> {
+  const registeredUserId = extractUserIdFromRegisterResponse(data);
+  const contactId = extractContactIdFromRegisterResponse(data);
+  const sessionId = extractSessionIdFromRegisterResponse(data);
+  const valuesToStore: [string, string][] = [];
+
+  if (registeredUserId) {
+    valuesToStore.push([REGISTERED_USER_ID_STORAGE_KEY, registeredUserId]);
+  }
+  if (contactId) {
+    valuesToStore.push(['contact_id', contactId]);
+  }
+  if (sessionId) {
+    valuesToStore.push([SESSION_ID_STORAGE_KEY, sessionId]);
+  }
+
+  if (valuesToStore.length > 0) {
+    await AsyncStorage.multiSet(valuesToStore);
+    if (registeredUserId) {
+      console.log('✅ registered_user_id stored:', registeredUserId);
+    }
+  }
+}
+
+export async function getEffectiveUserId(): Promise<string> {
+  const [loginUserId, registeredUserId] = await AsyncStorage.multiGet([
+    'user_id',
+    REGISTERED_USER_ID_STORAGE_KEY,
+  ]).then((entries) => entries.map(([_, value]) => value?.trim() ?? ''));
+
+  return loginUserId || registeredUserId || '';
+}
+
+/** Poll until login or register API user id is available (never returns hardcoded guest). */
+export async function waitForEffectiveUserId(
+  timeoutMs = DEFAULT_USER_ID_WAIT_MS
+): Promise<string> {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const userId = await getEffectiveUserId();
+    if (isAcceptableEventUserId(userId)) return userId.trim();
+    await new Promise((resolve) => setTimeout(resolve, USER_ID_POLL_MS));
+  }
+
+  const finalUserId = await getEffectiveUserId();
+  return isAcceptableEventUserId(finalUserId) ? finalUserId.trim() : '';
+}
+
+export async function getEffectiveContactId(
+  deviceId: string
+): Promise<string> {
+  const trimmedDeviceId = deviceId.trim();
+  if (!trimmedDeviceId) return '';
+
+  const storedContactId = (await AsyncStorage.getItem('contact_id'))?.trim();
+  if (storedContactId) return storedContactId;
+
+  const effectiveUserId = await getEffectiveUserId();
+  if (!effectiveUserId) return '';
+
+  return `${effectiveUserId}_${trimmedDeviceId}`;
+}
 
 function extractSessionIdFromLinkResponse(data: unknown): string {
   if (!data || typeof data !== 'object') return '';
@@ -132,18 +216,7 @@ async function recoverDeviceRegistration(
     parsed = null;
   }
 
-  const sessionId =
-    typeof parsed?.session_id === 'string' ? parsed.session_id.trim() : '';
-  const contactId =
-    typeof parsed?.device?.contact_id === 'string'
-      ? parsed.device.contact_id.trim()
-      : '';
-  if (sessionId) {
-    await AsyncStorage.setItem(SESSION_ID_STORAGE_KEY, sessionId);
-  }
-  if (contactId) {
-    await AsyncStorage.setItem('contact_id', contactId);
-  }
+  await persistRegisterIdentity(parsed);
   await AsyncStorage.multiSet([
     ['APNStoken', token],
     ['fcmToken', fcmToken ?? ''],

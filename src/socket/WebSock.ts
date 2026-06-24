@@ -1,13 +1,20 @@
 // sdk/index.tsx (add at the top or create a separate ws.ts file)
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { waitForEffectiveUserId } from '../utils/user';
 import { getWsHostUrl } from '../helpers/tenantContext';
 
 let socket: WebSocket | null = null;
 
 export const connectToServer = async () => {
-  const storedUserID = await AsyncStorage.getItem('user_id');
-  const userID = storedUserID || 'guest';
+  const userID = await waitForEffectiveUserId();
   const device_id = await AsyncStorage.getItem('device_id');
+
+  if (!userID || !device_id) {
+    console.warn(
+      '⚠️ WebSocket auth skipped: user_id or device_id unavailable.'
+    );
+    return;
+  }
 
   try {
     const wsUrl = await getWsHostUrl();

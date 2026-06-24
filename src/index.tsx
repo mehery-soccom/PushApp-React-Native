@@ -23,6 +23,13 @@ export {
 export type { SendCustomEventOptions } from './events/custom/CustomEvents';
 
 export {
+  SDK_EVENT_NAMES,
+  OnAppLaunch,
+  trackAppInstallIfNeeded,
+  trackDefaultLifecycleEvents,
+} from './events/default/LifecycleEvents';
+
+export {
   updateUserProfile,
   type UpdateUserProfileResult,
 } from './events/custom/ProfileUpdate';
@@ -59,6 +66,7 @@ import { registerDeviceWithAPNS } from './firebase/IosAPNS';
 // import { showPollOverlay, hidePollOverlay } from './components/PollOverlay';
 // 🛡 Safe NativeEventEmitter setup
 import { PollOverlayProvider } from './components/PollOverlay';
+import { trackDefaultLifecycleEvents } from './events/default/LifecycleEvents';
 
 export { TooltipPollContainer } from './components/TooltipPollContainer';
 export { registerFcmBackgroundHandler } from './firebase/Fb';
@@ -431,9 +439,6 @@ export const initSdk = async (
       setupNotificationOpenTracking();
     }
 
-    // ✅ Connect to the socket server
-    await connectToServer();
-
     // ✅ Mount overlay component only once
     if (!sdkMounted) {
       AppRegistry.registerComponent(
@@ -484,6 +489,11 @@ export const initSdk = async (
 
       await getFcmToken();
     }
+
+    await trackDefaultLifecycleEvents();
+
+    // Connect after register identity is available for guest user id in WS auth.
+    await connectToServer();
 
     console.log('✅ SDK Initialized Successfully');
   } catch (error) {
