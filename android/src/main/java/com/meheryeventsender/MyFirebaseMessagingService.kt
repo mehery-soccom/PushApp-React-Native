@@ -182,8 +182,12 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     private fun handleSimpleNotification(data: Map<String, String>) {
-        val title = data["title"] ?: "Notification"
-        val message = data["body"] ?: "You have a new message"
+        val title = data["title"]?.trim().orEmpty()
+        val message = data["body"]?.trim().orEmpty()
+        if (title.isBlank() && message.isBlank()) {
+            Log.i(TAG, "FCM: skip simple notification — no title or body in payload")
+            return
+        }
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "default_channel_id"
         val channelName = "Default Channel"
@@ -297,8 +301,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 notificationId = notificationId,
                 images = imageList,
                 index = 0,
-                title = data["title"] ?: "Notification",
-                body = data["body"] ?: "",
+                title = data["title"]?.trim().orEmpty(),
+                body = data["body"]?.trim().orEmpty(),
                 ctaData = data
             )
             sendReceivedTracking(data)
@@ -323,8 +327,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         val builder = customService.createCustomNotification(
             channelId = channelId,
-            title = data["title"] ?: "Notification",
-            message = data["body"] ?: "",
+            title = data["title"]?.trim().orEmpty(),
+            message = data["body"]?.trim().orEmpty(),
             tapText = data["tapText"] ?: "",
             titleColor = data["titleColorHex"] ?: "#000000",
             messageColor = data["messageColorHex"] ?: "#000000",
@@ -361,8 +365,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        val title = data["title"] ?: "Notification"
-        val message = data["body"] ?: "You have a new message"
+        val title = data["title"]?.trim().orEmpty()
+        val message = data["body"]?.trim().orEmpty()
         val imageUrl = NotificationPayloadUtils.resolveSingleImageUrl(data)
         val notificationId =
             (data["notification_id"] ?: System.currentTimeMillis().toString()).hashCode()

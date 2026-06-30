@@ -85,7 +85,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     // Data-only FCM (no `aps.alert`) reaches the app but iOS never draws a banner — schedule one.
     if UIApplication.shared.applicationState != .active,
        !apnsPayloadIncludesVisibleAlert(userInfo) {
-      let title = stringFromAny(merged["title"])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Notification"
+      let title = stringFromAny(merged["title"])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
       let body = stringFromAny(merged["body"])?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
       let category = stringFromAny(merged["category"])?.trimmingCharacters(in: .whitespacesAndNewlines)
         ?? "CAROUSEL_CATEGORY"

@@ -77,7 +77,7 @@ object LiveActivityUtils {
             val notificationId =
                 (data["notification_id"] ?: "carousel_${System.currentTimeMillis()}").hashCode()
 
-            val title = data["title"] ?: "Notification"
+            val title = data["title"]?.trim().orEmpty()
             val body = data["body"] ?: data["message"] ?: ""
             val startIndex = data["index"]?.toIntOrNull()?.coerceIn(0, imageList.size - 1) ?: 0
 

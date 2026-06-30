@@ -441,6 +441,20 @@ function normalizedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function resolvePushNotificationText(
+  remoteMessage: { notification?: { title?: string; body?: string } },
+  data: Record<string, unknown>
+): { title: string; message: string } {
+  return {
+    title: normalizedString(
+      remoteMessage.notification?.title ?? data.title
+    ),
+    message: normalizedString(
+      remoteMessage.notification?.body ?? data.body
+    ),
+  };
+}
+
 type ForegroundCtaPair = { title: string; url: string };
 
 function parseCtaButtonsJson(raw: unknown): ForegroundCtaPair[] {
@@ -744,11 +758,7 @@ function ensureBackgroundMessageHandlerRegistered(): void {
     const data = remoteMessage.data || {};
     await trackPushEvent('received', data);
 
-    const title =
-      remoteMessage.notification?.title || data.title || 'Notification';
-
-    const message =
-      remoteMessage.notification?.body || data.body || 'You have a new message';
+    const { title, message } = resolvePushNotificationText(remoteMessage, data);
 
     const image =
       remoteMessage.notification?.android?.imageUrl ||
@@ -1081,11 +1091,7 @@ export function setupForegroundNotificationListener(): () => void {
     }
     trackPushEvent('received', data).catch(() => undefined);
 
-    const title =
-      remoteMessage.notification?.title || data.title || 'Notification';
-
-    const message =
-      remoteMessage.notification?.body || data.body || 'You have a new message';
+    const { title, message } = resolvePushNotificationText(remoteMessage, data);
 
     const image =
       remoteMessage.notification?.android?.imageUrl ||
@@ -1146,6 +1152,13 @@ export function setupForegroundNotificationListener(): () => void {
       LiveActivityModule?.triggerLiveActivity
     ) {
       LiveActivityModule.triggerLiveActivity(data);
+      return;
+    }
+
+    if (!title && !message && !image) {
+      console.log(
+        '⏭️ Skipping foreground notification — no title, body, or image in payload'
+      );
       return;
     }
 

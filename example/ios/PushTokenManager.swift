@@ -135,9 +135,16 @@ class PushTokenManager: RCTEventEmitter {
     identifierPrefix: String = "mehery",
     deliverToJs: Bool = true
   ) {
+    let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+    let imageUrls = extractImageUrlStrings(from: data)
+    if trimmedTitle.isEmpty && trimmedBody.isEmpty && imageUrls.isEmpty {
+      return
+    }
+
     let content = UNMutableNotificationContent()
-    content.title = title
-    content.body = body
+    content.title = trimmedTitle
+    content.body = trimmedBody
     content.sound = .default
     content.categoryIdentifier = category
 
@@ -146,7 +153,6 @@ class PushTokenManager: RCTEventEmitter {
       userInfo[AnyHashable(key)] = value
     }
 
-    let imageUrls = extractImageUrlStrings(from: data)
     if !imageUrls.isEmpty {
       userInfo[AnyHashable("image_urls")] = imageUrls
       userInfo[AnyHashable("imageUrls")] = imageUrls
@@ -279,7 +285,7 @@ class PushTokenManager: RCTEventEmitter {
 
   @objc func showForegroundNotification(_ payload: NSDictionary) {
     DispatchQueue.main.async {
-      let title = (payload["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Notification"
+      let title = (payload["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
       let body = (payload["body"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
       let category = (payload["category"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         ?? "CAROUSEL_CATEGORY"

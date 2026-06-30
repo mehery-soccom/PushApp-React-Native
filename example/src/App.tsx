@@ -118,9 +118,7 @@ function LoginPage({
             }}
             autoCapitalize="words"
           />
-          {nameError ? (
-            <Text style={styles.errorText}>{nameError}</Text>
-          ) : null}
+          {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
         </>
       ) : null}
 
@@ -132,7 +130,11 @@ function LoginPage({
         />
         <View style={styles.customEventButtonSpacer} />
         {!showNameInput ? (
-          <Button title="Sign Up" onPress={handleSignUpPress} disabled={loading} />
+          <Button
+            title="Sign Up"
+            onPress={handleSignUpPress}
+            disabled={loading}
+          />
         ) : (
           <Button
             title={loading ? 'Signing up…' : 'Complete Sign Up'}
@@ -420,7 +422,9 @@ export default function App() {
       let environment: SdkInitEnvironmentParam = 'development';
       await initSdk(null, 'demo_1754408042569', environment);
       console.log('SDK initialized with environment:', environment);
-
+      // let environment: SdkInitEnvironmentParam = false;
+      // await initSdk(null, 'demo_1780031354415', environment);
+      // console.log('SDK initialized with environment:', environment);
       try {
         await messaging().requestPermission();
         const token = await messaging().getToken();
