@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
 import { waitForGeoIp } from '../utils/geoIpContext';
+import { sdkLog } from '../helpers/sdkLogger';
 import {
   getEffectiveUserId,
   isAcceptableEventUserId,
@@ -24,9 +25,9 @@ import { ensureAndroidNotificationPermission } from '../native/LiveActivity';
 
 const pushCtaLog = (msg: string, extra?: unknown) => {
   if (extra !== undefined) {
-    console.log(`[PushNotifCTA] ${msg}`, extra);
+    sdkLog.log(`[PushNotifCTA] ${msg}`, extra);
   } else {
-    console.log(`[PushNotifCTA] ${msg}`);
+    sdkLog.log(`[PushNotifCTA] ${msg}`);
   }
 };
 
@@ -73,7 +74,7 @@ function scheduleRegisterRetry(token: string, deviceId: string) {
   if (
     scheduledRegisterRetryAttempt >= SCHEDULED_REGISTER_RETRY_DELAYS_MS.length
   ) {
-    console.warn(
+    sdkLog.warn(
       '[SDK][Register] Giving up after scheduled background retries.'
     );
     return;
@@ -88,7 +89,7 @@ function scheduleRegisterRetry(token: string, deviceId: string) {
     clearTimeout(scheduledRegisterRetryTimer);
   }
 
-  console.warn(
+  sdkLog.warn(
     `[SDK][Register] Scheduling background retry ${scheduledRegisterRetryAttempt}/${SCHEDULED_REGISTER_RETRY_DELAYS_MS.length} in ${Math.round(delayMs / 1000)}s`
   );
 
@@ -104,7 +105,7 @@ function scheduleRegisterRetry(token: string, deviceId: string) {
         fromScheduledRetry: true,
       });
     })().catch((err) => {
-      console.warn('[SDK][Register] Scheduled retry failed', err);
+      sdkLog.warn('[SDK][Register] Scheduled retry failed', err);
     });
   }, delayMs);
 }
@@ -133,8 +134,8 @@ const FOREGROUND_MESSAGE_CACHE_LIMIT = 50;
 const seenBackgroundMessageIds = new Set<string>();
 const BACKGROUND_MESSAGE_CACHE_LIMIT = 50;
 
-console.log('💬 Firebase messaging:', messaging);
-console.log('📦 Firebase app exists:', app ? 'Yes' : 'No');
+sdkLog.log('💬 Firebase messaging:', messaging);
+sdkLog.log('📦 Firebase app exists:', app ? 'Yes' : 'No');
 
 export async function registerDeviceWithFCM(
   token: string,
@@ -142,13 +143,13 @@ export async function registerDeviceWithFCM(
   options?: { fromScheduledRetry?: boolean }
 ) {
   if (!token) {
-    console.warn('⚠️ No FCM token provided. Skipping registration.');
+    sdkLog.warn('⚠️ No FCM token provided. Skipping registration.');
     return false;
   }
 
   // 🧠 Skip if registration already in progress
   if (deviceRegistrationInProgress) {
-    console.log(
+    sdkLog.log(
       'ℹ️ Registration already in progress — skipping duplicate call.'
     );
     return false;
@@ -161,7 +162,7 @@ export async function registerDeviceWithFCM(
       const waitTime = Math.ceil(
         (API_CALL_COOLDOWN_MS - (now - lastApiCallTime)) / 1000
       );
-      console.log(`⏳ Cooldown active. Wait ${waitTime}s before retrying.`);
+      sdkLog.log(`⏳ Cooldown active. Wait ${waitTime}s before retrying.`);
       return false;
     }
   }
@@ -176,7 +177,7 @@ export async function registerDeviceWithFCM(
         'lastRegisteredState',
       ]).then((entries) => entries.map(([_, v]) => v));
 
-    console.log('last:', lastRegisteredToken);
+    sdkLog.log('last:', lastRegisteredToken);
     // Generate a fallback device_id if not found
     let finalDeviceId = deviceId || storedDeviceId;
     if (!finalDeviceId) {
@@ -198,12 +199,12 @@ export async function registerDeviceWithFCM(
     if (lastRegisteredState === currentState) {
       const userId = await getEffectiveUserId();
       if (isAcceptableEventUserId(userId)) {
-        console.log('✅ Registration already valid. Skipping re-register.');
+        sdkLog.log('✅ Registration already valid. Skipping re-register.');
         await AsyncStorage.setItem('isRegistered', 'true');
         clearScheduledRegisterRetry();
         return true;
       }
-      console.log(
+      sdkLog.log(
         '[SDK][Register] Re-registering: registered_user_id missing from storage.'
       );
     }
@@ -217,7 +218,7 @@ export async function registerDeviceWithFCM(
       geoIP,
     };
 
-    console.log('📡 Registering device with payload:', payload);
+    sdkLog.log('📡 Registering device with payload:', payload);
     const commonHeaders = await buildCommonHeaders();
     const apiBaseUrl = await getApiBaseUrl();
 
@@ -226,7 +227,7 @@ export async function registerDeviceWithFCM(
 
     for (let attempt = 1; attempt <= MAX_DEVICE_REGISTER_RETRIES; attempt++) {
       try {
-        console.log(
+        sdkLog.log(
           `[SDK][Register] Attempt ${attempt}/${MAX_DEVICE_REGISTER_RETRIES}`
         );
         const { response, text } = await postAndroidDeviceRegistration(
@@ -239,7 +240,7 @@ export async function registerDeviceWithFCM(
 
         if (!response.ok) {
           if (/device already exists/i.test(text)) {
-            console.warn(
+            sdkLog.warn(
               'ℹ️ Device already exists on server. Treating registration as valid.'
             );
             const parsed = tryParseRegisterResponse(text);
@@ -262,7 +263,7 @@ export async function registerDeviceWithFCM(
           ) {
             const waitMs =
               DEVICE_REGISTER_RETRY_DELAYS_MS[attempt - 1] ?? 15_000;
-            console.warn(
+            sdkLog.warn(
               `[SDK][Register] HTTP ${response.status}, retrying in ${waitMs}ms...`
             );
             await registerDelay(waitMs);
@@ -282,7 +283,7 @@ export async function registerDeviceWithFCM(
             `Device register returned a non-JSON success response: ${text.slice(0, 200)}`
           );
         }
-        console.log('✅ Device registered/updated:', resData);
+        sdkLog.log('✅ Device registered/updated:', resData);
 
         lastApiCallTime = Date.now();
 
@@ -299,7 +300,7 @@ export async function registerDeviceWithFCM(
         const retryable = isRetryableRegisterError(err);
         if (attempt < MAX_DEVICE_REGISTER_RETRIES && retryable) {
           const waitMs = DEVICE_REGISTER_RETRY_DELAYS_MS[attempt - 1] ?? 15_000;
-          console.warn(
+          sdkLog.warn(
             `[SDK][Register] Network error, retrying in ${waitMs}ms...`,
             err
           );
@@ -314,7 +315,7 @@ export async function registerDeviceWithFCM(
       `HTTP ${lastStatus}${lastErrorText ? ` - ${lastErrorText.slice(0, 200)}` : ''} after ${MAX_DEVICE_REGISTER_RETRIES} attempts`
     );
   } catch (err) {
-    console.error('❌ Failed to register/update device:', err);
+    sdkLog.error('❌ Failed to register/update device:', err);
     await AsyncStorage.setItem('isRegistered', 'false');
     scheduleRegisterRetry(token, deviceId || (await getDeviceId()));
     return false;
@@ -332,9 +333,9 @@ export async function requestUserPermission(): Promise<void> {
         authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
       if (enabled) {
-        console.log('✅ iOS notification permission granted:', authStatus);
+        sdkLog.log('✅ iOS notification permission granted:', authStatus);
       } else {
-        console.warn('❌ iOS notification permission denied');
+        sdkLog.warn('❌ iOS notification permission denied');
       }
     } catch {
       // Not iOS Firebase messaging
@@ -345,9 +346,9 @@ export async function requestUserPermission(): Promise<void> {
   if (Platform.OS === 'android') {
     const granted = await ensureAndroidNotificationPermission();
     if (granted) {
-      console.log('✅ Android POST_NOTIFICATIONS permission granted');
+      sdkLog.log('✅ Android POST_NOTIFICATIONS permission granted');
     } else {
-      console.warn('❌ Android POST_NOTIFICATIONS permission denied');
+      sdkLog.warn('❌ Android POST_NOTIFICATIONS permission denied');
     }
   }
 }
@@ -668,7 +669,7 @@ async function trackPushEvent(
     }
   }
   if (!baseUrl) {
-    console.log(
+    sdkLog.log(
       '[PushTrack] skipped (no track_base_url / api_base_url in payload and getApiBaseUrl empty)',
       eventType
     );
@@ -700,12 +701,12 @@ async function trackPushEvent(
       body: JSON.stringify(payload),
     });
     if (res.ok) {
-      console.log('[PushTrack]', eventType, 'HTTP', res.status);
+      sdkLog.log('[PushTrack]', eventType, 'HTTP', res.status);
     } else {
-      console.log('[PushTrack]', eventType, 'HTTP', res.status, '(not ok)');
+      sdkLog.log('[PushTrack]', eventType, 'HTTP', res.status, '(not ok)');
     }
   } catch (err) {
-    console.log('[PushTrack] non-blocking track failed:', eventType, err);
+    sdkLog.log('[PushTrack] non-blocking track failed:', eventType, err);
   }
 }
 
@@ -737,11 +738,11 @@ function ensureBackgroundMessageHandlerRegistered(): void {
         serialized = '(could not serialize remoteMessage)';
       }
     }
-    console.log('📨 Background FCM message:', serialized);
+    sdkLog.log('📨 Background FCM message:', serialized);
 
     const messageId = remoteMessage?.messageId || '';
     if (messageId && seenBackgroundMessageIds.has(messageId)) {
-      console.log('⏭️ Duplicate background FCM message ignored:', messageId);
+      sdkLog.log('⏭️ Duplicate background FCM message ignored:', messageId);
       const data = remoteMessage.data || {};
       await trackPushEvent('received', data);
       return;
@@ -768,11 +769,11 @@ function ensureBackgroundMessageHandlerRegistered(): void {
       null;
 
     if (Platform.OS === 'android') {
-      console.log(
+      sdkLog.log(
         '📲 Android background: native MyFirebaseMessagingService builds the tray notification; this log matches foreground field resolution (JS runs for data/headless messages).'
       );
     }
-    console.log('📲 Displaying local notification:', title, message, image);
+    sdkLog.log('📲 Displaying local notification:', title, message, image);
 
     const actionPairs = extractForegroundCtaPairs(data);
     if (actionPairs.length > 0) {
@@ -816,26 +817,26 @@ export async function getFcmToken(): Promise<string | null> {
     try {
       const token = await messaging().getToken();
       if (token) {
-        console.log('📲 FCM Token:', token);
+        sdkLog.log('📲 FCM Token:', token);
         const id = await getDeviceId();
-        console.log('✅ Device is being registered with ID:', id);
+        sdkLog.log('✅ Device is being registered with ID:', id);
         await AsyncStorage.setItem('device_id', id);
         await registerDeviceWithFCM(token, id);
         return token;
       }
     } catch (error) {
       const retryable = isRetryableFcmError(error);
-      console.error(
+      sdkLog.error(
         `Error getting FCM token (attempt ${attempt}/${MAX_FCM_TOKEN_RETRIES}):`,
         error
       );
 
       if (attempt < MAX_FCM_TOKEN_RETRIES && retryable) {
         const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
-        console.log(`⏳ Retrying in ${delay / 1000}s...`);
+        sdkLog.log(`⏳ Retrying in ${delay / 1000}s...`);
         await new Promise((r) => setTimeout(r, delay));
       } else {
-        console.error('❌ Failed to get FCM token after retries.');
+        sdkLog.error('❌ Failed to get FCM token after retries.');
         return null;
       }
     }
@@ -1017,7 +1018,7 @@ export function configurePushNotifications(): void {
       vibrate: true,
     },
     (created: boolean) =>
-      console.log(`📡 Notification channel created: ${created}`)
+      sdkLog.log(`📡 Notification channel created: ${created}`)
   );
 }
 
@@ -1056,15 +1057,15 @@ export function configurePushNotifications(): void {
 
 export function setupForegroundNotificationListener(): () => void {
   if (foregroundUnsubscribe) {
-    console.log('ℹ️ Foreground notification listener already active');
+    sdkLog.log('ℹ️ Foreground notification listener already active');
     return foregroundUnsubscribe;
   }
 
   const unsubscribe = messaging().onMessage((remoteMessage) => {
-    console.log('📨 Foreground FCM message:', JSON.stringify(remoteMessage));
+    sdkLog.log('📨 Foreground FCM message:', JSON.stringify(remoteMessage));
     const messageId = remoteMessage.messageId || '';
     if (messageId && seenForegroundMessageIds.has(messageId)) {
-      console.log('⏭️ Duplicate foreground message ignored:', messageId);
+      sdkLog.log('⏭️ Duplicate foreground message ignored:', messageId);
       return;
     }
     if (messageId) {
@@ -1105,7 +1106,7 @@ export function setupForegroundNotificationListener(): () => void {
       MAX_CAROUSEL_IMAGES
     );
     if (carouselImages.length > 1) {
-      console.log('🖼️ Carousel images parsed:', carouselImages);
+      sdkLog.log('🖼️ Carousel images parsed:', carouselImages);
     }
 
     const category = normalizedString(data.category);
@@ -1116,7 +1117,7 @@ export function setupForegroundNotificationListener(): () => void {
 
     if (isCarouselPayload) {
       if (Platform.OS === 'android' && LiveActivityModule?.triggerCarousel) {
-        console.log('🚀 Triggering Android carousel notification...');
+        sdkLog.log('🚀 Triggering Android carousel notification...');
         LiveActivityModule.triggerCarousel({
           ...(data as Record<string, string>),
           title,
@@ -1131,7 +1132,7 @@ export function setupForegroundNotificationListener(): () => void {
         Platform.OS === 'ios' &&
         PushTokenManager?.showForegroundNotification
       ) {
-        console.log('🚀 Triggering iOS foreground carousel notification...');
+        sdkLog.log('🚀 Triggering iOS foreground carousel notification...');
         PushTokenManager.showForegroundNotification({
           title,
           body: message,
@@ -1157,18 +1158,18 @@ export function setupForegroundNotificationListener(): () => void {
     }
 
     if (!title && !message && !image) {
-      console.log(
+      sdkLog.log(
         '⏭️ Skipping foreground notification — no title, body, or image in payload'
       );
       return;
     }
 
     if (Platform.OS === 'android') {
-      console.log(
+      sdkLog.log(
         '📲 Showing Android foreground JS local notification (plain payload path).'
       );
     }
-    console.log('📲 Displaying local notification:', title, message, image);
+    sdkLog.log('📲 Displaying local notification:', title, message, image);
 
     const localNotif: any = {
       channelId: 'default-channel-id',
@@ -1225,7 +1226,7 @@ export function setupForegroundNotificationListener(): () => void {
     }
 
     if (Platform.OS === 'ios' && PushTokenManager?.showForegroundNotification) {
-      console.log(
+      sdkLog.log(
         '📲 Displaying iOS foreground notification via PushTokenManager (plain payload path).'
       );
       const imageList =

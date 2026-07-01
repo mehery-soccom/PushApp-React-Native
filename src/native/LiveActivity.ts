@@ -1,3 +1,4 @@
+import { sdkLog } from '../helpers/sdkLogger';
 import {
   Alert,
   NativeModules,
@@ -29,25 +30,25 @@ export async function ensureAndroidNotificationPermission(): Promise<boolean> {
     );
     return result === PermissionsAndroid.RESULTS.GRANTED;
   } catch (error) {
-    console.warn('ensureAndroidNotificationPermission failed', error);
+    sdkLog.warn('ensureAndroidNotificationPermission failed', error);
     return false;
   }
 }
 
 export const triggerLiveActivity = (data: Record<string, string>) => {
-  console.log('📣 triggerLiveActivity called with data:', data);
+  sdkLog.log('📣 triggerLiveActivity called with data:', data);
 
   if (LiveActivityModule?.triggerLiveActivity) {
     try {
       LiveActivityModule.triggerLiveActivity(data);
-      console.log(
+      sdkLog.log(
         '✅ LiveActivityModule.triggerLiveActivity executed successfully'
       );
     } catch (error) {
-      console.error('❌ Error while calling LiveActivityModule:', error);
+      sdkLog.error('❌ Error while calling LiveActivityModule:', error);
     }
   } else {
-    console.warn('⚠️ LiveActivityModule is not available on NativeModules');
+    sdkLog.warn('⚠️ LiveActivityModule is not available on NativeModules');
   }
 };
 
@@ -67,14 +68,14 @@ export async function triggerCarouselNotification(
   params: TriggerCarouselNotificationParams
 ): Promise<boolean> {
   if (Platform.OS !== 'android') {
-    console.warn(
+    sdkLog.warn(
       'triggerCarouselNotification is only supported on Android in this SDK'
     );
     return false;
   }
 
   if (!LiveActivityModule?.triggerCarousel) {
-    console.warn('⚠️ LiveActivityModule.triggerCarousel is not available');
+    sdkLog.warn('⚠️ LiveActivityModule.triggerCarousel is not available');
     Alert.alert(
       'Carousel unavailable',
       'LiveActivityModule is not linked. Rebuild the app after updating the SDK.'
@@ -83,7 +84,7 @@ export async function triggerCarouselNotification(
   }
 
   if (!params.images || params.images.length < 2) {
-    console.warn('triggerCarouselNotification requires at least 2 image URLs');
+    sdkLog.warn('triggerCarouselNotification requires at least 2 image URLs');
     Alert.alert('Carousel', 'Add at least 2 image URLs.');
     return false;
   }
@@ -110,7 +111,7 @@ export async function triggerCarouselNotification(
     });
     return true;
   } catch (error) {
-    console.error('❌ Error while calling triggerCarousel:', error);
+    sdkLog.error('❌ Error while calling triggerCarousel:', error);
     Alert.alert('Carousel failed', String(error));
     return false;
   }

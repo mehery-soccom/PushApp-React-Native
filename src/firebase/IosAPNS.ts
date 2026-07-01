@@ -4,6 +4,7 @@ import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { extractChannelSegment, getApiBaseUrl } from '../helpers/tenantContext';
 import { getDeviceId } from '../utils/device';
 import { waitForGeoIp } from '../utils/geoIpContext';
+import { sdkLog } from '../helpers/sdkLogger';
 import {
   getEffectiveUserId,
   isAcceptableEventUserId,
@@ -42,7 +43,7 @@ function scheduleRegisterRetry(token: string) {
   if (
     scheduledRegisterRetryAttempt >= SCHEDULED_REGISTER_RETRY_DELAYS_MS.length
   ) {
-    console.warn(
+    sdkLog.warn(
       '[SDK][Register][iOS] Giving up after scheduled background retries.'
     );
     return;
@@ -57,7 +58,7 @@ function scheduleRegisterRetry(token: string) {
     clearTimeout(scheduledRegisterRetryTimer);
   }
 
-  console.warn(
+  sdkLog.warn(
     `[SDK][Register][iOS] Scheduling background retry ${scheduledRegisterRetryAttempt}/${SCHEDULED_REGISTER_RETRY_DELAYS_MS.length} in ${Math.round(delayMs / 1000)}s`
   );
 
@@ -71,7 +72,7 @@ function scheduleRegisterRetry(token: string) {
       }
       await registerDeviceWithAPNS(token, { fromScheduledRetry: true });
     })().catch((err) => {
-      console.warn('[SDK][Register][iOS] Scheduled retry failed', err);
+      sdkLog.warn('[SDK][Register][iOS] Scheduled retry failed', err);
     });
   }, delayMs);
 }
@@ -130,12 +131,12 @@ export async function registerDeviceWithAPNS(
   options?: { fromScheduledRetry?: boolean }
 ) {
   if (!token) {
-    console.warn('⚠️ No token provided, skipping registration.');
+    sdkLog.warn('⚠️ No token provided, skipping registration.');
     return;
   }
 
   if (deviceRegistrationInProgress) {
-    console.log(
+    sdkLog.log(
       'ℹ️ Device registration already in progress. Skipping duplicate call.'
     );
     return;
@@ -150,7 +151,7 @@ export async function registerDeviceWithAPNS(
         const waitTime = Math.ceil(
           (API_CALL_COOLDOWN_MS - (now - lastApiCallTime)) / 1000
         );
-        console.log(`⏳ Cooldown active. Wait ${waitTime}s before retrying.`);
+        sdkLog.log(`⏳ Cooldown active. Wait ${waitTime}s before retrying.`);
         return;
       }
     }
@@ -162,7 +163,7 @@ export async function registerDeviceWithAPNS(
         'lastRegisteredToken',
         'lastRegisteredState',
       ]).then((entries) => entries.map(([_, v]) => v));
-    console.log('last servertoken:', lastServerToken);
+    sdkLog.log('last servertoken:', lastServerToken);
 
     const device_id = await getDeviceId();
 
@@ -170,15 +171,15 @@ export async function registerDeviceWithAPNS(
     let fcmToken: string | null = null;
     try {
       fcmToken = await messaging().getToken();
-      console.log('📲 Fetched iOS FCM Token:', fcmToken);
+      sdkLog.log('📲 Fetched iOS FCM Token:', fcmToken);
     } catch (e) {
-      console.warn('⚠️ Could not fetch FCM token on iOS', e);
+      sdkLog.warn('⚠️ Could not fetch FCM token on iOS', e);
     }
 
     await cacheRegistrationTokens({ token, fcmToken });
 
     const channel_id = (await AsyncStorage.getItem('mehery_channel_id')) ?? '';
-    console.log('channel id at custom:', channel_id);
+    sdkLog.log('channel id at custom:', channel_id);
 
     // Device registration should only care about token/device identity.
     // Login/session changes are handled separately by /device/link.
@@ -193,12 +194,12 @@ export async function registerDeviceWithAPNS(
     if (lastRegisteredState === currentState) {
       const userId = await getEffectiveUserId();
       if (isAcceptableEventUserId(userId)) {
-        console.log('✅ Registration already valid. Skipping re-register.');
+        sdkLog.log('✅ Registration already valid. Skipping re-register.');
         await AsyncStorage.setItem('isRegistered', 'true');
         clearScheduledRegisterRetry();
         return;
       }
-      console.log(
+      sdkLog.log(
         '[SDK][Register][iOS] Re-registering: registered_user_id missing from storage.'
       );
     }
@@ -213,7 +214,7 @@ export async function registerDeviceWithAPNS(
       fcm_token: fcmToken,
       geoIP,
     };
-    console.log('📡 Registering/updating device...', payload);
+    sdkLog.log('📡 Registering/updating device...', payload);
     const commonHeaders = await buildCommonHeaders();
     const apiBaseUrl = await getApiBaseUrl();
 
@@ -222,7 +223,7 @@ export async function registerDeviceWithAPNS(
     let lastStatus = 0;
 
     for (let attempt = 1; attempt <= MAX_DEVICE_REGISTER_RETRIES; attempt++) {
-      console.log(
+      sdkLog.log(
         `[SDK][Register][iOS] Attempt ${attempt}/${MAX_DEVICE_REGISTER_RETRIES}`
       );
 
@@ -244,7 +245,7 @@ export async function registerDeviceWithAPNS(
         /non-existent collection in transaction/i.test(text);
 
       if (shouldRetryWithParsedChannel) {
-        console.warn(
+        sdkLog.warn(
           `⚠️ /device/register failed for full identifier, retrying with parsed channel segment: ${parsedChannelSegment}`
         );
         payload.channel_id = parsedChannelSegment;
@@ -256,7 +257,7 @@ export async function registerDeviceWithAPNS(
         response = retryResult.response;
         text = retryResult.text;
         lastStatus = response.status;
-        console.log('Retry response text:', text);
+        sdkLog.log('Retry response text:', text);
       }
 
       if (response.ok) {
@@ -264,7 +265,7 @@ export async function registerDeviceWithAPNS(
       }
 
       if (/device already exists/i.test(text)) {
-        console.warn(
+        sdkLog.warn(
           'ℹ️ Device already exists on server. Treating registration as valid.'
         );
         const parsed = tryParseRegisterResponse(text);
@@ -286,7 +287,7 @@ export async function registerDeviceWithAPNS(
         attempt < MAX_DEVICE_REGISTER_RETRIES
       ) {
         const waitMs = DEVICE_REGISTER_RETRY_DELAYS_MS[attempt - 1] ?? 15_000;
-        console.warn(
+        sdkLog.warn(
           `[SDK][Register][iOS] HTTP ${response.status}, retrying in ${waitMs}ms...`
         );
         await registerDelay(waitMs);
@@ -312,7 +313,7 @@ export async function registerDeviceWithAPNS(
         `Device register returned a non-JSON success response: ${text}`
       );
     }
-    console.log('✅ Device registered/updated:', resData);
+    sdkLog.log('✅ Device registered/updated:', resData);
 
     lastApiCallTime = Date.now();
 
@@ -327,7 +328,7 @@ export async function registerDeviceWithAPNS(
     clearScheduledRegisterRetry();
     return;
   } catch (err) {
-    console.error('❌ Failed to register/update device:', err);
+    sdkLog.error('❌ Failed to register/update device:', err);
     await AsyncStorage.multiSet([
       ['isRegistered', 'false'],
       ['UserRegistered', 'false'],

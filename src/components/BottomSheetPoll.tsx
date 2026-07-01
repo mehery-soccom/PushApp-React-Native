@@ -1,4 +1,5 @@
 import { useRef, useEffect } from 'react';
+import { sdkLog } from '../helpers/sdkLogger';
 import {
   Animated,
   Dimensions,
@@ -86,7 +87,7 @@ export default function BottomSheetPoll({
       data: ctaId ? { ctaId } : {},
     };
 
-    console.log('📤 Sending track event:', payload);
+    sdkLog.log('📤 Sending track event:', payload);
     const commonHeaders = await buildCommonHeaders();
     const apiBaseUrl = await getApiBaseUrl();
 
@@ -101,9 +102,9 @@ export default function BottomSheetPoll({
       });
 
       const data = await res.json();
-      console.log('✅ Track API response:', data);
+      sdkLog.log('✅ Track API response:', data);
     } catch (error) {
-      console.error('❌ Track API error:', error);
+      sdkLog.error('❌ Track API error:', error);
     }
   };
 
@@ -193,7 +194,7 @@ export default function BottomSheetPoll({
               await sendTrackEvent('openUrl', url);
               await Linking.openURL(url);
             } catch (err) {
-              console.error('❌ Failed to open URL:', err);
+              sdkLog.error('❌ Failed to open URL:', err);
             }
           }
           handleClose();
@@ -213,7 +214,7 @@ export default function BottomSheetPoll({
               await sendTrackEvent('openUrl', url);
               await Linking.openURL(url);
             } catch (err) {
-              console.error('❌ Failed to open URL:', err);
+              sdkLog.error('❌ Failed to open URL:', err);
             }
           }
           break;

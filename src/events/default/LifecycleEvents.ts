@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { sendCustomEvent } from '../custom/CustomEvents';
+import { sendCustomEvent, schedulePollCheck } from '../custom/CustomEvents';
 import { SDK_EVENT_NAMES } from './eventNames';
 import { ensureDeviceRegistered } from '../../utils/ensureDeviceRegistered';
+import { sdkLog } from '../../helpers/sdkLogger';
 
 export { SDK_EVENT_NAMES };
 
@@ -28,7 +29,7 @@ export async function OnAppLaunch(): Promise<void> {
 export async function trackDefaultLifecycleEvents(): Promise<void> {
   const registered = await ensureDeviceRegistered();
   if (!registered) {
-    console.warn(
+    sdkLog.warn(
       '[SDK] Skipping app_install and app_launch until device registration succeeds.'
     );
     return;
@@ -36,4 +37,5 @@ export async function trackDefaultLifecycleEvents(): Promise<void> {
 
   await trackAppInstallIfNeeded();
   await OnAppLaunch();
+  schedulePollCheck('lifecycle');
 }

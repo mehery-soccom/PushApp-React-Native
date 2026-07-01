@@ -1,6 +1,9 @@
 import { Dimensions, Platform } from 'react-native';
 import { getDeviceMetadata } from '../utils/deviceMetadata';
 import { getDeviceId } from '../utils/device';
+import { resolveDeviceHeaders } from '../utils/resolveDeviceHeaders';
+import { SDK_FRAMEWORK, SDK_VERSION } from './sdkInfo';
+import { sdkLog } from './sdkLogger';
 
 export async function buildCommonHeaders() {
   const { width, height } = Dimensions.get('window');
@@ -13,38 +16,33 @@ export async function buildCommonHeaders() {
 
   const orientation = width > height ? 'Landscape' : 'Portrait';
 
-  // 🔹 Base SDK headers (always present)
-  const baseHeaders: Record<string, string> = {
-    'X-App-Version': '1.0.33',
-    'X-SDK-Version': '0.0.10',
+  const runtimeHeaders: Record<string, string> = {
+    'X-SDK-Framework': SDK_FRAMEWORK,
+    'X-SDK-Version': SDK_VERSION,
+    sdk_framework: SDK_FRAMEWORK,
+    sdk_version: SDK_VERSION,
 
     'X-Screen-Resolution': `${Math.round(width)}x${Math.round(height)}`,
     'X-Device-Orientation': orientation,
 
     'X-OS-Name': Platform.OS.toUpperCase(),
-    'X-OS-Version': String(Platform.Version),
 
     'X-Timezone': timezone,
     'X-Locale': locale,
 
     'X-Device-ID': deviceId,
-
-    // Defaults for parity with Flutter
-    'X-Bundle-ID': 'com.meheryeventsender',
-    'X-Device-Model': 'unknown',
-    'X-System-Name': 'unknown',
-    'X-Device-Name': 'unknown',
-    'X-Manufacturer': 'unknown',
-    'X-API-Level': 'unknown',
-    'X-CPU-ABI': 'unknown',
-    'X-Boot-Time': 'unknown',
   };
 
-  // 🔹 App-provided overrides (safe, optional)
+  const deviceHeaders = await resolveDeviceHeaders();
   const deviceMetadata = getDeviceMetadata?.() ?? {};
 
-  return {
-    ...baseHeaders,
-    ...deviceMetadata, // ✅ app overrides "unknown" fields
+  const headers = {
+    ...runtimeHeaders,
+    ...deviceHeaders,
+    ...deviceMetadata,
   };
+
+  sdkLog.log('[SDK] Common headers:', headers);
+
+  return headers;
 }

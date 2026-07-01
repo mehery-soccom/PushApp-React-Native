@@ -12,6 +12,7 @@ import { getApiBaseUrl } from '../../helpers/tenantContext';
 import { SDK_EVENT_NAMES } from '../default/eventNames';
 import { getDeviceId } from '../../utils/device';
 import { waitForGeoIp } from '../../utils/geoIpContext';
+import { sdkLog } from '../../helpers/sdkLogger';
 import {
   getEffectiveContactId,
   waitForEffectiveUserId,
@@ -78,16 +79,16 @@ export async function sendCustomEvent(
 ): Promise<boolean> {
   const user_id = await waitForEffectiveUserId();
   if (!user_id) {
-    console.warn(
+    sdkLog.warn(
       `[SDK] Skipping ${event_name} event: server user_id unavailable (wait for /device/register).`
     );
     return false;
   }
   const device_id = await getDeviceId();
-  console.log('device id:', device_id);
+  sdkLog.log('device id:', device_id);
 
   const channel_id = await AsyncStorage.getItem('mehery_channel_id');
-  console.log('channel id at custom:', channel_id);
+  sdkLog.log('channel id at custom:', channel_id);
 
   const geoIP = await waitForGeoIp();
   const session_id = (await AsyncStorage.getItem('sessionId')) ?? '';
@@ -103,7 +104,7 @@ export async function sendCustomEvent(
     geoIP,
   };
 
-  console.log(`📡 Sending ${event_name} event:`, payload);
+  sdkLog.log(`📡 Sending ${event_name} event:`, payload);
   const commonHeaders = await buildCommonHeaders();
   const apiBaseUrl = await getApiBaseUrl();
   try {
@@ -119,21 +120,177 @@ export async function sendCustomEvent(
 
     if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
     const data = await res.json();
-    console.log(`✅ ${event_name} event logged successfully:`, data);
+    sdkLog.log(`✅ ${event_name} event logged successfully:`, data);
 
-    // Always fetch poll after event
-    await sendPollEvent();
+    if (event_type !== 'LOG') {
+      schedulePollCheck(`after-event:${event_name}`);
+    }
     return true;
   } catch (err) {
-    console.error(`❌ Failed to log ${event_name} event:`, err);
+    sdkLog.error(`❌ Failed to log ${event_name} event:`, err);
     return false;
   }
 }
 
 // 📌 Fetches poll HTML and shows in overlay
 
-let pollQueue: any[] = [];
-let showingPoll: boolean; // no initial value
+const POLL_DEBOUNCE_MS = 400;
+const WS_POLL_SIGNAL_DELAY_MS = 1000;
+const POLL_ADVANCE_DELAY_MS = 400;
+
+type QueuedOverlayPoll = {
+  htmlContent: string;
+  code: string;
+  style: Record<string, any>;
+  filterId: string;
+  messageId: string;
+};
+
+let pollQueue: QueuedOverlayPoll[] = [];
+let showingPoll = false;
+let pollFetchInFlight = false;
+let pollFetchScheduled = false;
+let pollDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function runPollFetchLoop(): Promise<void> {
+  if (pollFetchInFlight) {
+    pollFetchScheduled = true;
+    return;
+  }
+
+  pollFetchInFlight = true;
+  try {
+    do {
+      pollFetchScheduled = false;
+      await sendPollEvent();
+    } while (pollFetchScheduled);
+  } finally {
+    pollFetchInFlight = false;
+  }
+}
+
+export function schedulePollCheck(
+  reason?: string,
+  delayMs = POLL_DEBOUNCE_MS
+): void {
+  if (reason) {
+    sdkLog.log(`[SDK] schedulePollCheck: ${reason}`);
+  }
+  if (pollDebounceTimer) clearTimeout(pollDebounceTimer);
+  pollDebounceTimer = setTimeout(() => {
+    pollDebounceTimer = null;
+    void runPollFetchLoop();
+  }, delayMs);
+}
+
+export function handleWebSocketPollSignal(): void {
+  sdkLog.log(
+    `[SDK] WebSocket POLL signal — checking queue in ${WS_POLL_SIGNAL_DELAY_MS}ms`
+  );
+  setTimeout(() => {
+    if (pollQueue.length > 0 && !showingPoll) {
+      sdkLog.log('[SDK] Showing queued poll from WebSocket signal');
+      showNextPoll();
+    }
+    schedulePollCheck('websocket-poll');
+  }, WS_POLL_SIGNAL_DELAY_MS);
+}
+
+export function onPollDismissed(): void {
+  sdkLog.log(
+    `[SDK] onPollDismissed — queue: ${pollQueue.length}, showing: ${showingPoll}`
+  );
+  showingPoll = false;
+  if (pollQueue.length > 0) {
+    setTimeout(() => showNextPoll(), POLL_ADVANCE_DELAY_MS);
+  } else {
+    schedulePollCheck('after-dismiss');
+  }
+}
+
+function isOverlayPollCode(code: string): boolean {
+  return (
+    code.includes('roadblock') ||
+    code.includes('floater') ||
+    code.includes('banner') ||
+    code.includes('picture-in-picture') ||
+    code.includes('bottomsheet')
+  );
+}
+
+function renderQueuedPoll(poll: QueuedOverlayPoll): boolean {
+  const { htmlContent, code, style, filterId, messageId } = poll;
+  const commonProps = {
+    html: htmlContent,
+    visible: true,
+    pollType: code,
+    filterId,
+    messageId,
+  };
+
+  if (code.includes('roadblock')) {
+    showPollOverlay(
+      <RoadblockPoll
+        html={htmlContent}
+        pollType={code}
+        style={style}
+        filterId={filterId}
+        messageId={messageId}
+      />
+    );
+    return true;
+  }
+
+  if (code.includes('floater')) {
+    const verticalAlign = String(style?.vertical_align ?? 'flex-end');
+    const horizontalAlign = String(style?.horizontal_align ?? 'center');
+    const floaterPosition =
+      verticalAlign === 'flex-start'
+        ? 'top'
+        : verticalAlign === 'center'
+          ? 'center'
+          : 'bottom';
+    const floaterHorizontalAlign =
+      horizontalAlign === 'flex-start'
+        ? 'left'
+        : horizontalAlign === 'flex-end'
+          ? 'right'
+          : 'center';
+    showPollOverlay(
+      <Floater
+        {...commonProps}
+        position={floaterPosition}
+        horizontalAlign={floaterHorizontalAlign}
+      />
+    );
+    return true;
+  }
+
+  if (code.includes('banner')) {
+    showPollOverlay(<BannerPoll {...commonProps} />);
+    return true;
+  }
+
+  if (code.includes('picture-in-picture')) {
+    const alignment = getAlignment(style);
+    showPollOverlay(
+      <PipPoll {...commonProps} alignment={alignment} fullscreen={false} />
+    );
+    return true;
+  }
+
+  if (code.includes('bottomsheet')) {
+    showPollOverlay(
+      <BottomSheetPoll
+        {...commonProps}
+        onClose={() => sdkLog.log('BottomSheet closed')}
+      />
+    );
+    return true;
+  }
+
+  return false;
+}
 // export async function sendPollEvent() {
 //   const user_id = await AsyncStorage.getItem('user_id');
 //   const device_id = await AsyncStorage.getItem('device_id');
@@ -276,13 +433,13 @@ export async function sendPollEvent() {
 
   const contact_id = await getEffectiveContactId(device_id);
   if (!contact_id) {
-    console.warn(
+    sdkLog.warn(
       '[SDK] Skipping poll fetch: contact_id unavailable (registration may not be complete).'
     );
     return;
   }
 
-  console.log('showing poll:', showingPoll);
+  sdkLog.log('showing poll:', showingPoll);
   const payload = { contact_id };
   const commonHeaders = await buildCommonHeaders();
   const apiBaseUrl = await getApiBaseUrl();
@@ -298,7 +455,7 @@ export async function sendPollEvent() {
     });
 
     const data = await res.json();
-    console.log('poll data:', data);
+    sdkLog.log('poll data:', data);
 
     if (data.results?.length > 0) {
       data.results.forEach((poll: any) => {
@@ -310,19 +467,10 @@ export async function sendPollEvent() {
         const filter_id = poll?.filterId ?? '';
         const message_id = poll?.messageId ?? '';
 
-        console.log('poll.filterId:', filter_id);
-        console.log('poll.messageId:', message_id);
+        sdkLog.log('poll.filterId:', filter_id);
+        sdkLog.log('poll.messageId:', message_id);
 
         sendAck(poll.contactId, message_id);
-
-        // Common props passed to all poll components
-        const commonProps = {
-          html: htmlContent,
-          visible: true,
-          pollType: code,
-          filterId: filter_id,
-          messageId: message_id,
-        };
 
         if (code.includes('inline') && event?.event_data?.compare) {
           const placeholderId = event.event_data.compare;
@@ -374,7 +522,7 @@ export async function sendPollEvent() {
             ...tooltipData,
             tooltipKey: event.eventId || Date.now(),
           });
-        } else if (code.includes('roadblock')) {
+        } else if (isOverlayPollCode(code)) {
           pollQueue.push({
             htmlContent,
             code,
@@ -382,61 +530,21 @@ export async function sendPollEvent() {
             filterId: filter_id,
             messageId: message_id,
           });
-        } else if (code.includes('floater')) {
-          const verticalAlign = String(style?.vertical_align ?? 'flex-end');
-          const horizontalAlign = String(style?.horizontal_align ?? 'center');
-          const floaterPosition =
-            verticalAlign === 'flex-start'
-              ? 'top'
-              : verticalAlign === 'center'
-                ? 'center'
-                : 'bottom';
-          const floaterHorizontalAlign =
-            horizontalAlign === 'flex-start'
-              ? 'left'
-              : horizontalAlign === 'flex-end'
-                ? 'right'
-                : 'center';
-          showPollOverlay(
-            <Floater
-              {...commonProps}
-              position={floaterPosition}
-              horizontalAlign={floaterHorizontalAlign}
-            />
-          );
-        } else {
-          if (code.includes('banner')) {
-            showPollOverlay(<BannerPoll {...commonProps} />);
-          } else if (code.includes('picture-in-picture')) {
-            const alignment = getAlignment(style);
-            showPollOverlay(
-              <PipPoll
-                {...commonProps}
-                alignment={alignment}
-                fullscreen={false}
-              />
-            );
-          } else if (code.includes('bottomsheet')) {
-            showPollOverlay(
-              <BottomSheetPoll
-                {...commonProps}
-                onClose={() => console.log('BottomSheet closed')}
-              />
-            );
-          }
         }
       });
 
-      showNextPoll();
+      if (!showingPoll) {
+        showNextPoll();
+      }
     }
   } catch (err) {
-    console.error('❌ API error:', err);
+    sdkLog.error('❌ API error:', err);
   }
 }
 
 export async function sendAck(contactId: string, messageId: string) {
   if (!contactId || !messageId) {
-    console.warn('⚠️ Missing contactId or messageId for ACK');
+    sdkLog.warn('⚠️ Missing contactId or messageId for ACK');
     return;
   }
 
@@ -459,38 +567,38 @@ export async function sendAck(contactId: string, messageId: string) {
     });
 
     const data = await res.json();
-    console.log('✅ Acknowledgement response:', data);
+    sdkLog.log('✅ Acknowledgement response:', data);
   } catch (error) {
-    console.error('❌ ACK API error:', error);
+    sdkLog.error('❌ ACK API error:', error);
   }
 }
 function showNextPoll(): void {
-  if (pollQueue.length === 0) {
-    showingPoll = false;
+  if (showingPoll) {
+    sdkLog.log('[SDK] showNextPoll skipped — poll already showing');
     return;
   }
 
-  showingPoll = true;
-  const nextPoll = pollQueue.shift();
+  if (pollQueue.length === 0) {
+    return;
+  }
 
-  const { htmlContent, code, filterId, messageId, style } = nextPoll;
-  if (code.includes('roadblock')) {
-    showPollOverlay(
-      <RoadblockPoll
-        html={htmlContent}
-        // visible={true}
-        pollType={code}
-        style={style}
-        filterId={filterId}
-        messageId={messageId}
-      />
-    );
+  const nextPoll = pollQueue.shift();
+  if (!nextPoll) return;
+
+  sdkLog.log(
+    `[SDK] showNextPoll — type: ${nextPoll.code}, remaining: ${pollQueue.length}`
+  );
+
+  const rendered = renderQueuedPoll(nextPoll);
+  if (rendered) {
+    showingPoll = true;
+  } else {
+    showNextPoll();
   }
 }
 
 export function triggerNextPoll() {
-  console.log('✅ Triggering next poll');
-  showNextPoll();
+  onPollDismissed();
 }
 function getAlignment(style: any) {
   const vertical = (style.vertical_align ?? 'flex-end').toString();
@@ -516,7 +624,7 @@ export function OnPageOpen(page_name: string) {
       sendCustomEvent('widget_open', { compare: 'center' });
       sendCustomEvent('widget_open', { compare: 'login_banner' });
     } catch (error) {
-      console.log(`Error sending events for page: ${page_name}`, error);
+      sdkLog.log(`Error sending events for page: ${page_name}`, error);
     }
   }, 2000); // 2000ms = 2 seconds
 }
@@ -526,15 +634,22 @@ export function OnPageClose() {
 }
 
 export function OnAppOpen() {
-  console.log('⏳ Waiting 3 seconds before triggering app_open...');
+  sdkLog.log('⏳ Waiting 3 seconds before triggering app_open...');
 
   setTimeout(() => {
-    try {
-      console.log('🚀 Triggering app_open event');
-      sendCustomEvent(SDK_EVENT_NAMES.APP_OPEN, {}, { eventType: 'LOG' });
-    } catch (error) {
-      console.error('❌ Error during OnAppOpen:', error);
-    }
+    void (async () => {
+      try {
+        sdkLog.log('🚀 Triggering app_open event');
+        await sendCustomEvent(
+          SDK_EVENT_NAMES.APP_OPEN,
+          {},
+          { eventType: 'LOG' }
+        );
+        schedulePollCheck('app-open');
+      } catch (error) {
+        sdkLog.error('❌ Error during OnAppOpen:', error);
+      }
+    })();
   }, 1000); // 1000ms = 1 seconds delay
 }
 

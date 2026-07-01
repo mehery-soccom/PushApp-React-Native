@@ -9,6 +9,7 @@ import {
 export {
   LEGACY_PROFILE_UPDATED_KEY,
   buildProfileApiPayload,
+  canonicalizeProfileSnapshot,
   isLegacyProfileSnapshot,
   isProfileUpdatePayloadEmpty,
   prepareProfileUpdatePayload,

@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview';
 import { hidePollOverlay } from './PollOverlay';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
+import { sdkLog } from '../helpers/sdkLogger';
 
 export default function RoadblockPoll({
   html,
@@ -24,11 +25,11 @@ export default function RoadblockPoll({
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [overlayText, setOverlayText] = useState('');
 
-  console.log('poll type:', pollType);
-  console.log('style:', style);
+  sdkLog.log('poll type:', pollType);
+  sdkLog.log('style:', style);
 
-  console.log('📨 messageId:', messageId);
-  console.log('📨 filterId:', filterId);
+  sdkLog.log('📨 messageId:', messageId);
+  sdkLog.log('📨 filterId:', filterId);
   // console.log('📨 rb html:', html);
 
   const showOverlay = (text: string) => {
@@ -40,8 +41,8 @@ export default function RoadblockPoll({
     setOverlayVisible(false);
     setOverlayText('');
   };
-  console.log('overlay visible:', overlayVisible);
-  console.log('overlay visible:', overlayText);
+  sdkLog.log('overlay visible:', overlayVisible);
+  sdkLog.log('overlay visible:', overlayText);
 
   // 🔹 Send tracking event to backend
   const sendTrackEvent = async (
@@ -55,7 +56,7 @@ export default function RoadblockPoll({
       data: ctaId ? { ctaId } : {},
     };
 
-    console.log('📤 Sending track event:', payload);
+    sdkLog.log('📤 Sending track event:', payload);
     const commonHeaders = await buildCommonHeaders();
     const apiBaseUrl = await getApiBaseUrl();
 
@@ -70,9 +71,9 @@ export default function RoadblockPoll({
       });
 
       const data = await res.json();
-      console.log('✅ Track API response:', data);
+      sdkLog.log('✅ Track API response:', data);
     } catch (error) {
-      console.error('❌ Track API error:', error);
+      sdkLog.error('❌ Track API error:', error);
     }
   };
 
@@ -91,7 +92,7 @@ export default function RoadblockPoll({
     const raw = event.nativeEvent.data;
     try {
       const message = JSON.parse(raw);
-      console.log('📩 Message from WebView:', message);
+      sdkLog.log('📩 Message from WebView:', message);
 
       switch (message.type) {
         case 'buttonClick': {
@@ -103,7 +104,7 @@ export default function RoadblockPoll({
               await sendTrackEvent('openUrl', url);
               await Linking.openURL(url);
             } catch (err) {
-              console.error('❌ Failed to open URL:', err);
+              sdkLog.error('❌ Failed to open URL:', err);
             }
           }
           onClose?.() ?? hidePollOverlay();
@@ -128,14 +129,14 @@ export default function RoadblockPoll({
               await sendTrackEvent('openUrl', url);
               await Linking.openURL(url);
             } catch (err) {
-              console.error('❌ Failed to open URL:', err);
+              sdkLog.error('❌ Failed to open URL:', err);
             }
           }
           break;
         }
 
         default:
-          console.log('default case');
+          sdkLog.log('default case');
         // console.warn('⚠️ Unknown WebView message type:', message);
         // sendTrackEvent('unknown', JSON.stringify(message));
       }

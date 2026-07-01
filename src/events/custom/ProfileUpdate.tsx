@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildCommonHeaders } from '../../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../../helpers/tenantContext';
+import { sdkLog } from '../../helpers/sdkLogger';
 import {
   buildProfileApiPayload,
   isProfileUpdatePayloadEmpty,
@@ -8,13 +9,30 @@ import {
   prepareProfileUpdatePayload,
   profilePayloadsEqual,
   saveLastProfileSnapshot,
+  stableStringify,
 } from '../../utils/profileSnapshot';
+import type { ProfileApiPayload } from '../../utils/profileSnapshot';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const DATE_FIELD_KEY_REGEX = /(dob|date|birth|expiry|expires|expir)/i;
 
 let profileUpdateInProgress = false;
+let sessionProfileSyncKey: string | null = null;
+
+function buildSessionProfileSyncKey(
+  userId: string,
+  payload: ProfileApiPayload
+): string {
+  return `${userId}:${stableStringify(payload)}`;
+}
+
+function markSessionProfileHandled(
+  userId: string,
+  payload: ProfileApiPayload
+): void {
+  sessionProfileSyncKey = buildSessionProfileSyncKey(userId, payload);
+}
 
 // Wait until UserLoggedIn is set in AsyncStorage, up to `timeoutMs`.
 async function waitForUserLoggedIn(
@@ -97,7 +115,7 @@ function normalizeAdditionalInfoDates(
       continue;
     }
 
-    console.warn(
+    sdkLog.warn(
       `⚠️ [SDK][Profile] Invalid date in "${sourceName}.${key}", dropping field to prevent API 500`
     );
     delete normalized[key];
@@ -158,17 +176,23 @@ export type UpdateUserProfileResult = {
   message: string;
 };
 
+export type UpdateUserProfileOptions = {
+  /** Bypass in-session dedupe when true. Snapshot/API logic unchanged. */
+  force?: boolean;
+};
+
 // Updates customer profile (PUT) — skips API when payload matches last successful push.
 export async function updateUserProfile(
   info: Record<string, any> = {},
-  cohorts: Record<string, any> = {}
+  cohorts: Record<string, any> = {},
+  options?: UpdateUserProfileOptions
 ): Promise<UpdateUserProfileResult> {
-  console.log('🧩 [SDK][Profile] updateUserProfile called');
+  sdkLog.log('🧩 [SDK][Profile] updateUserProfile called');
 
   if (profileUpdateInProgress) {
     const message =
       'Skipped: profile update already in progress (duplicate call).';
-    console.log(`⏭️ [SDK][Profile] ${message}`);
+    sdkLog.log(`⏭️ [SDK][Profile] ${message}`);
     return { skipped: true, message };
   }
 
@@ -180,12 +204,12 @@ export async function updateUserProfile(
 
     if (!channel_code) {
       const message = 'Skipped: channel_code is missing.';
-      console.warn(`⚠️ [SDK][Profile] ${message}`);
+      sdkLog.warn(`⚠️ [SDK][Profile] ${message}`);
       return { skipped: true, message };
     }
     if (!user_id) {
       const message = 'Skipped: user_id is missing.';
-      console.warn(`⚠️ [SDK][Profile] ${message}`);
+      sdkLog.warn(`⚠️ [SDK][Profile] ${message}`);
       return { skipped: true, message };
     }
 
@@ -200,43 +224,52 @@ export async function updateUserProfile(
       normalizedCohorts
     );
 
+    const sessionKey = buildSessionProfileSyncKey(user_id, payload);
+    if (!options?.force && sessionProfileSyncKey === sessionKey) {
+      const message = 'Skipped: already handled this app session.';
+      sdkLog.log(`⏭️ [SDK][Profile] ${message}`);
+      return { skipped: true, message };
+    }
+
     const lastSnapshot = await loadLastProfileSnapshot(user_id);
     if (lastSnapshot && profilePayloadsEqual(lastSnapshot, payload)) {
       const message = 'Skipped: same profile already pushed (no API call).';
-      console.log(`⏭️ [SDK][Profile] ${message}`, JSON.stringify({ user_id }));
+      sdkLog.log(`⏭️ [SDK][Profile] ${message}`, JSON.stringify({ user_id }));
+      markSessionProfileHandled(user_id, payload);
       return { skipped: true, message };
     }
 
-    console.log('⏳ [SDK][Profile] Waiting for UserLoggedIn flag...');
-    const loggedIn = await waitForUserLoggedIn(30_000);
-    if (!loggedIn) {
-      const message = 'Skipped: timed out waiting for login.';
-      console.warn(`⚠️ [SDK][Profile] ${message}`);
-      return { skipped: true, message };
-    }
-    console.log('✅ [SDK][Profile] User is logged in, proceeding');
-
-    console.log('🏷️ [SDK][Profile] channel_code:', channel_code);
-    console.log('👤 [SDK][Profile] user_id:', user_id);
+    sdkLog.log('🏷️ [SDK][Profile] channel_code:', channel_code);
+    sdkLog.log('👤 [SDK][Profile] user_id:', user_id);
 
     let requestPayload = prepareProfileUpdatePayload(payload, lastSnapshot);
 
     if (isProfileUpdatePayloadEmpty(requestPayload)) {
       const message =
         'Skipped: no changed profile fields to send (unchanged phone omitted).';
-      console.log(`⏭️ [SDK][Profile] ${message}`, JSON.stringify({ user_id }));
+      sdkLog.log(`⏭️ [SDK][Profile] ${message}`, JSON.stringify({ user_id }));
       await saveLastProfileSnapshot(user_id, payload);
+      markSessionProfileHandled(user_id, payload);
       return { skipped: true, message };
     }
 
-    console.log(
+    sdkLog.log('⏳ [SDK][Profile] Waiting for UserLoggedIn flag...');
+    const loggedIn = await waitForUserLoggedIn(30_000);
+    if (!loggedIn) {
+      const message = 'Skipped: timed out waiting for login.';
+      sdkLog.warn(`⚠️ [SDK][Profile] ${message}`);
+      return { skipped: true, message };
+    }
+    sdkLog.log('✅ [SDK][Profile] User is logged in, proceeding');
+
+    sdkLog.log(
       '📡 [SDK][Profile] PUT /customer/profile payload:',
       JSON.stringify(requestPayload, null, 2)
     );
 
     const baseUrl = await getApiBaseUrl();
     const url = `${baseUrl}/v1/customer/profile?code=${encodeURIComponent(user_id)}`;
-    console.log('🌐 [SDK][Profile] Request URL:', url);
+    sdkLog.log('🌐 [SDK][Profile] Request URL:', url);
 
     const commonHeaders = await buildCommonHeaders();
 
@@ -246,7 +279,7 @@ export async function updateUserProfile(
     let strippedPhonesForDuplicate = false;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      console.log(`🔄 [SDK][Profile] Attempt ${attempt}/${MAX_RETRIES}`);
+      sdkLog.log(`🔄 [SDK][Profile] Attempt ${attempt}/${MAX_RETRIES}`);
       const startTime = Date.now();
 
       const { ok, status, data, rawText } = await attemptProfileUpdate(
@@ -257,15 +290,16 @@ export async function updateUserProfile(
       lastStatus = status;
       const serverMessage = extractProfileErrorMessage(data, rawText);
 
-      console.log(
+      sdkLog.log(
         `⏱️ [SDK][Profile] Response in ${Date.now() - startTime}ms — status ${status}`
       );
-      console.log('📥 [SDK][Profile] Response body:', data);
+      sdkLog.log('📥 [SDK][Profile] Response body:', data);
 
       if (ok) {
-        console.log('✅ [SDK][Profile] Profile updated successfully:', data);
+        sdkLog.log('✅ [SDK][Profile] Profile updated successfully:', data);
         await saveLastProfileSnapshot(user_id, payload);
-        console.log('🔒 [SDK][Profile] Profile snapshot saved locally');
+        sdkLog.log('🔒 [SDK][Profile] Profile snapshot saved locally');
+        markSessionProfileHandled(user_id, payload);
         return {
           skipped: false,
           message: 'Profile updated (API call sent).',
@@ -288,11 +322,12 @@ export async function updateUserProfile(
         if (requestPayload.phones?.length && !strippedPhonesForDuplicate) {
           strippedPhonesForDuplicate = true;
           delete requestPayload.phones;
-          console.warn(
+          sdkLog.warn(
             '⚠️ [SDK][Profile] Phone already on profile — omitting phones and retrying update for other fields'
           );
           if (isProfileUpdatePayloadEmpty(requestPayload)) {
             await saveLastProfileSnapshot(user_id, payload);
+            markSessionProfileHandled(user_id, payload);
             return {
               skipped: true,
               message:
@@ -308,7 +343,7 @@ export async function updateUserProfile(
       }
 
       if (status >= 400 && status < 500) {
-        console.error(
+        sdkLog.error(
           `🚨 [SDK][Profile] Client error ${status}, not retrying`,
           data
         );
@@ -319,7 +354,7 @@ export async function updateUserProfile(
 
       if (attempt < MAX_RETRIES) {
         const wait = RETRY_DELAYS[attempt - 1] ?? 5_000;
-        console.warn(
+        sdkLog.warn(
           `⚠️ [SDK][Profile] Server error ${status}, retrying in ${wait}ms...`
         );
         await delay(wait);
@@ -330,10 +365,10 @@ export async function updateUserProfile(
       `[SDK][Profile] HTTP ${lastStatus} after ${MAX_RETRIES} attempts.`
     );
   } catch (err) {
-    console.error('❌ [SDK][Profile] updateUserProfile failed', err);
+    sdkLog.error('❌ [SDK][Profile] updateUserProfile failed', err);
     throw err;
   } finally {
     profileUpdateInProgress = false;
-    console.log('🏁 [SDK][Profile] updateUserProfile finished');
+    sdkLog.log('🏁 [SDK][Profile] updateUserProfile finished');
   }
 }

@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { sdkLog } from '../helpers/sdkLogger';
 import {
   View,
   StyleSheet,
@@ -28,9 +29,9 @@ export default function BannerPoll({
   const hasIframe = /<iframe[\s>]/i.test(cleanHtml);
   // console.log('🧾 [BannerPoll] Raw HTML:', html);
   // console.log('🧾 [BannerPoll] Clean HTML:', cleanHtml);
-  console.log('📨 messageId at bann:', messageId);
-  console.log('📨 filterId at bann:', filterId);
-  console.log('[BannerPoll] HTML contains iframe:', hasIframe);
+  sdkLog.log('📨 messageId at bann:', messageId);
+  sdkLog.log('📨 filterId at bann:', filterId);
+  sdkLog.log('[BannerPoll] HTML contains iframe:', hasIframe);
   // Send track event helper
   const sendTrackEvent = async (
     eventType: 'cta' | 'dismissed' | 'longPress' | 'openUrl' | 'unknown',
@@ -43,7 +44,7 @@ export default function BannerPoll({
       data: ctaId ? { ctaId } : {},
     };
 
-    console.log('📤 Sending track event:', payload);
+    sdkLog.log('📤 Sending track event:', payload);
     const commonHeaders = await buildCommonHeaders();
     const apiBaseUrl = await getApiBaseUrl();
 
@@ -62,9 +63,9 @@ export default function BannerPoll({
       clearTimeout(timeout);
 
       const data = await res.json();
-      console.log('✅ Track API response:', data);
+      sdkLog.log('✅ Track API response:', data);
     } catch (error) {
-      console.error('❌ Track API error:', error);
+      sdkLog.error('❌ Track API error:', error);
     }
   };
 
@@ -85,7 +86,7 @@ export default function BannerPoll({
     value?: string
   ) => {
     sendTrackEvent(eventType, value).catch((err) => {
-      console.warn(
+      sdkLog.warn(
         '[BannerPoll] Track event failed (non-blocking):',
         eventType,
         err
@@ -128,7 +129,7 @@ export default function BannerPoll({
     }
     if (!picked) return;
     markCtaHandledForCurrentTouch();
-    console.log('[BannerPoll][HTML fallback CTA]', {
+    sdkLog.log('[BannerPoll][HTML fallback CTA]', {
       x,
       y,
       picked,
@@ -141,7 +142,7 @@ export default function BannerPoll({
         await Linking.openURL(encodeURI(picked.url));
         fireAndForgetTrack('openUrl', picked.url);
       } catch (err) {
-        console.warn('[BannerPoll][HTML fallback] open failed:', err);
+        sdkLog.warn('[BannerPoll][HTML fallback] open failed:', err);
       }
     }
   };
@@ -150,14 +151,14 @@ export default function BannerPoll({
     const url = normalizeUrl(rawUrl || '');
     if (!url) return false;
     try {
-      console.log('[BannerPoll][NativeIntercept] Opening URL:', url);
+      sdkLog.log('[BannerPoll][NativeIntercept] Opening URL:', url);
       markCtaHandledForCurrentTouch();
       fireAndForgetTrack('cta', 'native_intercept');
       await Linking.openURL(encodeURI(url));
       fireAndForgetTrack('openUrl', url);
       return true;
     } catch (err) {
-      console.warn('[BannerPoll][NativeIntercept] Failed to open URL:', err);
+      sdkLog.warn('[BannerPoll][NativeIntercept] Failed to open URL:', err);
       return false;
     }
   };
@@ -664,7 +665,7 @@ export default function BannerPoll({
         setSupportMultipleWindows={false}
         javaScriptCanOpenWindowsAutomatically
         onTouchStart={() => {
-          console.log('[BannerPoll][Native] WebView touch start');
+          sdkLog.log('[BannerPoll][Native] WebView touch start');
         }}
         onTouchEnd={(e) => {
           tapSeqRef.current += 1;
@@ -672,14 +673,14 @@ export default function BannerPoll({
           lastTouchSeqRef.current = seq;
           const x = e?.nativeEvent?.locationX ?? e?.nativeEvent?.pageX ?? 0;
           const y = e?.nativeEvent?.locationY ?? e?.nativeEvent?.pageY ?? 0;
-          console.log('[BannerPoll][Native] WebView touch end', { x, y, seq });
+          sdkLog.log('[BannerPoll][Native] WebView touch end', { x, y, seq });
           reinjectAndProbeTap(x, y);
           setTimeout(() => {
             fallbackTapFromHtml(x, y, seq).catch(() => {});
           }, 500);
         }}
         onTouchCancel={() => {
-          console.log('[BannerPoll][Native] WebView touch cancel');
+          sdkLog.log('[BannerPoll][Native] WebView touch cancel');
         }}
         onTouchMove={() => {}}
         injectedJavaScriptBeforeContentLoaded={bridgeHandleClick}
@@ -703,7 +704,7 @@ export default function BannerPoll({
             const msg = JSON.parse(event.nativeEvent.data);
             if (msg.type === '__bannerTouchDebug') {
               if (Platform.OS === 'android') {
-                console.log('[BannerPoll][Android WebView touch]', {
+                sdkLog.log('[BannerPoll][Android WebView touch]', {
                   phase: msg.phase,
                   x: msg.x,
                   y: msg.y,
@@ -715,26 +716,26 @@ export default function BannerPoll({
               return;
             }
             if (msg.type === '__bannerTapped') {
-              console.log('[BannerPoll] Banner tapped:', msg);
+              sdkLog.log('[BannerPoll] Banner tapped:', msg);
               return;
             }
             if (msg.type === '__bannerInjected') {
-              console.log('[BannerPoll][Injected]', msg);
+              sdkLog.log('[BannerPoll][Injected]', msg);
               return;
             }
             if (msg.type === '__bannerInjectedError') {
-              console.log('[BannerPoll][InjectedError]', msg);
+              sdkLog.log('[BannerPoll][InjectedError]', msg);
               return;
             }
             if (msg.type === '__nativeTapProbe') {
-              console.log('[BannerPoll][NativeTapProbe]', msg);
+              sdkLog.log('[BannerPoll][NativeTapProbe]', msg);
               return;
             }
             if (msg.type === '__nativeTapProbeError') {
-              console.log('[BannerPoll][NativeTapProbeError]', msg);
+              sdkLog.log('[BannerPoll][NativeTapProbeError]', msg);
               return;
             }
-            console.log('📩 BannerPoll message:', msg);
+            sdkLog.log('📩 BannerPoll message:', msg);
 
             // Template posts { event: "INAPP_CTA", data: { label, value } }
             if (msg.event === 'INAPP_CTA' || msg.type === 'INAPP_CTA') {
@@ -761,7 +762,7 @@ export default function BannerPoll({
 
               fireAndForgetTrack('cta', ctaId);
               if (url) {
-                console.log('🌐 Opening CTA link:', url);
+                sdkLog.log('🌐 Opening CTA link:', url);
                 const finalUrl = encodeURI(url);
                 await Linking.openURL(finalUrl);
                 fireAndForgetTrack('openUrl', url);
@@ -771,7 +772,7 @@ export default function BannerPoll({
               const ctaId = String(msg.ctaId || '').trim();
               const url = normalizeUrl(msg.url);
               if (ctaId) {
-                console.log(
+                sdkLog.log(
                   '[BannerPoll] CTA from link tap:',
                   ctaId,
                   url || '(no url)'
@@ -779,21 +780,21 @@ export default function BannerPoll({
                 fireAndForgetTrack('cta', ctaId);
               }
               if (url) {
-                console.log('🌐 Opening link:', url);
+                sdkLog.log('🌐 Opening link:', url);
                 const finalUrl = encodeURI(url);
                 await Linking.openURL(finalUrl);
                 fireAndForgetTrack('openUrl', url);
               }
             } else if (msg.type === 'dismissed') {
               markCtaHandledForCurrentTouch();
-              console.log('🚪 Banner dismissed');
+              sdkLog.log('🚪 Banner dismissed');
               fireAndForgetTrack('dismissed');
               onClose?.();
             } else {
               fireAndForgetTrack('unknown');
             }
           } catch (err) {
-            console.warn(
+            sdkLog.warn(
               '⚠️ Invalid message from WebView:',
               event.nativeEvent.data
             );

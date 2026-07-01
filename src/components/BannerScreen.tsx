@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Text } from 'react-native';
 import { getDeviceId } from '../utils/device';
 import { CustomBanner } from './CustomBanner';
+import { sdkLog } from '../helpers/sdkLogger';
 
 type BannerProps = {
   backgroundColor: string;
@@ -15,7 +16,7 @@ export const BannerScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getDeviceId().then((id) => console.log('✅ Device ID:', id));
+    getDeviceId().then((id) => sdkLog.log('✅ Device ID:', id));
   }, []);
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export const BannerScreen: React.FC = () => {
           });
         }
       })
-      .catch((err) => console.error('Failed to fetch banner:', err))
+      .catch((err) => sdkLog.error('Failed to fetch banner:', err))
       .finally(() => setLoading(false));
   }, []);
 

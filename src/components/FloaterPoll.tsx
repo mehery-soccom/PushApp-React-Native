@@ -1,4 +1,5 @@
 import { useRef, useEffect } from 'react';
+import { sdkLog } from '../helpers/sdkLogger';
 import {
   StyleSheet,
   Dimensions,
@@ -119,7 +120,7 @@ export default function Floater({
         body: JSON.stringify(payload),
       });
     } catch (error) {
-      console.error('❌ Track API error:', error);
+      sdkLog.error('❌ Track API error:', error);
     }
   };
 
@@ -182,7 +183,7 @@ export default function Floater({
               await sendTrackEvent('openUrl', url);
               await Linking.openURL(url);
             } catch (err) {
-              console.error('❌ Failed to open URL:', err);
+              sdkLog.error('❌ Failed to open URL:', err);
             }
           }
           break;
@@ -195,7 +196,7 @@ export default function Floater({
               await sendTrackEvent('openUrl', url);
               await Linking.openURL(url);
             } catch (err) {
-              console.error('❌ Failed to open URL:', err);
+              sdkLog.error('❌ Failed to open URL:', err);
             }
           }
           break;

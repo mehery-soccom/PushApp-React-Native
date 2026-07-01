@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { getFcmToken } from '../firebase/Fb';
 import { registerDeviceWithAPNS } from '../firebase/IosAPNS';
+import { sdkLog } from '../helpers/sdkLogger';
 import {
   DEFAULT_USER_ID_WAIT_MS,
   waitForEffectiveUserId,
@@ -64,7 +65,7 @@ export async function ensureDeviceRegistered(
     if (userId) return true;
   }
 
-  console.log(
+  sdkLog.log(
     '[SDK] Waiting for device registration before lifecycle events...'
   );
 
@@ -72,7 +73,7 @@ export async function ensureDeviceRegistered(
     try {
       await getFcmToken();
     } catch (error) {
-      console.warn('[SDK] getFcmToken failed during ensureDeviceRegistered', error);
+      sdkLog.warn('[SDK] getFcmToken failed during ensureDeviceRegistered', error);
     }
   } else {
     const token = await waitForStoredPushToken(remainingMs());
@@ -80,7 +81,7 @@ export async function ensureDeviceRegistered(
       try {
         await registerDeviceWithAPNS(token);
       } catch (error) {
-        console.warn(
+        sdkLog.warn(
           '[SDK] registerDeviceWithAPNS failed during ensureDeviceRegistered',
           error
         );
@@ -90,7 +91,7 @@ export async function ensureDeviceRegistered(
 
   const registered = await waitForRegisteredFlag(remainingMs());
   if (!registered) {
-    console.warn(
+    sdkLog.warn(
       '[SDK] Device registration not confirmed before lifecycle events.'
     );
     return false;
@@ -100,7 +101,7 @@ export async function ensureDeviceRegistered(
 
   const userId = await waitForEffectiveUserId(remainingMs());
   if (!userId) {
-    console.warn(
+    sdkLog.warn(
       '[SDK] Device registered but server user_id unavailable before lifecycle events.'
     );
     return false;

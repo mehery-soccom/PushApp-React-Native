@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { sdkLog } from '../helpers/sdkLogger';
 import {
   View,
   TouchableOpacity,
@@ -132,7 +133,7 @@ export default function PipPoll({
         body: JSON.stringify(payload),
       });
     } catch (error) {
-      console.error('❌ Track API error:', error);
+      sdkLog.error('❌ Track API error:', error);
     }
   };
 
@@ -195,7 +196,7 @@ export default function PipPoll({
               await sendTrackEvent('openUrl', url);
               await Linking.openURL(url);
             } catch (err) {
-              console.error('❌ Failed to open URL:', err);
+              sdkLog.error('❌ Failed to open URL:', err);
             }
           }
           break;
@@ -208,7 +209,7 @@ export default function PipPoll({
               await sendTrackEvent('openUrl', url);
               await Linking.openURL(url);
             } catch (err) {
-              console.error('❌ Failed to open URL:', err);
+              sdkLog.error('❌ Failed to open URL:', err);
             }
           }
           break;

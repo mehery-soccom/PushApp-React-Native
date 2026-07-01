@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { OnAppOpen } from '../events/custom/CustomEvents';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+import { sdkLog } from '../helpers/sdkLogger';
 import {
   extractChannelSegment,
   getApiBaseUrl,
@@ -57,7 +58,7 @@ export async function persistRegisterIdentity(data: unknown): Promise<void> {
   if (valuesToStore.length > 0) {
     await AsyncStorage.multiSet(valuesToStore);
     if (registeredUserId) {
-      console.log('✅ registered_user_id stored:', registeredUserId);
+      sdkLog.log('✅ registered_user_id stored:', registeredUserId);
     }
   }
 }
@@ -151,7 +152,7 @@ async function waitForStoredRegistrationToken(
     }
 
     if (!loggedWaiting) {
-      console.log(
+      sdkLog.log(
         `⏳ Waiting up to ${Math.ceil(timeoutMs / 1000)}s for stored push token before auto-register.`
       );
       loggedWaiting = true;
@@ -175,7 +176,7 @@ async function recoverDeviceRegistration(
 ): Promise<boolean> {
   const { token, fcmToken } = await waitForStoredRegistrationToken();
   if (!token) {
-    console.warn(
+    sdkLog.warn(
       '⚠️ Cannot auto-register device: token is missing in storage.'
     );
     return false;
@@ -204,7 +205,7 @@ async function recoverDeviceRegistration(
   const text = await response.text();
   if (!response.ok) {
     if (/device already exists/i.test(text)) {
-      console.warn(
+      sdkLog.warn(
         'ℹ️ Device already exists during auto-register before relink; continuing to /device/link retry.'
       );
       const parsed = tryParseRegisterResponse(text);
@@ -212,7 +213,7 @@ async function recoverDeviceRegistration(
         await persistRegisterIdentity(parsed);
       }
     } else {
-      console.warn(
+      sdkLog.warn(
         `⚠️ Auto-register failed before relink. Status: ${response.status} - ${text}`
       );
       return false;
@@ -228,14 +229,14 @@ async function recoverDeviceRegistration(
     ['UserRegistered', 'true'],
     ['isRegistered', 'true'],
   ]);
-  console.log('✅ Auto-registered device before relink.');
+  sdkLog.log('✅ Auto-registered device before relink.');
   return true;
 }
 
 export function logUserDetails(details: UserDetails) {
-  console.log('User Details:');
+  sdkLog.log('User Details:');
   Object.entries(details).forEach(([key, value]) => {
-    console.log(`${key}: ${value}`);
+    sdkLog.log(`${key}: ${value}`);
   });
 
   storedUserDetails = details;
@@ -244,25 +245,25 @@ export function logUserDetails(details: UserDetails) {
 export async function OnUserLogin(user_id: string) {
   const normalizedUserId = user_id.trim();
   if (!normalizedUserId) {
-    console.warn('⏭️ [SDK][OnUserLogin] Skipped: user_id is missing/empty.');
+    sdkLog.warn('⏭️ [SDK][OnUserLogin] Skipped: user_id is missing/empty.');
     return;
   }
 
   if (loginInProgress) {
-    console.log(
+    sdkLog.log(
       '⏭️ [SDK][OnUserLogin] Skipped: login already in progress (duplicate call).'
     );
     return;
   }
   loginInProgress = true;
 
-  console.log('userid from front end:', normalizedUserId);
+  sdkLog.log('userid from front end:', normalizedUserId);
 
   try {
     await AsyncStorage.setItem('user_id', normalizedUserId);
-    console.log('✅ user_id stored:', normalizedUserId);
+    sdkLog.log('✅ user_id stored:', normalizedUserId);
   } catch (err) {
-    console.error('❌ Failed to store user_id:', err);
+    sdkLog.error('❌ Failed to store user_id:', err);
     loginInProgress = false;
     return;
   }
@@ -274,13 +275,13 @@ export async function OnUserLogin(user_id: string) {
     const loginUserId = (userID || normalizedUserId).trim();
 
     if (!device_id) {
-      console.warn(
+      sdkLog.warn(
         '⏭️ [SDK][OnUserLogin] Skipped: device_id is not available.'
       );
       return;
     }
     if (!loginUserId) {
-      console.warn(
+      sdkLog.warn(
         '⏭️ [SDK][OnUserLogin] Skipped: user_id unavailable after storage.'
       );
       return;
@@ -306,7 +307,7 @@ export async function OnUserLogin(user_id: string) {
       lastLinkedHost === currentHostRoot;
 
     if (loginContextMatches) {
-      console.log(
+      sdkLog.log(
         '⏭️ [SDK][OnUserLogin] Skipped: same contact already logged in.',
         JSON.stringify({
           contact_id: storedContactId,
@@ -319,7 +320,7 @@ export async function OnUserLogin(user_id: string) {
     }
 
     if (isUserLoggedIn && !loginContextMatches) {
-      console.log(
+      sdkLog.log(
         '🔁 [SDK][OnUserLogin] Re-linking: channel or environment changed since last login.',
         JSON.stringify({
           lastLinkedChannel,
@@ -329,7 +330,7 @@ export async function OnUserLogin(user_id: string) {
         })
       );
     }
-    console.log('channel id at custom:', channel_id);
+    sdkLog.log('channel id at custom:', channel_id);
 
     const commonHeaders = await buildCommonHeaders();
     const apiBaseUrl = await getApiBaseUrl();
@@ -343,7 +344,7 @@ export async function OnUserLogin(user_id: string) {
         channel_id: channelIdValue,
         geoIP,
       };
-      console.log('📦 Payload of login:', payload);
+      sdkLog.log('📦 Payload of login:', payload);
       const response = await fetch(`${apiBaseUrl}/device/link`, {
         method: 'POST',
         headers: {
@@ -358,7 +359,7 @@ export async function OnUserLogin(user_id: string) {
 
     try {
       let { response, text } = await linkDevice(primaryChannelId);
-      console.log('Response text:', text);
+      sdkLog.log('Response text:', text);
 
       const parsedChannelSegment = extractChannelSegment(primaryChannelId);
       const shouldRetryWithParsedChannel =
@@ -369,13 +370,13 @@ export async function OnUserLogin(user_id: string) {
         /non-existent collection in transaction/i.test(text);
 
       if (shouldRetryWithParsedChannel) {
-        console.warn(
+        sdkLog.warn(
           `⚠️ /device/link failed for full identifier, retrying with parsed channel segment: ${parsedChannelSegment}`
         );
         const retryResult = await linkDevice(parsedChannelSegment);
         response = retryResult.response;
         text = retryResult.text;
-        console.log('Retry response text:', text);
+        sdkLog.log('Retry response text:', text);
       }
 
       const shouldRecoverMissingDevice =
@@ -383,7 +384,7 @@ export async function OnUserLogin(user_id: string) {
         response.status === 404 &&
         /device not found/i.test(text);
       if (shouldRecoverMissingDevice) {
-        console.warn(
+        sdkLog.warn(
           '⚠️ /device/link reported missing device. Attempting auto-register then retry.'
         );
         const recovered = await recoverDeviceRegistration(
@@ -396,7 +397,7 @@ export async function OnUserLogin(user_id: string) {
           const retryResult = await linkDevice(primaryChannelId);
           response = retryResult.response;
           text = retryResult.text;
-          console.log('Retry response text after auto-register:', text);
+          sdkLog.log('Retry response text after auto-register:', text);
 
           const shouldRetryLinkWithParsedChannel =
             !response.ok &&
@@ -405,13 +406,13 @@ export async function OnUserLogin(user_id: string) {
             parsedChannelSegment !== primaryChannelId &&
             /device not found/i.test(text);
           if (shouldRetryLinkWithParsedChannel) {
-            console.warn(
+            sdkLog.warn(
               `⚠️ /device/link still missing after auto-register; retrying with parsed channel segment: ${parsedChannelSegment}`
             );
             const parsedRetry = await linkDevice(parsedChannelSegment);
             response = parsedRetry.response;
             text = parsedRetry.text;
-            console.log('Retry response text with parsed channel:', text);
+            sdkLog.log('Retry response text with parsed channel:', text);
           }
         }
       }
@@ -421,7 +422,7 @@ export async function OnUserLogin(user_id: string) {
       }
 
       const data = JSON.parse(text);
-      console.log('✅ Log in successfully:', data);
+      sdkLog.log('✅ Log in successfully:', data);
 
       const sessionFromLink = extractSessionIdFromLinkResponse(data);
       const responseContactId =
@@ -439,19 +440,19 @@ export async function OnUserLogin(user_id: string) {
       if (sessionFromLink) {
         valuesToStore.push([SESSION_ID_STORAGE_KEY, sessionFromLink]);
       } else {
-        console.warn('⚠️ /device/link response had no device.session_id');
+        sdkLog.warn('⚠️ /device/link response had no device.session_id');
       }
 
       await AsyncStorage.multiSet(valuesToStore);
-      console.log('🟢 UserLoggedIn set to true');
-      console.log('✅ contact_id stored:', finalContactId);
+      sdkLog.log('🟢 UserLoggedIn set to true');
+      sdkLog.log('✅ contact_id stored:', finalContactId);
       if (sessionFromLink) {
-        console.log('✅ session_id stored from /device/link');
+        sdkLog.log('✅ session_id stored from /device/link');
       }
 
       OnAppOpen();
     } catch (error: any) {
-      console.warn('❌ Error registering device:', error.message);
+      sdkLog.warn('❌ Error registering device:', error.message);
     }
   } finally {
     loginInProgress = false;
@@ -459,7 +460,7 @@ export async function OnUserLogin(user_id: string) {
 }
 
 export async function OnUserLogOut(user_id: string) {
-  console.log('userid from fornt end:', user_id);
+  sdkLog.log('userid from fornt end:', user_id);
   // if (!user_id) {
   //   console.warn('❌ user_id is missing. Skipping device registration.');
   //   return;
@@ -469,10 +470,10 @@ export async function OnUserLogOut(user_id: string) {
   const device_id = await AsyncStorage.getItem('device_id');
 
   const channel_id = await AsyncStorage.getItem('mehery_channel_id');
-  console.log('channel id at custom:', channel_id);
+  sdkLog.log('channel id at custom:', channel_id);
 
   if (!device_id) {
-    console.warn('❌ Device ID not available.');
+    sdkLog.warn('❌ Device ID not available.');
     return;
   }
 
@@ -486,7 +487,7 @@ export async function OnUserLogOut(user_id: string) {
     LAST_LINKED_HOST_KEY,
   ]);
 
-  console.log('✅ Device is being registered with ID:', device_id);
+  sdkLog.log('✅ Device is being registered with ID:', device_id);
 
   const payload = {
     device_id,
@@ -520,10 +521,10 @@ export async function OnUserLogOut(user_id: string) {
       return response.json();
     })
     .then((data) => {
-      console.log('Logged out successfully:', data);
+      sdkLog.log('Logged out successfully:', data);
     })
     .catch((error) => {
-      console.warn('❌ Error registering device:', error);
+      sdkLog.warn('❌ Error registering device:', error);
     });
 }
 export function getLoggedUserDetails(): UserDetails | null {

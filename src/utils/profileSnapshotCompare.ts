@@ -74,11 +74,74 @@ export function stableStringify(value: unknown): string {
   return JSON.stringify(sortKeysDeep(value));
 }
 
+/** Lifts legacy identity fields from additionalInfo to top-level canonical shape. */
+export function canonicalizeProfileSnapshot(
+  snapshot: ProfileApiPayload
+): ProfileApiPayload {
+  if (!isLegacyProfileSnapshot(snapshot)) {
+    return snapshot;
+  }
+
+  const source = { ...(snapshot.additionalInfo ?? {}) };
+  const payload: ProfileApiPayload = {};
+
+  if (snapshot.devices !== undefined) {
+    payload.devices = snapshot.devices;
+  }
+  if (snapshot.cohorts !== undefined) {
+    payload.cohorts = snapshot.cohorts;
+  }
+
+  if (snapshot.name !== undefined) {
+    payload.name = snapshot.name;
+  } else if (source.name !== undefined && source.name !== null) {
+    const name = source.name;
+    if (
+      typeof name === 'string' ||
+      (typeof name === 'object' && !Array.isArray(name))
+    ) {
+      payload.name = name as string | Record<string, unknown>;
+    }
+    delete source.name;
+  }
+
+  const phones =
+    snapshot.phones ??
+    normalizePhones(source.phones ?? source.mobile ?? source.phone);
+  if (phones) {
+    payload.phones = phones;
+  }
+  delete source.phones;
+  delete source.mobile;
+  delete source.phone;
+
+  if (snapshot.emails?.length) {
+    payload.emails = snapshot.emails;
+  } else if (Array.isArray(source.emails) && source.emails.length) {
+    payload.emails = source.emails as ProfileEmail[];
+    delete source.emails;
+  }
+
+  const additionalInfo: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (RESERVED_INFO_KEYS.has(key)) continue;
+    additionalInfo[key] = value;
+  }
+  if (Object.keys(additionalInfo).length) {
+    payload.additionalInfo = additionalInfo;
+  }
+
+  return payload;
+}
+
 export function profilePayloadsEqual(
   a: ProfileApiPayload,
   b: ProfileApiPayload
 ): boolean {
-  return stableStringify(a) === stableStringify(b);
+  return (
+    stableStringify(canonicalizeProfileSnapshot(a)) ===
+    stableStringify(canonicalizeProfileSnapshot(b))
+  );
 }
 
 /**
@@ -153,8 +216,9 @@ export function prepareProfileUpdatePayload(
     return desired;
   }
 
+  const canonicalLast = canonicalizeProfileSnapshot(lastSuccessful);
   const outbound: ProfileApiPayload = { ...desired };
-  const lastPhones = extractPhonesFromSnapshot(lastSuccessful);
+  const lastPhones = extractPhonesFromSnapshot(canonicalLast);
 
   if (
     outbound.phones &&
@@ -166,9 +230,8 @@ export function prepareProfileUpdatePayload(
 
   if (
     outbound.emails &&
-    lastSuccessful.emails &&
-    stableStringify(outbound.emails) ===
-      stableStringify(lastSuccessful.emails)
+    canonicalLast.emails &&
+    stableStringify(outbound.emails) === stableStringify(canonicalLast.emails)
   ) {
     delete outbound.emails;
   }

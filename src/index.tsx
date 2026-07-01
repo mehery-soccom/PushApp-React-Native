@@ -32,6 +32,7 @@ export {
 export {
   updateUserProfile,
   type UpdateUserProfileResult,
+  type UpdateUserProfileOptions,
 } from './events/custom/ProfileUpdate';
 
 export { PollOverlayProvider } from './components/PollOverlay';
@@ -47,6 +48,7 @@ export {
 export type { TriggerCarouselNotificationParams } from './native/LiveActivity';
 
 import { AppRegistry } from 'react-native';
+import { sdkLog, setSdkLogging } from './helpers/sdkLogger';
 
 // 🛠 Imports
 import { Platform, NativeModules, NativeEventEmitter } from 'react-native';
@@ -79,6 +81,7 @@ export {
 export type { NotificationLinkRewrite } from './utils/notificationLink';
 
 import { buildCommonHeaders } from './helpers/buildCommonHeaders';
+import { resolveDeviceHeaders } from './utils/resolveDeviceHeaders';
 import {
   getApiBaseUrl,
   MEHERY_PUSHAPP_HOST_ROOT_KEY,
@@ -104,26 +107,26 @@ const { PushTokenManager } = NativeModules;
 //       removeAllListeners: () => {},
 //     };
 // // 🚀 SDK Init
-console.log('PushTokenManager:', NativeModules.PushTokenManager);
+sdkLog.log('PushTokenManager:', NativeModules.PushTokenManager);
 
 let iosListenerAdded = false;
 
 export const iosChecker = () => {
   if (!PushTokenManager) {
-    console.warn('⚠️ Native module PushTokenManager is NOT available.');
+    sdkLog.warn('⚠️ Native module PushTokenManager is NOT available.');
     return;
   }
 
   if (iosListenerAdded) {
-    console.log('ℹ️ iOS listener already added, skipping duplicate.');
+    sdkLog.log('ℹ️ iOS listener already added, skipping duplicate.');
     return;
   }
 
   const pushEmitter = new NativeEventEmitter(PushTokenManager);
 
-  console.log('🍏 iOS: Setting up PushTokenEvent listener');
+  sdkLog.log('🍏 iOS: Setting up PushTokenEvent listener');
   pushEmitter.addListener('PushTokenEvent', ({ type, token }) => {
-    console.log(`📡 Received ${type} token from native: ${token}`);
+    sdkLog.log(`📡 Received ${type} token from native: ${token}`);
     registerDeviceWithAPNS(token);
   });
 
@@ -178,7 +181,7 @@ const trackIosPushEvent = async (
       apiBaseUrl = await getApiBaseUrl();
     }
     if (!apiBaseUrl?.trim()) {
-      console.log(
+      sdkLog.log(
         '[PushTrack] iOS skipped (no api_base_url in payload and getApiBaseUrl empty)',
         event
       );
@@ -194,12 +197,12 @@ const trackIosPushEvent = async (
       body: JSON.stringify(body),
     });
     if (res.ok) {
-      console.log('[PushTrack] iOS', event, 'HTTP', res.status);
+      sdkLog.log('[PushTrack] iOS', event, 'HTTP', res.status);
     } else {
-      console.log('[PushTrack] iOS', event, 'HTTP', res.status, '(not ok)');
+      sdkLog.log('[PushTrack] iOS', event, 'HTTP', res.status, '(not ok)');
     }
   } catch (err) {
-    console.log('⚠️ iOS push track failed (non-blocking):', err);
+    sdkLog.log('⚠️ iOS push track failed (non-blocking):', err);
   }
 };
 
@@ -234,7 +237,7 @@ const sendDailyPing = async () => {
     const contactId = await AsyncStorage.getItem('contact_id');
 
     if (!channelId || !contactId) {
-      console.warn('⚠️ Missing channel_id or contact_id. Skipping ping.');
+      sdkLog.warn('⚠️ Missing channel_id or contact_id. Skipping ping.');
       return;
     }
 
@@ -243,7 +246,7 @@ const sendDailyPing = async () => {
       contact_id: contactId,
     };
 
-    console.log('📡 Sending silent daily ping:', payload);
+    sdkLog.log('📡 Sending silent daily ping:', payload);
     const commonHeaders = await buildCommonHeaders();
 
     const apiBaseUrl = await getApiBaseUrl();
@@ -256,9 +259,9 @@ const sendDailyPing = async () => {
       body: JSON.stringify(payload),
     });
 
-    console.log('✅ Silent daily ping sent');
+    sdkLog.log('✅ Silent daily ping sent');
   } catch (err) {
-    console.error('❌ Silent ping failed:', err);
+    sdkLog.error('❌ Silent ping failed:', err);
   }
 };
 
@@ -299,7 +302,7 @@ export const addNotificationDebugListener = () => {
   const emitter = new NativeEventEmitter(PushTokenManager);
 
   emitter.addListener('PushNotificationEvent', async (payload) => {
-    console.log('📦 Push payload received:', payload);
+    sdkLog.log('📦 Push payload received:', payload);
 
     if (payload?.type !== 'silent_daily_ping') {
       const raw = payload as Record<string, unknown>;
@@ -319,18 +322,18 @@ export const addNotificationDebugListener = () => {
         if (bodyUrl) {
           try {
             await openNotificationLink(bodyUrl);
-            console.log(
+            sdkLog.log(
               '[PushNotificationEvent] iOS body tap opened notification_url:',
               bodyUrl
             );
           } catch (e) {
-            console.warn(
+            sdkLog.warn(
               '[PushNotificationEvent] iOS openNotificationLink failed:',
               e
             );
           }
         } else {
-          console.warn(
+          sdkLog.warn(
             '[PushNotificationEvent] iOS body tap: no notification_url in payload (checked style/templateData). Keys:',
             Object.keys(merged).join(', ')
           );
@@ -341,14 +344,14 @@ export const addNotificationDebugListener = () => {
 
     // ⏰ Ensure it's after 12 noon
     if (!isAfterNoon()) {
-      console.log('⏳ Silent ping received before 12 noon, skipping');
+      sdkLog.log('⏳ Silent ping received before 12 noon, skipping');
       return;
     }
 
     // 🧠 Ensure only once per day
     const shouldRun = await shouldRunSilentPingToday();
     if (!shouldRun) {
-      console.log('⏭️ Silent ping already executed today');
+      sdkLog.log('⏭️ Silent ping already executed today');
       return;
     }
 
@@ -406,22 +409,25 @@ let sdkMounted = false;
 export const initSdk = async (
   context: any,
   identifier: string,
-  environment: SdkInitEnvironmentParam = true
+  environment: SdkInitEnvironmentParam = true,
+  logs: boolean = true
 ) => {
+  setSdkLogging(logs);
   try {
-    console.log('🧩 Initializing Mehery SDK...');
-    console.log(context ? 'Received' : 'Not provided');
-    console.log(`🏷️ Identifier: ${identifier}`);
+    sdkLog.log('🧩 Initializing Mehery SDK...');
+    void resolveDeviceHeaders();
+    sdkLog.log(context ? 'Received' : 'Not provided');
+    sdkLog.log(`🏷️ Identifier: ${identifier}`);
     if (environment === 'development') {
-      console.log('🌐 Environment: development (pushapp.in)');
+      sdkLog.log('🌐 Environment: development (pushapp.in)');
     } else {
-      console.log(
+      sdkLog.log(
         `🧪 ${environment ? 'Sandbox (pushapp.xyz)' : 'Production (pushapp.ai)'}`
       );
     }
 
     const tenant = await storeTenantFromIdentifier(identifier);
-    console.log(`🏢 Resolved tenant: ${tenant}`);
+    sdkLog.log(`🏢 Resolved tenant: ${tenant}`);
 
     const [previousChannelId, previousHostRoot] = await AsyncStorage.multiGet([
       'mehery_channel_id',
@@ -435,7 +441,7 @@ export const initSdk = async (
     await storePushAppHostFromInitParam(environment);
 
     if (initContextChanged) {
-      console.warn(
+      sdkLog.warn(
         '[SDK] Channel or environment changed — clearing cached registration so /device/register runs again.'
       );
       await AsyncStorage.multiRemove([
@@ -451,7 +457,7 @@ export const initSdk = async (
 
     // Keep raw identifier as channel_id for API compatibility.
     await AsyncStorage.setItem('mehery_channel_id', identifier);
-    console.log(`💾 Saved Channel ID: ${identifier}`);
+    sdkLog.log(`💾 Saved Channel ID: ${identifier}`);
 
     // ✅ Fetch or create device ID (await so early custom events have x-device-id)
     await fetchDeviceId();
@@ -472,12 +478,12 @@ export const initSdk = async (
         () => PollOverlayProvider
       );
       sdkMounted = true;
-      console.log('🧱 SDK Overlay mounted');
+      sdkLog.log('🧱 SDK Overlay mounted');
     }
 
     // ✅ Platform-specific setup
     if (Platform.OS === 'android') {
-      console.log('📱 Android: Initializing push notification setup');
+      sdkLog.log('📱 Android: Initializing push notification setup');
 
       const MeheryPushTrack = NativeModules.MeheryPushTrack as
         | { setApiBaseUrl?: (url: string) => void }
@@ -486,7 +492,7 @@ export const initSdk = async (
         try {
           MeheryPushTrack.setApiBaseUrl(await getApiBaseUrl());
         } catch (e) {
-          console.warn('MeheryPushTrack.setApiBaseUrl failed', e);
+          sdkLog.warn('MeheryPushTrack.setApiBaseUrl failed', e);
         }
       }
 
@@ -521,8 +527,8 @@ export const initSdk = async (
     // Connect after register identity is available for guest user id in WS auth.
     await connectToServer();
 
-    console.log('✅ SDK Initialized Successfully');
+    sdkLog.log('✅ SDK Initialized Successfully');
   } catch (error) {
-    console.error('❌ Error initializing SDK:', error);
+    sdkLog.error('❌ Error initializing SDK:', error);
   }
 };

@@ -26,8 +26,7 @@ import { PollOverlayProvider } from 'react-native-mehery-event-sender';
 import { InlinePollContainer } from 'react-native-mehery-event-sender';
 import { TooltipPollContainer } from 'react-native-mehery-event-sender';
 
-import DeviceInfo from 'react-native-device-info';
-import { setDeviceMetadata, setGeoIP } from 'react-native-mehery-event-sender';
+import { setGeoIP } from 'react-native-mehery-event-sender';
 import { EVENT_NAMES } from './constants/events';
 import {
   buildProfilePayload,
@@ -372,44 +371,12 @@ function HomePage({
   );
 }
 
-async function initDeviceMetadata() {
-  try {
-    const metadata: Record<string, string> = {
-      'X-Device-Model': DeviceInfo.getModel?.() || 'unknown',
-      'X-System-Name': DeviceInfo.getSystemName?.() || 'unknown',
-      'X-OS-Version': DeviceInfo.getSystemVersion?.() || 'unknown',
-    };
-
-    if (Platform.OS === 'android') {
-      metadata['X-Manufacturer'] =
-        (await DeviceInfo.getManufacturer()) || 'unknown';
-
-      metadata['X-API-Level'] =
-        String(await DeviceInfo.getApiLevel()) || 'unknown';
-
-      metadata['X-CPU-ABI'] =
-        (await DeviceInfo.supportedAbis()).join(', ') || 'unknown';
-    }
-
-    if (Platform.OS === 'ios') {
-      metadata['X-Device-Name'] =
-        (await DeviceInfo.getDeviceName()) || 'unknown';
-    }
-
-    setDeviceMetadata(metadata);
-  } catch (err) {
-    console.warn('[App] Failed to init device metadata', err);
-  }
-}
-
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'login' | 'home'>('login');
   const [userId, setUserId] = useState<string>('');
 
   useEffect(() => {
     const init = async () => {
-      await initDeviceMetadata();
-
       setGeoIP({
         ip: '103.21.244.0',
         location: { lat: 19.076, lng: 72.8777 },
@@ -419,12 +386,13 @@ export default function App() {
         area: { name: 'Parel' },
       });
 
-      // let environment: SdkInitEnvironmentParam = 'development';
-      // await initSdk(null, 'demo_1754408042569', environment);
-      // console.log('SDK initialized with environment:', environment);
-      let environment: SdkInitEnvironmentParam = false;
-      await initSdk(null, 'demo_1780031354415', environment);
+      let environment: SdkInitEnvironmentParam = 'development';
+      // 4th arg `logs` (default true): pass false to silence SDK console output
+      await initSdk(null, 'demo_1754408042569', environment);
       console.log('SDK initialized with environment:', environment);
+      // let environment: SdkInitEnvironmentParam = false;
+      // await initSdk(null, 'demo_1780031354415', environment);
+      // console.log('SDK initialized with environment:', environment);
       try {
         await messaging().requestPermission();
         const token = await messaging().getToken();

@@ -1,6 +1,7 @@
 import tooltipEmitter from './TooltipEmitter';
+import { sdkLog } from '../helpers/sdkLogger';
 
 export function renderTooltipPoll(placeholderId: string, tooltipData: any) {
-  console.log('🎯 renderTooltipPoll called with:', placeholderId, tooltipData);
+  sdkLog.log('🎯 renderTooltipPoll called with:', placeholderId, tooltipData);
   tooltipEmitter.emit('showTooltip', { placeholderId, tooltipData });
 }

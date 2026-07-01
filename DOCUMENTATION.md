@@ -116,17 +116,20 @@ Enable **Push Notifications** and **Background Modes** (Remote notifications) in
 ### **🚀 SDK Initialization**
 Initialize the SDK as early as possible in your app lifecycle (e.g., in `App.tsx` or `index.js`).
 
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `context` | `any` | — | Reserved; pass `null` |
+| `identifier` | `string` | — | Channel ID, format `"<tenant>_<channel>"` |
+| `environment` | `boolean \| 'development'` | `true` | Host: `false` = production, `true` = sandbox, `'development'` = dev |
+| `logs` | `boolean` | `true` | Enable or disable SDK console logging |
+
 ```tsx
 import { useEffect } from 'react';
 import { initSdk } from 'react-native-mehery-event-sender';
 
 const App = () => {
   useEffect(() => {
-    /**
-     * @param identifier format: "<tenant>_<channel>"
-     * @param debug boolean
-     */
-    initSdk(null, 'your_tenant_id', false);
+    initSdk(null, 'your_tenant_id', false, false); // production, logs off
   }, []);
 
   return <MainNavigator />;

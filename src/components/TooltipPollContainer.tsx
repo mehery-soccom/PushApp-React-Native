@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import TooltipPoll from './TooltipPoll';
 import { sendCustomEvent } from '../events/custom/CustomEvents';
 import tooltipEmitter from './TooltipEmitter';
+import { sdkLog } from '../helpers/sdkLogger';
 
 // ✅ External API to trigger tooltip
 export function renderTooltipPoll(placeholderId: string, tooltipData: any) {
@@ -24,10 +25,10 @@ export function TooltipPollContainer({
       if (id !== placeholderId) return;
 
       if (data) {
-        console.log(`[SDK] Tooltip matches ${placeholderId}, showing it`);
+        sdkLog.log(`[SDK] Tooltip matches ${placeholderId}, showing it`);
         setTooltipData(data);
       } else {
-        console.log(`[SDK] No tooltip for ${placeholderId}, hiding tooltip`);
+        sdkLog.log(`[SDK] No tooltip for ${placeholderId}, hiding tooltip`);
         setTooltipData(null);
       }
     };

@@ -117,15 +117,23 @@ The third argument selects which **pushapp** host the SDK uses for API and WebSo
 - `true` — sandbox: `pushapp.xyz` (default)
 - `'development'` — development: `pushapp.in`
 
+The fourth argument controls SDK console logging:
+
+- `true` — SDK debug output is printed to the JS console (default)
+- `false` — all SDK-owned `console.log` / `warn` / `error` calls are suppressed
+
+Native Android FCM logcat lines are unaffected (native code).
+
 ```tsx
 import { useEffect } from 'react';
 import { initSdk } from 'react-native-mehery-event-sender';
 
 useEffect(() => {
   // identifier format: "<tenant>_<channel>"
-  initSdk(null, 'demo_1754408042569', false);
-  // initSdk(null, 'demo_1754408042569', true);       // sandbox
-  // initSdk(null, 'demo_1754408042569', 'development');
+  initSdk(null, 'demo_1754408042569', false);              // production, logs on (default)
+  // initSdk(null, 'demo_1754408042569', false, false);   // production, logs off
+  // initSdk(null, 'demo_1754408042569', true);           // sandbox
+  // initSdk(null, 'demo_1754408042569', 'development');  // development
 }, []);
 ```
 

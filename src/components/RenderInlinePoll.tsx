@@ -4,6 +4,7 @@ import { View, StyleSheet, Linking } from 'react-native';
 import { sendCustomEvent } from '../events/custom/CustomEvents';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
+import { sdkLog } from '../helpers/sdkLogger';
 
 const inlinePollRegistry: Record<
   string,
@@ -25,7 +26,7 @@ export async function renderInlinePoll(
   // 🧹 Clear if null
   if (!htmlContent) {
     delete inlinePollRegistry[placeholderId];
-    console.log(`🧹 Cleared inline poll for ${placeholderId}`);
+    sdkLog.log(`🧹 Cleared inline poll for ${placeholderId}`);
     return;
   }
 
@@ -39,7 +40,7 @@ export async function renderInlinePoll(
 
   // 🧠 Save in memory only
   inlinePollRegistry[placeholderId] = pollData;
-  console.log(
+  sdkLog.log(
     `💾 Saved inline poll in memory for ${placeholderId} @ ${pollData.updatedAt}`
   );
 }
@@ -81,7 +82,7 @@ export function InlinePollContainer({
         JSON.stringify(memPoll.htmlContent) !==
           JSON.stringify(currentPoll?.htmlContent)
       ) {
-        console.log(`🔄 Poll updated to latest for ${placeholderId}`);
+        sdkLog.log(`🔄 Poll updated to latest for ${placeholderId}`);
         setPoll(memPoll);
       }
     }, 3000);
@@ -103,7 +104,7 @@ export function InlinePollContainer({
       data: ctaId ? { ctaId } : {},
     };
 
-    console.log('📤 Sending track event:', payload);
+    sdkLog.log('📤 Sending track event:', payload);
     const commonHeaders = await buildCommonHeaders();
     const apiBaseUrl = await getApiBaseUrl();
 
@@ -118,9 +119,9 @@ export function InlinePollContainer({
       });
 
       const data = await res.json();
-      console.log('✅ Track API response:', data);
+      sdkLog.log('✅ Track API response:', data);
     } catch (error) {
-      console.error('❌ Track API error:', error);
+      sdkLog.error('❌ Track API error:', error);
     }
   };
 
@@ -156,7 +157,7 @@ export function InlinePollContainer({
         }
         return;
       }
-      console.log('📩 InlinePoll message:', message);
+      sdkLog.log('📩 InlinePoll message:', message);
 
       switch (message.type) {
         case 'buttonClick':
@@ -174,7 +175,7 @@ export function InlinePollContainer({
           });
           if (url) {
             Linking.openURL(url).catch((err) =>
-              console.error('❌ Failed to open URL:', err)
+              sdkLog.error('❌ Failed to open URL:', err)
             );
           }
           break;
@@ -194,25 +195,25 @@ export function InlinePollContainer({
           sendTrackEvent('openUrl', url);
           if (url) {
             Linking.openURL(url).catch((err) =>
-              console.error('❌ Failed to open URL:', err)
+              sdkLog.error('❌ Failed to open URL:', err)
             );
           }
           break;
         }
 
         default:
-          console.warn('⚠️ Unknown message type:', message);
+          sdkLog.warn('⚠️ Unknown message type:', message);
           sendTrackEvent('unknown', JSON.stringify(message));
       }
     } catch (err) {
-      console.warn('⚠️ Invalid message from WebView:', raw);
+      sdkLog.warn('⚠️ Invalid message from WebView:', raw);
       sendTrackEvent('unknown', JSON.stringify(raw));
     }
   };
 
   useEffect(() => {
     if (poll?.htmlContent) {
-      console.log('🧩 Inline poll rendered:', placeholderId);
+      sdkLog.log('🧩 Inline poll rendered:', placeholderId);
       sendCustomEvent('widget_open', {
         compare: placeholderId,
         messageId: poll?.messageId,

@@ -1,5 +1,6 @@
 import {
   buildProfileApiPayload,
+  canonicalizeProfileSnapshot,
   isProfileUpdatePayloadEmpty,
   prepareProfileUpdatePayload,
   profilePayloadsEqual,
@@ -141,5 +142,51 @@ describe('profileSnapshot', () => {
       {}
     );
     expect(profilePayloadsEqual(left, right)).toBe(false);
+  });
+
+  it('canonicalizeProfileSnapshot lifts legacy identity fields', () => {
+    const legacy: ReturnType<typeof buildProfileApiPayload> = {
+      additionalInfo: {
+        name: 'Jane Doe',
+        phones: ['+919876543210'],
+        city: 'Mumbai',
+        _h1_ajejik_h2_: 'static',
+      },
+    };
+    expect(canonicalizeProfileSnapshot(legacy)).toEqual({
+      name: 'Jane Doe',
+      phones: [{ phone: '+919876543210' }],
+      additionalInfo: {
+        city: 'Mumbai',
+        _h1_ajejik_h2_: 'static',
+      },
+    });
+  });
+
+  it('profilePayloadsEqual treats legacy snapshot as equal to canonical desired', () => {
+    const legacy: ReturnType<typeof buildProfileApiPayload> = {
+      additionalInfo: {
+        name: 'Jane',
+        phones: ['+919876543210'],
+        _h1_ajejik_h2_: 'static',
+      },
+    };
+    const desired = buildProfileApiPayload(
+      {
+        name: 'Jane',
+        phones: ['+919876543210'],
+        _h1_ajejik_h2_: 'static',
+      },
+      {}
+    );
+    expect(profilePayloadsEqual(legacy, desired)).toBe(true);
+  });
+
+  it('canonicalizeProfileSnapshot is a no-op for canonical payloads', () => {
+    const canonical = buildProfileApiPayload(
+      { name: 'Jane', city: 'Mumbai' },
+      { plan: 'free' }
+    );
+    expect(canonicalizeProfileSnapshot(canonical)).toBe(canonical);
   });
 });

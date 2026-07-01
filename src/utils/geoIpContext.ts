@@ -1,4 +1,5 @@
 import type { GeoIpInput, GeoIpPayload } from '../types/geoIp';
+import { sdkLog } from '../helpers/sdkLogger';
 
 const DEFAULT_TIMEOUT_MS = 4000;
 const SESSION_ID_STORAGE_KEY = 'sessionId';
@@ -87,7 +88,7 @@ async function postSessionGeoUpdate(
   const commonHeaders = await buildCommonHeaders();
   const apiBaseUrl = await getApiBaseUrl();
   const endpoint = `${apiBaseUrl}/session/geo`;
-  console.log(`🌍 Session geo sync request started: ${endpoint}`);
+  sdkLog.log(`🌍 Session geo sync request started: ${endpoint}`);
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -104,7 +105,7 @@ async function postSessionGeoUpdate(
       }`
     );
   }
-  console.log(
+  sdkLog.log(
     `✅ Session geo sync request succeeded: ${endpoint} (status ${response.status})`
   );
 }
@@ -138,9 +139,9 @@ async function syncSessionGeoInBackground(): Promise<void> {
           SESSION_GEO_SYNC_RETRY_DELAYS_MS.length - 1
         ];
       if (isFinalAttempt) {
-        console.warn('⚠️ Failed to sync session geo context:', error);
+        sdkLog.warn('⚠️ Failed to sync session geo context:', error);
       } else {
-        console.warn('⚠️ Retrying session geo sync after failure:', error);
+        sdkLog.warn('⚠️ Retrying session geo sync after failure:', error);
       }
     }
   }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { sdkLog } from '../helpers/sdkLogger';
 import {
   Modal,
   View,
@@ -8,13 +9,14 @@ import {
   Dimensions,
   SafeAreaView,
 } from 'react-native';
-import { triggerNextPoll } from '../events/custom/CustomEvents';
+import { onPollDismissed } from '../events/custom/CustomEvents';
 
 let showOverlayFn: ((element: React.ReactNode) => void) | null = null;
 let hideOverlayFn: (() => void) | null = null;
 let overlayQueue: React.ReactNode[] = [];
 
 const { width, height } = Dimensions.get('window');
+const POLL_DISMISS_DELAY_MS = 300;
 
 export const PollOverlayProvider: React.FC = () => {
   const [modalContent, setModalContent] = useState<React.ReactNode | null>(
@@ -29,13 +31,20 @@ export const PollOverlayProvider: React.FC = () => {
     React.ReactNode[]
   >([]);
 
+  const dismissModalOverlay = () => {
+    setModalVisible(false);
+    setModalContent(null);
+    setIsFloater(false);
+    setTimeout(() => onPollDismissed(), POLL_DISMISS_DELAY_MS);
+  };
+
   showOverlayFn = (element: React.ReactNode) => {
     const pollType = (element as any)?.props?.pollType;
-    console.log('Displaying poll type:', pollType);
+    sdkLog.log('Displaying poll type:', pollType);
 
     if (pollType && pollType.includes('roadblock')) {
       const cloned = React.cloneElement(element as React.ReactElement<any>, {
-        onClose: hideOverlayFn,
+        onClose: dismissModalOverlay,
       });
 
       setModalContent(cloned);
@@ -43,7 +52,10 @@ export const PollOverlayProvider: React.FC = () => {
       setModalVisible(true);
     } else if (pollType.includes('banner')) {
       const cloned = React.cloneElement(element as React.ReactElement<any>, {
-        onClose: () => setBannerContents([]),
+        onClose: () => {
+          setBannerContents([]);
+          onPollDismissed();
+        },
         key: Date.now(), // forces WebView reload
       });
 
@@ -54,13 +66,16 @@ export const PollOverlayProvider: React.FC = () => {
       const alignment = (element as any).props?.alignment || 'center-center';
       const cloned = React.cloneElement(element as React.ReactElement<any>, {
         alignment,
-        onClose: () => setPipContents([]),
+        onClose: () => {
+          setPipContents([]);
+          onPollDismissed();
+        },
       });
 
       setPipContents([cloned]);
     } else if (pollType.includes('floater')) {
       const cloned = React.cloneElement(element as React.ReactElement<any>, {
-        onClose: hideOverlayFn,
+        onClose: dismissModalOverlay,
       });
       // ✅ Floater UI — fullscreen without cross button
       setModalContent(cloned);
@@ -74,35 +89,18 @@ export const PollOverlayProvider: React.FC = () => {
             originalOnClose();
           }
           setBottomSheetContents([]);
+          onPollDismissed();
         },
       });
       setBottomSheetContents([cloned]);
     } else {
-      console.warn('Unknown poll type', pollType);
+      sdkLog.warn('Unknown poll type', pollType);
     }
   };
-  hideOverlayFn = () => {
-    // const wasRoadblock = (modalContent as any)?.props?.pollType === 'roadblock';
-
-    // Step 1: Close the current modal
-    setModalVisible(false);
-
-    // Step 2: Wait for modal to finish closing animation
-    setModalContent(null);
-    setIsFloater(false);
-    // slightly less delay, smooth transition
-  };
+  hideOverlayFn = dismissModalOverlay;
 
   const handleRoadblock = () => {
-    // Close current modal first
-    setModalVisible(false);
-    setModalContent(null);
-    setIsFloater(false);
-
-    // Slight delay to allow animation to finish
-    setTimeout(() => {
-      triggerNextPoll(); // now show next poll, if any
-    }, 500);
+    dismissModalOverlay();
   };
 
   useEffect(() => {
@@ -112,9 +110,13 @@ export const PollOverlayProvider: React.FC = () => {
 
   return (
     <>
-      {/* ✅ Shared modal for roadblock and floater */}
-      {modalContent && (
-        <Modal visible={modalVisible} transparent animationType="fade">
+      {/* ✅ Shared modal for roadblock and floater — keep mounted to avoid RN Modal remount bugs */}
+      <Modal
+        visible={modalVisible && !!modalContent}
+        transparent
+        animationType="fade"
+      >
+        {modalContent ? (
           <View
             style={[styles.modalContainer, !isFloater && styles.roadblockBg]}
           >
@@ -129,8 +131,8 @@ export const PollOverlayProvider: React.FC = () => {
             )}
             {modalContent}
           </View>
-        </Modal>
-      )}
+        ) : null}
+      </Modal>
 
       {/* Banner */}
       {bannerContents.map((content, index) => (

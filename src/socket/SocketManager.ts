@@ -1,6 +1,7 @@
 import { AppState } from 'react-native';
 import type { AppStateStatus } from 'react-native';
 import { io, Socket } from 'socket.io-client';
+import { sdkLog } from '../helpers/sdkLogger';
 
 class SocketManager {
   private socket: Socket | null = null;
@@ -16,10 +17,10 @@ class SocketManager {
   }
 
   init(url: string) {
-    console.log('[SocketManager] Init called. Current socket:', !!this.socket);
+    sdkLog.log('[SocketManager] Init called. Current socket:', !!this.socket);
 
     if (this.socket && this.isConnected) {
-      console.log('[SocketManager] Already connected, skipping init.');
+      sdkLog.log('[SocketManager] Already connected, skipping init.');
       return;
     }
 
@@ -31,31 +32,31 @@ class SocketManager {
 
       this.socket.on('connect', () => {
         this.isConnected = true;
-        console.log('🟢 Socket connected');
+        sdkLog.log('🟢 Socket connected');
         this.socket?.emit('add user', 'mehery-test-user');
       });
 
       this.socket.on('disconnect', () => {
         this.isConnected = false;
-        console.log('🔴 Socket disconnected');
+        sdkLog.log('🔴 Socket disconnected');
       });
 
       this.socket.on('connect_error', (err) => {
-        console.log('❌ Connection error:', err.message);
+        sdkLog.log('❌ Connection error:', err.message);
       });
 
       this.socket.on('login', (data) => {
-        console.log('✅ Logged in:', data);
+        sdkLog.log('✅ Logged in:', data);
       });
 
       this.socket.on('new message', (data) => {
-        console.log('💬 New message:', data);
+        sdkLog.log('💬 New message:', data);
       });
     }
 
     // Reconnect if not connected
     if (!this.isConnected) {
-      console.log('[SocketManager] Calling socket.connect()...');
+      sdkLog.log('[SocketManager] Calling socket.connect()...');
       this.socket.connect();
     }
   }
@@ -65,11 +66,11 @@ class SocketManager {
 
     if (nextAppState === 'active') {
       if (!this.isConnected) {
-        console.log('🔁 App resumed, reconnecting socket...');
+        sdkLog.log('🔁 App resumed, reconnecting socket...');
         this.socket?.connect();
       }
     } else if (nextAppState === 'background' || nextAppState === 'inactive') {
-      console.log('📴 App backgrounded or inactive');
+      sdkLog.log('📴 App backgrounded or inactive');
       // You can disconnect or keep the socket here depending on platform preference
       // this.socket?.disconnect();
     }

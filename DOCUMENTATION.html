@@ -344,10 +344,46 @@ npm install @react-native-async-storage/async-storage react-native-push-notifica
         <section>
             <h2>📖 Basic Usage</h2>
             <h3>SDK Initialization</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Param</th>
+                        <th>Type</th>
+                        <th>Default</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>context</code></td>
+                        <td><code>any</code></td>
+                        <td>—</td>
+                        <td>Reserved; pass <code>null</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>identifier</code></td>
+                        <td><code>string</code></td>
+                        <td>—</td>
+                        <td>Channel ID, format <code>"&lt;tenant&gt;_&lt;channel&gt;"</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>environment</code></td>
+                        <td><code>boolean | 'development'</code></td>
+                        <td><code>true</code></td>
+                        <td><code>false</code> = production, <code>true</code> = sandbox, <code>'development'</code> = dev</td>
+                    </tr>
+                    <tr>
+                        <td><code>logs</code></td>
+                        <td><code>boolean</code></td>
+                        <td><code>true</code></td>
+                        <td>Enable or disable SDK console logging</td>
+                    </tr>
+                </tbody>
+            </table>
             <pre><code>import { initSdk } from 'react-native-mehery-event-sender';
 
 useEffect(() => {
-  initSdk(null, 'your_tenant_id', false);
+  initSdk(null, 'your_tenant_id', false, false); // production, logs off
 }, []);</code></pre>
 
             <h3>Mounting Polls</h3>
