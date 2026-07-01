@@ -81,6 +81,8 @@ export type { NotificationLinkRewrite } from './utils/notificationLink';
 import { buildCommonHeaders } from './helpers/buildCommonHeaders';
 import {
   getApiBaseUrl,
+  MEHERY_PUSHAPP_HOST_ROOT_KEY,
+  resolvePushAppHostRoot,
   storePushAppHostFromInitParam,
   storeTenantFromIdentifier,
   type SdkInitEnvironmentParam,
@@ -421,7 +423,31 @@ export const initSdk = async (
     const tenant = await storeTenantFromIdentifier(identifier);
     console.log(`🏢 Resolved tenant: ${tenant}`);
 
+    const [previousChannelId, previousHostRoot] = await AsyncStorage.multiGet([
+      'mehery_channel_id',
+      MEHERY_PUSHAPP_HOST_ROOT_KEY,
+    ]).then((entries) => entries.map(([_, value]) => value ?? ''));
+    const nextHostRoot = resolvePushAppHostRoot(environment);
+    const initContextChanged =
+      (previousChannelId && previousChannelId !== identifier) ||
+      (previousHostRoot && previousHostRoot !== nextHostRoot);
+
     await storePushAppHostFromInitParam(environment);
+
+    if (initContextChanged) {
+      console.warn(
+        '[SDK] Channel or environment changed — clearing cached registration so /device/register runs again.'
+      );
+      await AsyncStorage.multiRemove([
+        'lastRegisteredState',
+        'lastRegisteredToken',
+        'isRegistered',
+        'UserRegistered',
+        'registered_user_id',
+        'contact_id',
+        'UserLoggedIn',
+      ]);
+    }
 
     // Keep raw identifier as channel_id for API compatibility.
     await AsyncStorage.setItem('mehery_channel_id', identifier);

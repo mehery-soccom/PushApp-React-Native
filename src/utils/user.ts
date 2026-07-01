@@ -15,6 +15,7 @@ import {
   extractSessionIdFromRegisterResponse,
   extractUserIdFromRegisterResponse,
   isAcceptableEventUserId,
+  tryParseRegisterResponse,
 } from './registerResponse';
 
 export {
@@ -200,23 +201,26 @@ async function recoverDeviceRegistration(
     },
     body: JSON.stringify(payload),
   });
-  if (!response.ok) {
-    const text = await response.text();
-    console.warn(
-      `⚠️ Auto-register failed before relink. Status: ${response.status} - ${text}`
-    );
-    return false;
-  }
-
   const text = await response.text();
-  let parsed: any = null;
-  try {
-    parsed = text ? JSON.parse(text) : null;
-  } catch {
-    parsed = null;
+  if (!response.ok) {
+    if (/device already exists/i.test(text)) {
+      console.warn(
+        'ℹ️ Device already exists during auto-register before relink; continuing to /device/link retry.'
+      );
+      const parsed = tryParseRegisterResponse(text);
+      if (parsed) {
+        await persistRegisterIdentity(parsed);
+      }
+    } else {
+      console.warn(
+        `⚠️ Auto-register failed before relink. Status: ${response.status} - ${text}`
+      );
+      return false;
+    }
+  } else {
+    const parsed = tryParseRegisterResponse(text);
+    await persistRegisterIdentity(parsed);
   }
-
-  await persistRegisterIdentity(parsed);
   await AsyncStorage.multiSet([
     ['APNStoken', token],
     ['fcmToken', fcmToken ?? ''],
@@ -393,6 +397,22 @@ export async function OnUserLogin(user_id: string) {
           response = retryResult.response;
           text = retryResult.text;
           console.log('Retry response text after auto-register:', text);
+
+          const shouldRetryLinkWithParsedChannel =
+            !response.ok &&
+            response.status === 404 &&
+            parsedChannelSegment &&
+            parsedChannelSegment !== primaryChannelId &&
+            /device not found/i.test(text);
+          if (shouldRetryLinkWithParsedChannel) {
+            console.warn(
+              `⚠️ /device/link still missing after auto-register; retrying with parsed channel segment: ${parsedChannelSegment}`
+            );
+            const parsedRetry = await linkDevice(parsedChannelSegment);
+            response = parsedRetry.response;
+            text = parsedRetry.text;
+            console.log('Retry response text with parsed channel:', text);
+          }
         }
       }
 

@@ -184,10 +184,13 @@ export async function registerDeviceWithFCM(
       await AsyncStorage.setItem('device_id', finalDeviceId);
     }
 
-    // Create state key to check for changes
+    const channel_id = await AsyncStorage.getItem('mehery_channel_id');
+
+    // Include channel_id so a new initSdk identifier triggers re-register on Android.
     const currentState = JSON.stringify({
       token,
       deviceId: finalDeviceId,
+      channel_id: channel_id ?? '',
       platform: Platform.OS,
     });
 
@@ -204,8 +207,6 @@ export async function registerDeviceWithFCM(
         '[SDK][Register] Re-registering: registered_user_id missing from storage.'
       );
     }
-
-    const channel_id = await AsyncStorage.getItem('mehery_channel_id');
 
     const geoIP = await waitForGeoIp();
     const payload = {

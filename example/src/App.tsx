@@ -419,12 +419,12 @@ export default function App() {
         area: { name: 'Parel' },
       });
 
-      let environment: SdkInitEnvironmentParam = 'development';
-      await initSdk(null, 'demo_1754408042569', environment);
-      console.log('SDK initialized with environment:', environment);
-      // let environment: SdkInitEnvironmentParam = false;
-      // await initSdk(null, 'demo_1780031354415', environment);
+      // let environment: SdkInitEnvironmentParam = 'development';
+      // await initSdk(null, 'demo_1754408042569', environment);
       // console.log('SDK initialized with environment:', environment);
+      let environment: SdkInitEnvironmentParam = false;
+      await initSdk(null, 'demo_1780031354415', environment);
+      console.log('SDK initialized with environment:', environment);
       try {
         await messaging().requestPermission();
         const token = await messaging().getToken();
@@ -455,7 +455,6 @@ export default function App() {
 
   const handleSignIn = async (code: string) => {
     await AsyncStorage.setItem('user_id', code);
-    await OnUserLogin(code);
     sendCustomEvent(EVENT_NAMES.logIn, { code });
     navigateHome(code);
   };
@@ -463,7 +462,6 @@ export default function App() {
   const handleSignUp = async (code: string, name: string) => {
     await AsyncStorage.setItem('user_id', code);
     await setProfileName(name);
-    await OnUserLogin(code);
     sendCustomEvent(EVENT_NAMES.signUp, { code, name });
     await setRegistrationCompleted(1);
     navigateHome(code);
