@@ -263,6 +263,7 @@ export default function RoadblockPoll({
         mediaPlaybackRequiresUserAction={false}
         mixedContentMode="always"
         userAgent="Mozilla/5.0 (ReactNativeWebView)"
+        // @ts-ignore opaque is a valid iOS WebView prop not in current type defs
         opaque={webViewProps.opaque}
         androidLayerType={webViewProps.androidLayerType}
       />

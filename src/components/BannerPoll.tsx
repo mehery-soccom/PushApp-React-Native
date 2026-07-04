@@ -695,6 +695,7 @@ export default function BannerPoll({
         scalesPageToFit={false}
         nestedScrollEnabled={Platform.OS === 'android'}
         androidLayerType={webViewProps.androidLayerType}
+        // @ts-ignore opaque is a valid iOS WebView prop not in current type defs
         opaque={webViewProps.opaque}
         setSupportMultipleWindows={false}
         javaScriptCanOpenWindowsAutomatically

@@ -20,6 +20,7 @@ async function collectDeviceHeaders(): Promise<Record<string, string>> {
   };
 
   try {
+    // @ts-ignore getBootTime exists at runtime but missing from type defs
     const bootTime = await DeviceInfo.getBootTime();
     if (Number.isFinite(bootTime)) {
       headers['X-Boot-Time'] = String(bootTime);
