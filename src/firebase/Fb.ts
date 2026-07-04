@@ -14,11 +14,12 @@ import {
 } from '../utils/user';
 import { tryParseRegisterResponse } from '../utils/registerResponse';
 import {
-  extractClickTrackToken,
+  buildPushTrackBody,
   mergeIosNotificationPayload,
   resolveNotificationUrl,
 } from '../utils/pushTrackPayload';
 import { openNotificationLink } from '../utils/notificationLink';
+import { updatePushToken } from '../utils/updateToken';
 
 import { NativeModules, Platform } from 'react-native';
 import { ensureAndroidNotificationPermission } from '../native/LiveActivity';
@@ -448,12 +449,8 @@ function resolvePushNotificationText(
   data: Record<string, unknown>
 ): { title: string; message: string } {
   return {
-    title: normalizedString(
-      remoteMessage.notification?.title ?? data.title
-    ),
-    message: normalizedString(
-      remoteMessage.notification?.body ?? data.body
-    ),
+    title: normalizedString(remoteMessage.notification?.title ?? data.title),
+    message: normalizedString(remoteMessage.notification?.body ?? data.body),
   };
 }
 
@@ -676,18 +673,18 @@ async function trackPushEvent(
     return;
   }
 
-  const payload: Record<string, any> = {
-    event: eventType,
-  };
-  const clickToken = extractClickTrackToken(merged);
-  if (clickToken) payload.t = clickToken;
-  const messageId = normalizedString(merged.messageId || merged.message_id);
-  const filterId = normalizedString(merged.filterId || merged.filter_id);
-  const notificationId = normalizedString(merged.notification_id);
-  if (messageId) payload.messageId = messageId;
-  if (filterId) payload.filterId = filterId;
-  if (notificationId) payload.notificationId = notificationId;
-  if (ctaId) payload.data = { ctaId };
+  const payload = buildPushTrackBody(eventType, merged, { ctaId });
+
+  if (eventType === 'received') {
+    sdkLog.log(
+      '[PushTrack] captured receivedAt:',
+      payload.receivedAt,
+      'messageId=',
+      payload.messageId ?? '(none)',
+      'notificationId=',
+      payload.notificationId ?? '(none)'
+    );
+  }
 
   try {
     const commonHeaders = await buildCommonHeaders();
@@ -822,6 +819,9 @@ export async function getFcmToken(): Promise<string | null> {
         sdkLog.log('✅ Device is being registered with ID:', id);
         await AsyncStorage.setItem('device_id', id);
         await registerDeviceWithFCM(token, id);
+        messaging().onTokenRefresh((newToken) => {
+          updatePushToken(newToken);
+        });
         return token;
       }
     } catch (error) {

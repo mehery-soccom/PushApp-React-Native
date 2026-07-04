@@ -12,13 +12,29 @@ import {
 import { WebView } from 'react-native-webview';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
+import { prepareBannerPollHtml } from '../helpers/prepareBannerPollHtml';
+import {
+  getPollWebViewProps,
+  getTransparentContainerStyle,
+} from '../helpers/pollTransparency';
 
 export default function BannerPoll({
   html,
   messageId,
   filterId,
+  journiId,
   onClose,
-}: any) {
+  backgroundColor = 'transparent',
+  notificationUrl = '',
+}: {
+  html: string;
+  messageId?: string;
+  filterId?: string;
+  journiId?: string;
+  onClose?: () => void;
+  backgroundColor?: string;
+  notificationUrl?: string;
+}) {
   const webViewRef = useRef<WebView>(null);
   /** Monotonic per touch; HTML fallback runs only if no CTA handled for this seq. */
   const tapSeqRef = useRef(0);
@@ -26,6 +42,10 @@ export default function BannerPoll({
   const lastTouchSeqRef = useRef(0);
   const bannerWidthRef = useRef(0);
   const cleanHtml = html.replace(/<\/?body[^>]*>/g, '');
+  const preparedHtml = prepareBannerPollHtml(cleanHtml, backgroundColor);
+  const webViewProps = getPollWebViewProps(backgroundColor);
+  const transparentContainerStyle =
+    getTransparentContainerStyle(backgroundColor);
   const hasIframe = /<iframe[\s>]/i.test(cleanHtml);
   // console.log('🧾 [BannerPoll] Raw HTML:', html);
   // console.log('🧾 [BannerPoll] Clean HTML:', cleanHtml);
@@ -40,6 +60,7 @@ export default function BannerPoll({
     const payload = {
       messageId,
       filterId,
+      ...(journiId ? { journiId } : {}),
       event: eventType,
       data: ctaId ? { ctaId } : {},
     };
@@ -120,7 +141,7 @@ export default function BannerPoll({
     const w =
       bannerWidthRef.current > 0
         ? bannerWidthRef.current
-        : Dimensions.get('window').width * 0.92;
+        : Dimensions.get('window').width;
     // CTA stack is usually on the right; ignore obvious left-side title taps.
     if (x < w * 0.38) return;
     let picked = ctas[0];
@@ -468,6 +489,18 @@ export default function BannerPoll({
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'dismissed' }));
           });
         });
+
+      var __notificationUrl = '${notificationUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}';
+      if (__notificationUrl) {
+        document.querySelectorAll('.media-item, .media-preview img').forEach(function(el) {
+          el.style.cursor = 'pointer';
+          el.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            postToRn({ type: 'imageClick', url: __notificationUrl });
+          }, { capture: true });
+        });
+      }
     }
 
     try {
@@ -633,7 +666,7 @@ export default function BannerPoll({
 
   return (
     <View
-      style={styles.container}
+      style={[styles.container, transparentContainerStyle, { backgroundColor }]}
       pointerEvents="auto"
       collapsable={Platform.OS === 'android' ? false : undefined}
       onLayout={(e) => {
@@ -651,8 +684,8 @@ export default function BannerPoll({
       </TouchableOpacity>
       <WebView
         ref={webViewRef}
-        source={{ html: cleanHtml }}
-        style={styles.webview}
+        source={{ html: preparedHtml }}
+        style={[styles.webview, { backgroundColor }]}
         originWhitelist={['*']}
         javaScriptEnabled
         domStorageEnabled
@@ -661,7 +694,8 @@ export default function BannerPoll({
         overScrollMode="never"
         scalesPageToFit={false}
         nestedScrollEnabled={Platform.OS === 'android'}
-        androidLayerType="hardware"
+        androidLayerType={webViewProps.androidLayerType}
+        opaque={webViewProps.opaque}
         setSupportMultipleWindows={false}
         javaScriptCanOpenWindowsAutomatically
         onTouchStart={() => {
@@ -733,6 +767,16 @@ export default function BannerPoll({
             }
             if (msg.type === '__nativeTapProbeError') {
               sdkLog.log('[BannerPoll][NativeTapProbeError]', msg);
+              return;
+            }
+            if (msg.type === 'imageClick') {
+              markCtaHandledForCurrentTouch();
+              const url = normalizeUrl(msg.url || '');
+              fireAndForgetTrack('cta', 'MEDIA_CLICK');
+              if (url) {
+                await Linking.openURL(encodeURI(url));
+                fireAndForgetTrack('openUrl', url);
+              }
               return;
             }
             sdkLog.log('📩 BannerPoll message:', msg);
@@ -809,13 +853,13 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     top: 60,
-    width: '92%',
-    alignSelf: 'center',
+    left: 0,
+    right: 0,
+    width: '100%',
     minHeight: 100,
     height: 100,
     zIndex: 9999,
-    backgroundColor: 'white',
-    borderRadius: 12,
+    borderRadius: 0,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },

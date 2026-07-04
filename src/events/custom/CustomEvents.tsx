@@ -13,6 +13,7 @@ import { SDK_EVENT_NAMES } from '../default/eventNames';
 import { getDeviceId } from '../../utils/device';
 import { waitForGeoIp } from '../../utils/geoIpContext';
 import { sdkLog } from '../../helpers/sdkLogger';
+import { resolvePollBackgroundColor } from '../../helpers/resolvePollBackgroundColor';
 import {
   getEffectiveContactId,
   waitForEffectiveUserId,
@@ -144,6 +145,7 @@ type QueuedOverlayPoll = {
   style: Record<string, any>;
   filterId: string;
   messageId: string;
+  journiId: string;
 };
 
 let pollQueue: QueuedOverlayPoll[] = [];
@@ -219,13 +221,21 @@ function isOverlayPollCode(code: string): boolean {
 }
 
 function renderQueuedPoll(poll: QueuedOverlayPoll): boolean {
-  const { htmlContent, code, style, filterId, messageId } = poll;
+  const { htmlContent, code, style, filterId, messageId, journiId } = poll;
+  const backgroundColor = resolvePollBackgroundColor(style?.bg_color);
+  const notificationUrl =
+    typeof style?.notification_url === 'string'
+      ? style.notification_url.trim()
+      : '';
   const commonProps = {
     html: htmlContent,
     visible: true,
     pollType: code,
     filterId,
     messageId,
+    journiId,
+    backgroundColor,
+    notificationUrl,
   };
 
   if (code.includes('roadblock')) {
@@ -236,6 +246,9 @@ function renderQueuedPoll(poll: QueuedOverlayPoll): boolean {
         style={style}
         filterId={filterId}
         messageId={messageId}
+        journiId={journiId}
+        backgroundColor={backgroundColor}
+        notificationUrl={notificationUrl}
       />
     );
     return true;
@@ -466,9 +479,11 @@ export async function sendPollEvent() {
         const templateModelData = poll?.template?.model?.data ?? {};
         const filter_id = poll?.filterId ?? '';
         const message_id = poll?.messageId ?? '';
+        const journi_id = poll?.journiId ?? '';
 
         sdkLog.log('poll.filterId:', filter_id);
         sdkLog.log('poll.messageId:', message_id);
+        sdkLog.log('poll.journiId:', journi_id);
 
         sendAck(poll.contactId, message_id);
 
@@ -478,6 +493,7 @@ export async function sendPollEvent() {
           renderInlinePoll(placeholderId, htmlContent, style, {
             filterId: filter_id,
             messageId: message_id,
+            journiId: journi_id,
           });
           // setTimeout(() => {}, 2000);
         } else if (event?.event_data?.compare && code.includes('tooltip')) {
@@ -501,7 +517,7 @@ export async function sendPollEvent() {
             html: style?.html,
             width: style?.width || 70,
             align: style?.align || 'center',
-            bgColor: style?.bg_color || '',
+            bgColor: resolvePollBackgroundColor(style?.bg_color),
             line1: tooltipTitle,
             line2: tooltipBody,
             line1Icon: style?.line1_icon || '',
@@ -529,6 +545,7 @@ export async function sendPollEvent() {
             style,
             filterId: filter_id,
             messageId: message_id,
+            journiId: journi_id,
           });
         }
       });

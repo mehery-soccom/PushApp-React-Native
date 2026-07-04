@@ -12,6 +12,11 @@ import { WebView } from 'react-native-webview';
 import Video from 'react-native-video';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
+import { prepareOverlayPollHtml } from '../helpers/prepareOverlayPollHtml';
+import {
+  getPollWebViewProps,
+  getTransparentContainerStyle,
+} from '../helpers/pollTransparency';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -24,7 +29,9 @@ interface FloaterProps {
   height?: number;
   messageId?: string;
   filterId?: string;
+  journiId?: string;
   onClose?: () => void;
+  backgroundColor?: string;
 }
 
 export default function Floater({
@@ -36,7 +43,9 @@ export default function Floater({
   height = 130,
   messageId,
   filterId,
+  journiId,
   onClose,
+  backgroundColor = 'transparent',
 }: FloaterProps) {
   // ✅ Compute initial position based on alignment
   const initialTop =
@@ -104,6 +113,7 @@ export default function Floater({
     const payload = {
       messageId,
       filterId,
+      ...(journiId ? { journiId } : {}),
       event: eventType,
       data: ctaId ? { ctaId } : {},
     };
@@ -214,14 +224,21 @@ export default function Floater({
     onClose?.();
   };
 
+  const preparedHtml = prepareOverlayPollHtml(html || '', backgroundColor);
+  const webViewProps = getPollWebViewProps(backgroundColor);
+  const transparentContainerStyle =
+    getTransparentContainerStyle(backgroundColor);
+
   return (
     <Pressable style={styles.overlay} onPress={handleOverlayClose}>
       <Animated.View
         style={[
           styles.container,
+          transparentContainerStyle,
           {
             width,
             height,
+            backgroundColor,
             transform: [{ translateX: pan.x }, { translateY: pan.y }],
           },
         ]}
@@ -240,8 +257,8 @@ export default function Floater({
           />
         ) : (
           <WebView
-            source={{ html: html || '' }}
-            style={styles.webview}
+            source={{ html: preparedHtml }}
+            style={[styles.webview, { backgroundColor }]}
             originWhitelist={['*']}
             javaScriptEnabled
             domStorageEnabled
@@ -251,6 +268,8 @@ export default function Floater({
             scrollEnabled={false}
             injectedJavaScript={injectedJS}
             onMessage={onMessage}
+            opaque={webViewProps.opaque}
+            androidLayerType={webViewProps.androidLayerType}
           />
         )}
       </Animated.View>
@@ -270,13 +289,13 @@ const styles = StyleSheet.create({
   },
   container: {
     position: 'absolute',
-    backgroundColor: 'white',
     borderRadius: 8,
     overflow: 'hidden',
     elevation: 5,
   },
   webview: {
     flex: 1,
+    backgroundColor: 'transparent',
   },
   video: {
     width: '100%',

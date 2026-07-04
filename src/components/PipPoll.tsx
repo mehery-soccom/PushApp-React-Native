@@ -14,6 +14,11 @@ import {
 import { WebView } from 'react-native-webview';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
+import { preparePipPollHtml } from '../helpers/preparePipPollHtml';
+import {
+  getPollWebViewProps,
+  getTransparentContainerStyle,
+} from '../helpers/pollTransparency';
 
 const { width, height } = Dimensions.get('window');
 
@@ -23,7 +28,9 @@ interface PipPollProps {
   alignment?: string; // "top-left", "center-right", etc
   messageId?: string;
   filterId?: string;
+  journiId?: string;
   onClose?: () => void;
+  backgroundColor?: string;
 }
 
 export default function PipPoll({
@@ -32,7 +39,9 @@ export default function PipPoll({
   alignment,
   messageId,
   filterId,
+  journiId,
   onClose,
+  backgroundColor = 'transparent',
 }: PipPollProps) {
   const [maximized, setMaximized] = useState(false);
   const pan = useRef(new Animated.ValueXY()).current;
@@ -94,21 +103,10 @@ export default function PipPoll({
     })
   ).current;
 
-  // Wrap HTML to ensure responsive video support
-  const htmlContent = `
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          body { margin:0; padding:0; background:black; }
-          video, iframe { max-width:100%; max-height:100%; display:block; margin:auto; }
-        </style>
-      </head>
-      <body>
-        ${html}
-      </body>
-    </html>
-  `;
+  const preparedHtml = preparePipPollHtml(html, backgroundColor);
+  const webViewProps = getPollWebViewProps(backgroundColor);
+  const transparentContainerStyle =
+    getTransparentContainerStyle(backgroundColor);
 
   const sendTrackEvent = async (
     eventType: 'cta' | 'dismissed' | 'longPress' | 'openUrl' | 'unknown',
@@ -117,6 +115,7 @@ export default function PipPoll({
     const payload = {
       messageId,
       filterId,
+      ...(journiId ? { journiId } : {}),
       event: eventType,
       data: ctaId ? { ctaId } : {},
     };
@@ -225,10 +224,16 @@ export default function PipPoll({
   // Fullscreen / Maximized Mode
   if (maximized || fullscreen) {
     return (
-      <View style={[styles.fullscreenContainer, { width, height }]}>
+      <View
+        style={[
+          styles.fullscreenContainer,
+          transparentContainerStyle,
+          { width, height, backgroundColor },
+        ]}
+      >
         <WebView
-          source={{ html: htmlContent }}
-          style={styles.web}
+          source={{ html: preparedHtml }}
+          style={[styles.web, { backgroundColor }]}
           javaScriptEnabled
           domStorageEnabled
           allowsInlineMediaPlayback
@@ -236,6 +241,12 @@ export default function PipPoll({
           originWhitelist={['*']}
           injectedJavaScript={injectedJS}
           onMessage={onMessage}
+          scrollEnabled={false}
+          bounces={false}
+          overScrollMode="never"
+          scalesPageToFit={false}
+          opaque={webViewProps.opaque}
+          androidLayerType={webViewProps.androidLayerType}
         />
         <TouchableOpacity
           style={styles.maxBtn}
@@ -255,12 +266,18 @@ export default function PipPoll({
 
   return (
     <Animated.View
-      style={[containerStyle, pan.getLayout(), styles.pipContainer]}
+      style={[
+        containerStyle,
+        pan.getLayout(),
+        styles.pipContainer,
+        transparentContainerStyle,
+        { backgroundColor },
+      ]}
       {...(!maximized && !fullscreen ? panResponder.panHandlers : {})}
     >
       <WebView
-        source={{ html: htmlContent }}
-        style={styles.web}
+        source={{ html: preparedHtml }}
+        style={[styles.web, { backgroundColor }]}
         javaScriptEnabled
         domStorageEnabled
         allowsInlineMediaPlayback
@@ -268,6 +285,12 @@ export default function PipPoll({
         originWhitelist={['*']}
         injectedJavaScript={injectedJS}
         onMessage={onMessage}
+        scrollEnabled={false}
+        bounces={false}
+        overScrollMode="never"
+        scalesPageToFit={false}
+        opaque={webViewProps.opaque}
+        androidLayerType={webViewProps.androidLayerType}
       />
       <TouchableOpacity
         style={styles.maxBtnSmall}
@@ -290,40 +313,45 @@ const styles = StyleSheet.create({
     zIndex: 10000,
     elevation: 10000,
   },
-  web: { flex: 1 },
+  web: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'transparent',
+  },
   pipContainer: {
     position: 'absolute',
     zIndex: 400,
     elevation: 5,
-    backgroundColor: '#000',
     borderRadius: 8,
     overflow: 'hidden',
   },
   maxBtn: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 50 : 20,
-    right: 15,
-    padding: 10,
+    right: 12,
+    padding: 6,
     zIndex: 10001,
   },
   maxBtnSmall: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    padding: 10,
+    padding: 6,
   },
   maxBtnText: {
     color: 'white',
     fontWeight: 'bold',
-    fontSize: 28,
+    fontSize: 20,
+    lineHeight: 22,
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
   },
   maxBtnGlyph: {
     color: 'white',
-    fontSize: 24,
-    lineHeight: 28,
+    fontSize: 18,
+    lineHeight: 20,
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },

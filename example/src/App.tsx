@@ -20,6 +20,7 @@ import {
   OnPageOpen,
   updateUserProfile,
   sendCustomEvent,
+  updatePushToken,
   type SdkInitEnvironmentParam,
 } from 'react-native-mehery-event-sender';
 import { PollOverlayProvider } from 'react-native-mehery-event-sender';
@@ -356,6 +357,25 @@ function HomePage({
             sendCustomEvent('button 2 clicked', { screen: 'home' });
           }}
         />
+        <View style={styles.customEventButtonSpacer} />
+        <Button
+          title="Update Token"
+          onPress={async () => {
+            try {
+              const token = await messaging().getToken();
+              if (token) {
+                await updatePushToken(token);
+                console.log(
+                  '[Example] updatePushToken called with current token'
+                );
+              } else {
+                console.warn('[Example] No token available');
+              }
+            } catch (e) {
+              console.warn('[Example] Update token failed', e);
+            }
+          }}
+        />
       </View>
       <View style={styles.customEventButtonSpacer} />
       {Platform.OS === 'android' && (
@@ -386,8 +406,8 @@ export default function App() {
         area: { name: 'Parel' },
       });
 
-      let environment: SdkInitEnvironmentParam = 'development';
       // 4th arg `logs` (default true): pass false to silence SDK console output
+      let environment: SdkInitEnvironmentParam = 'development';
       await initSdk(null, 'demo_1754408042569', environment);
       console.log('SDK initialized with environment:', environment);
       // let environment: SdkInitEnvironmentParam = false;

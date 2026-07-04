@@ -7,7 +7,6 @@ import {
   Text,
   StyleSheet,
   Dimensions,
-  SafeAreaView,
 } from 'react-native';
 import { onPollDismissed } from '../events/custom/CustomEvents';
 
@@ -117,9 +116,7 @@ export const PollOverlayProvider: React.FC = () => {
         animationType="fade"
       >
         {modalContent ? (
-          <View
-            style={[styles.modalContainer, !isFloater && styles.roadblockBg]}
-          >
+          <View style={styles.modalContainer}>
             {/* ❌ Only show close button if NOT floater */}
             {!isFloater && (
               <TouchableOpacity
@@ -136,13 +133,13 @@ export const PollOverlayProvider: React.FC = () => {
 
       {/* Banner */}
       {bannerContents.map((content, index) => (
-        <SafeAreaView
+        <View
           key={index}
           style={[styles.bannerContainer, { zIndex: 10 + index }]}
           pointerEvents="box-none"
         >
           {content}
-        </SafeAreaView>
+        </View>
       ))}
       {/* PIP */}
       {pipContents.map((content, index) => {
@@ -187,9 +184,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 45,
   },
-  roadblockBg: {
-    backgroundColor: '#fff',
-  },
   bannerContainer: {
     position: 'absolute',
     top: 0,
@@ -209,7 +203,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     width: '100%',
-    elevation: 3,
+    elevation: 0,
   },
   closeBtn: {
     position: 'absolute',

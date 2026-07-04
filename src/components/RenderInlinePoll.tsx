@@ -14,6 +14,7 @@ const inlinePollRegistry: Record<
     updatedAt: number;
     messageId?: string;
     filterId?: string;
+    journiId?: string;
   }
 > = {};
 
@@ -21,7 +22,11 @@ export async function renderInlinePoll(
   placeholderId: string,
   htmlContent: string | null,
   style?: any,
-  { messageId, filterId }: { messageId?: string; filterId?: string } = {}
+  {
+    messageId,
+    filterId,
+    journiId,
+  }: { messageId?: string; filterId?: string; journiId?: string } = {}
 ) {
   // 🧹 Clear if null
   if (!htmlContent) {
@@ -33,8 +38,9 @@ export async function renderInlinePoll(
   const pollData = {
     htmlContent,
     style,
-    messageId, // ✅ store messageId
-    filterId, // ✅ store filterId
+    messageId,
+    filterId,
+    journiId,
     updatedAt: Date.now(),
   };
 
@@ -98,8 +104,9 @@ export function InlinePollContainer({
     if (!poll) return;
 
     const payload = {
-      messageId: poll.messageId, // ✅ fixed
-      filterId: poll.filterId, // ✅ fixed
+      messageId: poll.messageId,
+      filterId: poll.filterId,
+      ...(poll.journiId ? { journiId: poll.journiId } : {}),
       event: eventType,
       data: ctaId ? { ctaId } : {},
     };
@@ -160,6 +167,24 @@ export function InlinePollContainer({
       sdkLog.log('📩 InlinePoll message:', message);
 
       switch (message.type) {
+        case 'imageClick': {
+          const url = normalizeUrl(message.url || '');
+          sendTrackEvent('cta', 'MEDIA_CLICK');
+          sendCustomEvent('sendcta', {
+            ctaId: 'MEDIA_CLICK',
+            url: url || undefined,
+            compare: placeholderId,
+            messageId: poll?.messageId,
+            filterId: poll?.filterId,
+          });
+          if (url) {
+            Linking.openURL(url).catch((err) =>
+              sdkLog.error('Failed to open URL:', err)
+            );
+          }
+          break;
+        }
+
         case 'buttonClick':
         case 'cta': {
           const ctaId = message.ctaId || message.value || '';
@@ -224,6 +249,11 @@ export function InlinePollContainer({
 
   if (!poll?.htmlContent) return null;
 
+  const inlineNotificationUrl =
+    typeof poll?.style?.notification_url === 'string'
+      ? poll.style.notification_url.trim()
+      : '';
+
   const injectedJS = `
     (function() {
       const send = (data) => window.ReactNativeWebView.postMessage(JSON.stringify(data));
@@ -275,6 +305,18 @@ function measureAndSend() {
         document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn').forEach(el => {
           el.addEventListener('click', () => send({ type: 'closePoll' }));
         });
+
+        var __notificationUrl = '${inlineNotificationUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}';
+        if (__notificationUrl) {
+          document.querySelectorAll('.media-item, .media-preview img').forEach(function(el) {
+            el.style.cursor = 'pointer';
+            el.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              send({ type: 'imageClick', url: __notificationUrl });
+            });
+          });
+        }
       }
 
       if (document.readyState === 'loading') {

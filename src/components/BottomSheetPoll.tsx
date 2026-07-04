@@ -11,6 +11,12 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
+import { prepareBottomSheetHtml } from '../helpers/prepareBottomSheetHtml';
+import {
+  getPollWebViewProps,
+  getTransparentContainerStyle,
+  isTransparentPollBackground,
+} from '../helpers/pollTransparency';
 import { getApiBaseUrl } from '../helpers/tenantContext';
 
 const { height } = Dimensions.get('window');
@@ -21,6 +27,9 @@ interface BottomSheetPollProps {
   pollType?: string;
   messageId?: string;
   filterId?: string;
+  journiId?: string;
+  backgroundColor?: string;
+  notificationUrl?: string;
 }
 
 export default function BottomSheetPoll({
@@ -28,36 +37,16 @@ export default function BottomSheetPoll({
   onClose,
   messageId,
   filterId,
+  journiId,
+  backgroundColor = 'transparent',
+  notificationUrl = '',
 }: BottomSheetPollProps) {
   const translateY = useRef(new Animated.Value(height)).current;
-  const boldFixStyles = `
-    <style>
-      strong, b { font-weight: 700 !important; }
-      [style*="font-weight:bold"], [style*="font-weight: bold"] { font-weight: 700 !important; }
-      html, body {
-        margin: 0 !important;
-        padding: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        overflow-x: hidden !important;
-        -webkit-text-size-adjust: 100% !important;
-      }
-      * { box-sizing: border-box; }
-      img, video, iframe, table, canvas, svg {
-        max-width: 100% !important;
-        height: auto !important;
-      }
-    </style>
-  `;
-  const viewportMeta = `
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
-    />
-  `;
-  const htmlWithBoldFix = /<\/head>/i.test(html)
-    ? html.replace(/<\/head>/i, `${viewportMeta}${boldFixStyles}</head>`)
-    : `${viewportMeta}${boldFixStyles}${html}`;
+  const preparedHtml = prepareBottomSheetHtml(html, backgroundColor);
+  const webViewProps = getPollWebViewProps(backgroundColor);
+  const transparentContainerStyle =
+    getTransparentContainerStyle(backgroundColor);
+  const isTransparentBackground = isTransparentPollBackground(backgroundColor);
 
   useEffect(() => {
     Animated.timing(translateY, {
@@ -83,6 +72,7 @@ export default function BottomSheetPoll({
     const payload = {
       messageId,
       filterId,
+      ...(journiId ? { journiId } : {}),
       event: eventType,
       data: ctaId ? { ctaId } : {},
     };
@@ -170,6 +160,18 @@ export default function BottomSheetPoll({
         document.querySelectorAll('[data-close], .poll-close, .close-btn').forEach(el =>
           el.addEventListener('click', () => send({ type: 'closePoll' }))
         );
+
+        var __notificationUrl = '${notificationUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}';
+        if (__notificationUrl) {
+          document.querySelectorAll('.media-item, .media-preview img').forEach(function(el) {
+            el.style.cursor = 'pointer';
+            el.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              send({ type: 'imageClick', url: __notificationUrl });
+            });
+          });
+        }
       }
 
       if (document.readyState === 'loading') {
@@ -184,6 +186,17 @@ export default function BottomSheetPoll({
     try {
       const msg = JSON.parse(event.nativeEvent.data);
       switch (msg.type) {
+        case 'imageClick': {
+          const url = normalizeUrl(msg.url || '');
+          if (url) {
+            await sendTrackEvent('cta', 'MEDIA_CLICK');
+            await sendTrackEvent('openUrl', url);
+            await Linking.openURL(url);
+          }
+          handleClose();
+          break;
+        }
+
         case 'buttonClick':
         case 'cta': {
           const ctaId = msg.ctaId || msg.value || '';
@@ -231,7 +244,12 @@ export default function BottomSheetPoll({
 
   return (
     <Animated.View
-      style={[styles.sheet, { transform: [{ translateY }] }]}
+      style={[
+        styles.sheet,
+        isTransparentBackground && styles.sheetTransparent,
+        transparentContainerStyle,
+        { backgroundColor, transform: [{ translateY }] },
+      ]}
       {...panResponder.panHandlers}
     >
       <TouchableOpacity style={styles.closeBtn} onPress={handleDismiss}>
@@ -239,8 +257,8 @@ export default function BottomSheetPoll({
       </TouchableOpacity>
       <WebView
         originWhitelist={['*']}
-        source={{ html: htmlWithBoldFix }}
-        style={styles.webview}
+        source={{ html: preparedHtml }}
+        style={[styles.webview, { backgroundColor }]}
         injectedJavaScript={injectedJS}
         injectedJavaScriptBeforeContentLoaded="true;"
         javaScriptEnabled
@@ -255,6 +273,8 @@ export default function BottomSheetPoll({
         setSupportMultipleWindows={false}
         scalesPageToFit={false}
         scrollEnabled={false}
+        opaque={webViewProps.opaque}
+        androidLayerType={webViewProps.androidLayerType}
         onMessage={onMessage}
       />
     </Animated.View>
@@ -266,7 +286,6 @@ const styles = StyleSheet.create({
     height: height * 0.56,
     width: '100%',
     alignSelf: 'center',
-    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     overflow: 'hidden',
@@ -276,9 +295,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 10,
   },
+  sheetTransparent: {
+    elevation: 0,
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+  },
   closeBtn: {
     position: 'absolute',
-    top: 8,
+    top: 40,
     right: 14,
     zIndex: 1000,
     backgroundColor: 'rgba(17,24,39,0.08)',
@@ -288,6 +316,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  closeText: { fontSize: 15, color: 'white', fontWeight: '700' },
+  closeText: { fontSize: 15, color: '#111827', fontWeight: '700' },
   webview: { flex: 1, backgroundColor: 'transparent' },
 });

@@ -46,7 +46,7 @@ export default function TooltipPoll({
   line2FontTextStyles = [],
   tooltipKey,
   width = 150,
-  bgColor = 'black',
+  bgColor = 'transparent',
   top = 50,
   left = -140,
   align = 'center',

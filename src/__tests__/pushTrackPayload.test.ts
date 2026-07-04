@@ -1,8 +1,10 @@
 import {
+  buildPushTrackBody,
   extractClickTrackToken,
   getPushTrackBaseFromMerged,
   mergeIosNotificationPayload,
   normalizeTargetUrl,
+  pushTrackReceivedAtIso,
   resolveIosSemanticCtaId,
   resolveNotificationUrl,
 } from '../utils/pushTrackPayload';
@@ -118,5 +120,53 @@ describe('pushTrackPayload', () => {
     };
     expect(resolveIosSemanticCtaId('PUSHAPP_SELL', merged)).toBe('Sell');
     expect(resolveIosSemanticCtaId('PUSHAPP_LATER', merged)).toBe('Later');
+  });
+
+  it('pushTrackReceivedAtIso returns ISO 8601 UTC', () => {
+    const iso = pushTrackReceivedAtIso(new Date('2026-07-03T11:08:00.000Z'));
+    expect(iso).toBe('2026-07-03T11:08:00.000Z');
+  });
+
+  it('buildPushTrackBody includes receivedAt only for received', () => {
+    const merged = {
+      message_id: 'msg-1',
+      filter_id: 'flt-1',
+      notification_id: 'notif-1',
+      t: 'jwt',
+    };
+    const fixed = '2026-07-03T11:08:00.000Z';
+
+    const received = buildPushTrackBody('received', merged, {
+      receivedAt: fixed,
+    });
+    expect(received).toEqual({
+      event: 'received',
+      receivedAt: fixed,
+      t: 'jwt',
+      messageId: 'msg-1',
+      filterId: 'flt-1',
+      notificationId: 'notif-1',
+    });
+
+    const opened = buildPushTrackBody('opened', merged);
+    expect(opened).toEqual({
+      event: 'opened',
+      t: 'jwt',
+      messageId: 'msg-1',
+      filterId: 'flt-1',
+      notificationId: 'notif-1',
+    });
+    expect(opened).not.toHaveProperty('receivedAt');
+
+    const cta = buildPushTrackBody('cta', merged, { ctaId: 'buy_now' });
+    expect(cta).toEqual({
+      event: 'cta',
+      t: 'jwt',
+      messageId: 'msg-1',
+      filterId: 'flt-1',
+      notificationId: 'notif-1',
+      data: { ctaId: 'buy_now' },
+    });
+    expect(cta).not.toHaveProperty('receivedAt');
   });
 });

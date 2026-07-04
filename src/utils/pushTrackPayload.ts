@@ -105,6 +105,40 @@ export function extractClickTrackToken(
   return undefined;
 }
 
+export type PushTrackEvent = 'received' | 'opened' | 'cta';
+
+/** ISO 8601 UTC timestamp for push delivery (`received` event body field). */
+export function pushTrackReceivedAtIso(now: Date = new Date()): string {
+  return now.toISOString();
+}
+
+export function buildPushTrackBody(
+  event: PushTrackEvent,
+  merged: Record<string, unknown>,
+  options?: { ctaId?: string; receivedAt?: string }
+): Record<string, unknown> {
+  const body: Record<string, unknown> = { event };
+
+  if (event === 'received') {
+    body.receivedAt = options?.receivedAt ?? pushTrackReceivedAtIso();
+  }
+
+  const clickToken = extractClickTrackToken(merged);
+  if (clickToken) body.t = clickToken;
+
+  const messageId = normalizedString(merged.messageId || merged.message_id);
+  const filterId = normalizedString(merged.filterId || merged.filter_id);
+  const notificationId = normalizedString(merged.notification_id);
+  if (messageId) body.messageId = messageId;
+  if (filterId) body.filterId = filterId;
+  if (notificationId) body.notificationId = notificationId;
+
+  const ctaId = options?.ctaId;
+  if (ctaId) body.data = { ctaId };
+
+  return body;
+}
+
 function parseCtaButtonArray(raw: unknown): Record<string, unknown>[] {
   if (raw == null) return [];
   let parsed: unknown = raw;

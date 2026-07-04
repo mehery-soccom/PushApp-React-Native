@@ -5,21 +5,32 @@ import { hidePollOverlay } from './PollOverlay';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
 import { sdkLog } from '../helpers/sdkLogger';
+import { prepareOverlayPollHtml } from '../helpers/prepareOverlayPollHtml';
+import {
+  getPollWebViewProps,
+  getTransparentContainerStyle,
+} from '../helpers/pollTransparency';
 
 export default function RoadblockPoll({
   html,
   onClose,
   messageId,
   filterId,
-  pollType, // ✅ added here
+  journiId,
+  pollType,
   style,
+  backgroundColor = 'transparent',
+  notificationUrl = '',
 }: {
   html: string;
   onClose?: () => void;
   messageId?: string;
   filterId?: string;
-  pollType?: string; // ✅ added here
-  style?: string; // ✅ added here
+  journiId?: string;
+  pollType?: string;
+  style?: Record<string, unknown>;
+  backgroundColor?: string;
+  notificationUrl?: string;
 }) {
   const webViewRef = useRef<WebView>(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
@@ -52,6 +63,7 @@ export default function RoadblockPoll({
     const payload = {
       messageId,
       filterId,
+      ...(journiId ? { journiId } : {}),
       event: eventType,
       data: ctaId ? { ctaId } : {},
     };
@@ -95,6 +107,17 @@ export default function RoadblockPoll({
       sdkLog.log('📩 Message from WebView:', message);
 
       switch (message.type) {
+        case 'imageClick': {
+          const url = normalizeUrl(message.url || '');
+          if (url) {
+            await sendTrackEvent('cta', 'MEDIA_CLICK');
+            await sendTrackEvent('openUrl', url);
+            await Linking.openURL(url);
+          }
+          onClose?.() ?? hidePollOverlay();
+          break;
+        }
+
         case 'buttonClick': {
           const ctaId = message.ctaId || message.value || '';
           const url = normalizeUrl(message.url || '');
@@ -194,6 +217,18 @@ export default function RoadblockPoll({
 
         document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn')
           .forEach(el => el.addEventListener('click', () => send({ type: 'closePoll' })));
+
+        var __notificationUrl = '${notificationUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}';
+        if (__notificationUrl) {
+          document.querySelectorAll('.media-item, .media-preview img').forEach(function(el) {
+            el.style.cursor = 'pointer';
+            el.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              send({ type: 'imageClick', url: __notificationUrl });
+            });
+          });
+        }
       }
 
       if (document.readyState === 'loading') {
@@ -204,12 +239,19 @@ export default function RoadblockPoll({
     })();
   `;
 
+  const preparedHtml = prepareOverlayPollHtml(html, backgroundColor);
+  const webViewProps = getPollWebViewProps(backgroundColor);
+  const transparentContainerStyle =
+    getTransparentContainerStyle(backgroundColor);
+
   return (
-    <View style={styles.container}>
+    <View
+      style={[styles.container, transparentContainerStyle, { backgroundColor }]}
+    >
       <WebView
         ref={webViewRef}
-        source={{ html }}
-        style={styles.webview}
+        source={{ html: preparedHtml }}
+        style={[styles.webview, { backgroundColor }]}
         onMessage={onMessage}
         injectedJavaScript={injectedJS}
         originWhitelist={['*']}
@@ -221,6 +263,8 @@ export default function RoadblockPoll({
         mediaPlaybackRequiresUserAction={false}
         mixedContentMode="always"
         userAgent="Mozilla/5.0 (ReactNativeWebView)"
+        opaque={webViewProps.opaque}
+        androidLayerType={webViewProps.androidLayerType}
       />
 
       {/* Long press overlay */}
@@ -242,7 +286,7 @@ const styles = StyleSheet.create({
   },
   webview: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
   },
   overlay: {
     flex: 1,

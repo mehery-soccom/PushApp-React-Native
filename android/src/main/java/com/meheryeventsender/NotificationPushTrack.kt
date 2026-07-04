@@ -24,7 +24,8 @@ object NotificationPushTrack {
         filterId: String,
         notificationId: String,
         ctaId: String,
-        trackToken: String = ""
+        trackToken: String = "",
+        receivedAt: String = ""
     ) {
         Thread {
             val endpoint = baseUrl.trimEnd('/') + "/v1/notification/push/track"
@@ -38,7 +39,11 @@ object NotificationPushTrack {
                 conn.setRequestProperty("Content-Type", "application/json")
 
                 val payload = JSONObject()
-                payload.put("event", actionType.ifBlank { "opened" })
+                val event = actionType.ifBlank { "opened" }
+                payload.put("event", event)
+                if (event == "received" && receivedAt.isNotBlank()) {
+                    payload.put("receivedAt", receivedAt)
+                }
                 if (trackToken.isNotBlank()) {
                     payload.put("t", trackToken)
                 }
@@ -50,12 +55,29 @@ object NotificationPushTrack {
                     payload.put("data", JSONObject().put("ctaId", ctaId))
                 }
 
+                if (event == "received" && receivedAt.isNotBlank()) {
+                    Log.i(
+                        TAG,
+                        "Push track POST event=received receivedAt=$receivedAt " +
+                            "messageId=$messageId notificationId=$notificationId"
+                    )
+                }
+
                 conn.outputStream.use { os ->
                     os.write(payload.toString().toByteArray(Charsets.UTF_8))
                 }
                 val code = conn.responseCode
                 if (code in 200..299) {
-                    Log.i(TAG, "Push track OK HTTP $code endpoint=$endpoint")
+                    Log.i(
+                        TAG,
+                        "Push track OK HTTP $code event=$event" +
+                            if (event == "received" && receivedAt.isNotBlank()) {
+                                " receivedAt=$receivedAt"
+                            } else {
+                                ""
+                            } +
+                            " endpoint=$endpoint"
+                    )
                 } else {
                     val errBody = try {
                         conn.errorStream?.use { it.readBytes() }?.toString(Charsets.UTF_8)?.take(500)

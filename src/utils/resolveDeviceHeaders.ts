@@ -37,7 +37,8 @@ async function collectDeviceHeaders(): Promise<Record<string, string>> {
     }
 
     try {
-      headers['X-API-Level'] = String(await DeviceInfo.getApiLevel()) || 'unknown';
+      headers['X-API-Level'] =
+        String(await DeviceInfo.getApiLevel()) || 'unknown';
     } catch {
       // keep default
     }
@@ -52,7 +53,8 @@ async function collectDeviceHeaders(): Promise<Record<string, string>> {
 
   if (Platform.OS === 'ios') {
     try {
-      headers['X-Device-Name'] = (await DeviceInfo.getDeviceName()) || 'unknown';
+      headers['X-Device-Name'] =
+        (await DeviceInfo.getDeviceName()) || 'unknown';
     } catch {
       // keep default
     }

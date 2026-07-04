@@ -209,7 +209,8 @@ object NotificationCtaUtils {
         data: Map<String, String>,
         eventName: String,
         targetUrl: String? = null,
-        ctaId: String? = null
+        ctaId: String? = null,
+        receivedAt: String? = null
     ): Intent {
         return Intent(context, NotificationActionReceiver::class.java).apply {
             putExtra(NotificationActionReceiver.EXTRA_ACTION_TYPE, eventName)
@@ -228,6 +229,9 @@ object NotificationCtaUtils {
             )
             putExtra(NotificationActionReceiver.EXTRA_CTA_ID, ctaId.orEmpty())
             putExtra(NotificationActionReceiver.EXTRA_TRACK_TOKEN, trackClickToken(data))
+            if (!receivedAt.isNullOrBlank()) {
+                putExtra(NotificationActionReceiver.EXTRA_RECEIVED_AT, receivedAt)
+            }
         }
     }
 
@@ -320,8 +324,16 @@ object NotificationCtaUtils {
         data: Map<String, String>,
         eventName: String,
         targetUrl: String? = null,
-        ctaId: String? = null
+        ctaId: String? = null,
+        receivedAt: String? = null
     ): Intent {
-        return buildActionReceiverIntent(context, data, eventName, targetUrl, ctaId)
+        return buildActionReceiverIntent(
+            context,
+            data,
+            eventName,
+            targetUrl,
+            ctaId,
+            receivedAt
+        )
     }
 }

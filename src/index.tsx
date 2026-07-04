@@ -5,6 +5,7 @@ export { CustomBanner } from './components/CustomBanner';
 export { getDeviceId } from './utils/device';
 export { setDeviceMetadata } from './utils/deviceMetadata';
 export { setGeoIP } from './utils/geoIpContext';
+export { updatePushToken } from './utils/updateToken';
 export type { GeoIpInput, GeoIpPayload } from './types/geoIp';
 export type { SdkInitEnvironmentParam } from './helpers/tenantContext';
 
@@ -65,6 +66,8 @@ import { connectToServer } from './socket/WebSock';
 import { getDeviceId as fetchDeviceId } from './utils/device';
 // import { registerDeviceWithFCM } from './utils/registerDevice';
 import { registerDeviceWithAPNS } from './firebase/IosAPNS';
+import { updatePushToken } from './utils/updateToken';
+import messaging from '@react-native-firebase/messaging';
 // import { showPollOverlay, hidePollOverlay } from './components/PollOverlay';
 // 🛡 Safe NativeEventEmitter setup
 import { PollOverlayProvider } from './components/PollOverlay';
@@ -91,11 +94,12 @@ import {
   type SdkInitEnvironmentParam,
 } from './helpers/tenantContext';
 import {
-  extractClickTrackToken,
+  buildPushTrackBody,
   getPushTrackBaseFromMerged,
   mergeIosNotificationPayload,
   resolveIosSemanticCtaId,
   resolveNotificationUrl,
+  type PushTrackEvent,
 } from './utils/pushTrackPayload';
 import { openNotificationLink } from './utils/notificationLink';
 
@@ -125,9 +129,14 @@ export const iosChecker = () => {
   const pushEmitter = new NativeEventEmitter(PushTokenManager);
 
   sdkLog.log('🍏 iOS: Setting up PushTokenEvent listener');
-  pushEmitter.addListener('PushTokenEvent', ({ type, token }) => {
+  pushEmitter.addListener('PushTokenEvent', async ({ type, token }) => {
     sdkLog.log(`📡 Received ${type} token from native: ${token}`);
-    registerDeviceWithAPNS(token);
+    const isRegistered = await AsyncStorage.getItem('isRegistered');
+    if (isRegistered === 'true') {
+      updatePushToken(token);
+    } else {
+      registerDeviceWithAPNS(token);
+    }
   });
 
   iosListenerAdded = true;
@@ -137,7 +146,7 @@ let notificationListenerAdded = false;
 const seenIosPushTrackEvents = new Set<string>();
 const IOS_PUSH_TRACK_CACHE_LIMIT = 100;
 
-type IosPushTrackEvent = 'opened' | 'cta';
+type IosPushTrackEvent = PushTrackEvent;
 
 const normalizePayloadString = (value: unknown): string =>
   typeof value === 'string' ? value.trim() : '';
@@ -166,13 +175,18 @@ const trackIosPushEvent = async (
     if (oldest) seenIosPushTrackEvents.delete(oldest);
   }
 
-  const body: Record<string, unknown> = { event };
-  const clickToken = extractClickTrackToken(merged);
-  if (clickToken) body.t = clickToken;
-  if (messageId) body.messageId = messageId;
-  if (filterId) body.filterId = filterId;
-  if (notificationId) body.notificationId = notificationId;
-  if (ctaId) body.data = { ctaId };
+  const body = buildPushTrackBody(event, merged, { ctaId });
+
+  if (event === 'received') {
+    sdkLog.log(
+      '[PushTrack] iOS captured receivedAt:',
+      body.receivedAt,
+      'messageId=',
+      body.messageId ?? '(none)',
+      'notificationId=',
+      body.notificationId ?? '(none)'
+    );
+  }
 
   try {
     const commonHeaders = await buildCommonHeaders();
@@ -260,6 +274,11 @@ const sendDailyPing = async () => {
     });
 
     sdkLog.log('✅ Silent daily ping sent');
+
+    const currentToken = await messaging().getToken();
+    if (currentToken) {
+      updatePushToken(currentToken);
+    }
   } catch (err) {
     sdkLog.error('❌ Silent ping failed:', err);
   }
@@ -316,7 +335,12 @@ export const addNotificationDebugListener = () => {
       if (actionId && !isDefaultTap && !isDismiss) {
         const semanticCtaId = resolveIosSemanticCtaId(actionId, merged);
         await trackIosPushEvent('cta', merged, semanticCtaId);
-      } else if (!actionId || isDefaultTap) {
+      } else if (!actionId) {
+        sdkLog.log(
+          '[PushTrack] iOS notification delivered (no tap); posting received track'
+        );
+        await trackIosPushEvent('received', merged);
+      } else if (isDefaultTap) {
         await trackIosPushEvent('opened', merged);
         const bodyUrl = resolveNotificationUrl(merged);
         if (bodyUrl) {
