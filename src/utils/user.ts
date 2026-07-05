@@ -9,6 +9,10 @@ import {
   MEHERY_PUSHAPP_HOST_ROOT_KEY,
 } from '../helpers/tenantContext';
 import { getDeviceId } from './device';
+import {
+  ensureDeviceRegistered,
+  settleAfterRegister,
+} from './ensureDeviceRegistered';
 import { waitForGeoIp } from './geoIpContext';
 import { clearStoredProfileSnapshot } from './profileSnapshot';
 import {
@@ -18,6 +22,7 @@ import {
   isAcceptableEventUserId,
   tryParseRegisterResponse,
 } from './registerResponse';
+import { waitForSdkReady } from './sdkReadiness';
 
 export {
   extractContactIdFromRegisterResponse,
@@ -38,6 +43,43 @@ export const DEFAULT_USER_ID_WAIT_MS = 15_000;
 
 const LAST_LINKED_CHANNEL_KEY = 'mehery_last_linked_channel_id';
 const LAST_LINKED_HOST_KEY = 'mehery_last_linked_host_root';
+
+/** channel_id actually used in the last successful `/device/register`. */
+export const REGISTERED_CHANNEL_ID_KEY = 'mehery_registered_channel_id';
+
+const LINK_NOT_FOUND_RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
+
+export type OnUserLoginResult = {
+  success: boolean;
+  sessionId?: string;
+  error?: string;
+};
+
+export async function persistRegisteredChannelId(
+  channelId: string
+): Promise<void> {
+  const normalized = channelId.trim();
+  if (normalized) {
+    await AsyncStorage.setItem(REGISTERED_CHANNEL_ID_KEY, normalized);
+  }
+}
+
+export async function getEffectiveLinkChannelId(): Promise<string> {
+  const [registeredChannel, initChannel] = await AsyncStorage.multiGet([
+    REGISTERED_CHANNEL_ID_KEY,
+    'mehery_channel_id',
+  ]).then((entries) => entries.map(([_, value]) => value?.trim() ?? ''));
+
+  return registeredChannel || initChannel || '';
+}
+
+/** True when host set login user_id but /device/link has not completed yet. */
+export async function shouldBlockInteractiveBeforeLink(): Promise<boolean> {
+  const loginUserId = (await AsyncStorage.getItem('user_id'))?.trim() ?? '';
+  const userLoggedIn =
+    (await AsyncStorage.getItem('UserLoggedIn'))?.toLowerCase() === 'true';
+  return Boolean(loginUserId && !userLoggedIn);
+}
 
 export async function persistRegisterIdentity(data: unknown): Promise<void> {
   const registeredUserId = extractUserIdFromRegisterResponse(data);
@@ -61,6 +103,16 @@ export async function persistRegisterIdentity(data: unknown): Promise<void> {
       sdkLog.log('✅ registered_user_id stored:', registeredUserId);
     }
   }
+}
+
+export async function getStoredRegisteredUserId(): Promise<string> {
+  return (
+    (await AsyncStorage.getItem(REGISTERED_USER_ID_STORAGE_KEY))?.trim() ?? ''
+  );
+}
+
+export async function hasStoredGuestUserId(): Promise<boolean> {
+  return isAcceptableEventUserId(await getStoredRegisteredUserId());
 }
 
 export async function getEffectiveUserId(): Promise<string> {
@@ -212,6 +264,12 @@ async function recoverDeviceRegistration(
       if (parsed) {
         await persistRegisterIdentity(parsed);
       }
+      if (!(await hasStoredGuestUserId())) {
+        sdkLog.warn(
+          '⚠️ Auto-register: device exists but guest user_id unavailable; relink may fail.'
+        );
+        return false;
+      }
     } else {
       sdkLog.warn(
         `⚠️ Auto-register failed before relink. Status: ${response.status} - ${text}`
@@ -229,6 +287,13 @@ async function recoverDeviceRegistration(
     ['UserRegistered', 'true'],
     ['isRegistered', 'true'],
   ]);
+  await persistRegisteredChannelId(channelId);
+  if (!(await hasStoredGuestUserId())) {
+    sdkLog.warn(
+      '⚠️ Auto-register completed but guest user_id still missing from storage.'
+    );
+    return false;
+  }
   sdkLog.log('✅ Auto-registered device before relink.');
   return true;
 }
@@ -242,18 +307,20 @@ export function logUserDetails(details: UserDetails) {
   storedUserDetails = details;
 }
 
-export async function OnUserLogin(user_id: string) {
+export async function OnUserLogin(
+  user_id: string
+): Promise<OnUserLoginResult> {
   const normalizedUserId = user_id.trim();
   if (!normalizedUserId) {
     sdkLog.warn('⏭️ [SDK][OnUserLogin] Skipped: user_id is missing/empty.');
-    return;
+    return { success: false, error: 'user_id is missing/empty' };
   }
 
   if (loginInProgress) {
     sdkLog.log(
       '⏭️ [SDK][OnUserLogin] Skipped: login already in progress (duplicate call).'
     );
-    return;
+    return { success: false, error: 'login already in progress' };
   }
   loginInProgress = true;
 
@@ -265,10 +332,31 @@ export async function OnUserLogin(user_id: string) {
   } catch (err) {
     sdkLog.error('❌ Failed to store user_id:', err);
     loginInProgress = false;
-    return;
+    return { success: false, error: 'failed to store user_id' };
   }
 
   try {
+    const sdkReady = await waitForSdkReady();
+    if (!sdkReady) {
+      sdkLog.warn(
+        '⏭️ [SDK][OnUserLogin] Skipped: initSdk has not completed yet.'
+      );
+      return { success: false, error: 'SDK not ready — wait for initSdk' };
+    }
+
+    const registered = await ensureDeviceRegistered();
+    if (!registered) {
+      sdkLog.warn(
+        '⏭️ [SDK][OnUserLogin] Skipped: device registration not confirmed.'
+      );
+      return {
+        success: false,
+        error: 'device registration not confirmed',
+      };
+    }
+
+    await settleAfterRegister();
+
     const storedDeviceId = await AsyncStorage.getItem('device_id');
     const device_id = storedDeviceId || (await getDeviceId());
     const userID = await AsyncStorage.getItem('user_id');
@@ -278,17 +366,18 @@ export async function OnUserLogin(user_id: string) {
       sdkLog.warn(
         '⏭️ [SDK][OnUserLogin] Skipped: device_id is not available.'
       );
-      return;
+      return { success: false, error: 'device_id is not available' };
     }
     if (!loginUserId) {
       sdkLog.warn(
         '⏭️ [SDK][OnUserLogin] Skipped: user_id unavailable after storage.'
       );
-      return;
+      return { success: false, error: 'user_id unavailable after storage' };
     }
 
     const currentContactId = `${loginUserId}_${device_id}`;
-    const channel_id = await AsyncStorage.getItem('mehery_channel_id');
+    const initChannelId = (await AsyncStorage.getItem('mehery_channel_id')) ?? '';
+    const linkChannelId = await getEffectiveLinkChannelId();
     const currentHostRoot =
       (await AsyncStorage.getItem(MEHERY_PUSHAPP_HOST_ROOT_KEY))?.trim() ?? '';
     const [storedContactId, userLoggedInFlag, storedSessionId, lastLinkedChannel, lastLinkedHost] =
@@ -303,7 +392,7 @@ export async function OnUserLogin(user_id: string) {
     const loginContextMatches =
       storedContactId === currentContactId &&
       isUserLoggedIn &&
-      lastLinkedChannel === (channel_id ?? '') &&
+      lastLinkedChannel === linkChannelId &&
       lastLinkedHost === currentHostRoot;
 
     if (loginContextMatches) {
@@ -312,11 +401,14 @@ export async function OnUserLogin(user_id: string) {
         JSON.stringify({
           contact_id: storedContactId,
           hasSession: Boolean(storedSessionId),
-          channel_id,
+          channel_id: linkChannelId,
           host: currentHostRoot,
         })
       );
-      return;
+      return {
+        success: true,
+        sessionId: storedSessionId || undefined,
+      };
     }
 
     if (isUserLoggedIn && !loginContextMatches) {
@@ -324,17 +416,18 @@ export async function OnUserLogin(user_id: string) {
         '🔁 [SDK][OnUserLogin] Re-linking: channel or environment changed since last login.',
         JSON.stringify({
           lastLinkedChannel,
-          currentChannel: channel_id,
+          currentChannel: linkChannelId,
+          initChannel: initChannelId,
           lastLinkedHost,
           currentHost: currentHostRoot,
         })
       );
     }
-    sdkLog.log('channel id at custom:', channel_id);
+    sdkLog.log('channel id at custom:', linkChannelId);
 
     const commonHeaders = await buildCommonHeaders();
     const apiBaseUrl = await getApiBaseUrl();
-    const primaryChannelId = channel_id ?? '';
+    const primaryChannelId = linkChannelId;
 
     const linkDevice = async (channelIdValue: string) => {
       const geoIP = await waitForGeoIp();
@@ -357,8 +450,25 @@ export async function OnUserLogin(user_id: string) {
       return { response, text, payload };
     };
 
+    const retryLinkOnNotFound = async (channelIdValue: string) => {
+      let result = await linkDevice(channelIdValue);
+      for (const delayMs of LINK_NOT_FOUND_RETRY_DELAYS_MS) {
+        const shouldRetry =
+          !result.response.ok &&
+          result.response.status === 404 &&
+          /device not found/i.test(result.text);
+        if (!shouldRetry) break;
+        sdkLog.warn(
+          `⚠️ /device/link device not found, retrying in ${delayMs}ms...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        result = await linkDevice(channelIdValue);
+      }
+      return result;
+    };
+
     try {
-      let { response, text } = await linkDevice(primaryChannelId);
+      let { response, text } = (await retryLinkOnNotFound(primaryChannelId));
       sdkLog.log('Response text:', text);
 
       const parsedChannelSegment = extractChannelSegment(primaryChannelId);
@@ -373,7 +483,7 @@ export async function OnUserLogin(user_id: string) {
         sdkLog.warn(
           `⚠️ /device/link failed for full identifier, retrying with parsed channel segment: ${parsedChannelSegment}`
         );
-        const retryResult = await linkDevice(parsedChannelSegment);
+        const retryResult = await retryLinkOnNotFound(parsedChannelSegment);
         response = retryResult.response;
         text = retryResult.text;
         sdkLog.log('Retry response text:', text);
@@ -394,7 +504,7 @@ export async function OnUserLogin(user_id: string) {
           primaryChannelId
         );
         if (recovered) {
-          const retryResult = await linkDevice(primaryChannelId);
+          const retryResult = await retryLinkOnNotFound(primaryChannelId);
           response = retryResult.response;
           text = retryResult.text;
           sdkLog.log('Retry response text after auto-register:', text);
@@ -409,7 +519,7 @@ export async function OnUserLogin(user_id: string) {
             sdkLog.warn(
               `⚠️ /device/link still missing after auto-register; retrying with parsed channel segment: ${parsedChannelSegment}`
             );
-            const parsedRetry = await linkDevice(parsedChannelSegment);
+            const parsedRetry = await retryLinkOnNotFound(parsedChannelSegment);
             response = parsedRetry.response;
             text = parsedRetry.text;
             sdkLog.log('Retry response text with parsed channel:', text);
@@ -451,8 +561,15 @@ export async function OnUserLogin(user_id: string) {
       }
 
       OnAppOpen();
+      return {
+        success: true,
+        sessionId: sessionFromLink || undefined,
+      };
     } catch (error: any) {
-      sdkLog.warn('❌ Error registering device:', error.message);
+      const message =
+        error instanceof Error ? error.message : String(error ?? 'unknown');
+      sdkLog.warn('❌ Error registering device:', message);
+      return { success: false, error: message };
     }
   } finally {
     loginInProgress = false;

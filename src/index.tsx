@@ -14,7 +14,9 @@ export {
   getLoggedUserDetails,
   OnUserLogin,
   OnUserLogOut,
+  type OnUserLoginResult,
 } from './utils/user';
+export { waitForSdkReady } from './utils/sdkReadiness';
 export {
   OnPageClose,
   OnPageOpen,
@@ -72,9 +74,14 @@ import messaging from '@react-native-firebase/messaging';
 // 🛡 Safe NativeEventEmitter setup
 import { PollOverlayProvider } from './components/PollOverlay';
 import { trackDefaultLifecycleEvents } from './events/default/LifecycleEvents';
+import { markSdkReady, resetSdkReady } from './utils/sdkReadiness';
 
 export { TooltipPollContainer } from './components/TooltipPollContainer';
-export { registerFcmBackgroundHandler } from './firebase/Fb';
+export {
+  registerFcmBackgroundHandler,
+  setFcmBackgroundMessageListener,
+} from './firebase/Fb';
+export type { FcmBackgroundMessageListener } from './firebase/Fb';
 export {
   setNotificationUrlHandler,
   configureNotificationLinkRewrites,
@@ -436,7 +443,9 @@ export const initSdk = async (
   environment: SdkInitEnvironmentParam = true,
   logs: boolean = true
 ) => {
+  resetSdkReady();
   setSdkLogging(logs);
+  let initSucceeded = false;
   try {
     sdkLog.log('🧩 Initializing Mehery SDK...');
     void resolveDeviceHeaders();
@@ -476,6 +485,7 @@ export const initSdk = async (
         'registered_user_id',
         'contact_id',
         'UserLoggedIn',
+        'mehery_registered_channel_id',
       ]);
     }
 
@@ -552,7 +562,10 @@ export const initSdk = async (
     await connectToServer();
 
     sdkLog.log('✅ SDK Initialized Successfully');
+    initSucceeded = true;
   } catch (error) {
     sdkLog.error('❌ Error initializing SDK:', error);
+  } finally {
+    markSdkReady(initSucceeded);
   }
 };

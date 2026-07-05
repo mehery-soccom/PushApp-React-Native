@@ -1,18 +1,23 @@
 import messaging from '@react-native-firebase/messaging';
+import type { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
 import app from '@react-native-firebase/app';
 import PushNotification from 'react-native-push-notification';
-import { getDeviceId } from '../utils/device';
+import { getDeviceId, resetCachedDeviceId } from '../utils/device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
-import { getApiBaseUrl } from '../helpers/tenantContext';
+import { getApiBaseUrl, extractChannelSegment } from '../helpers/tenantContext';
 import { waitForGeoIp } from '../utils/geoIpContext';
 import { sdkLog } from '../helpers/sdkLogger';
 import {
-  getEffectiveUserId,
+  hasStoredGuestUserId,
   isAcceptableEventUserId,
   persistRegisterIdentity,
+  persistRegisteredChannelId,
 } from '../utils/user';
-import { tryParseRegisterResponse } from '../utils/registerResponse';
+import {
+  guestUserIdFromRegisterResponse,
+  tryParseRegisterResponse,
+} from '../utils/registerResponse';
 import {
   buildPushTrackBody,
   mergeIosNotificationPayload,
@@ -130,6 +135,19 @@ async function postAndroidDeviceRegistration(
 let foregroundUnsubscribe: null | (() => void) = null;
 let openTrackingUnsubscribe: null | (() => void) = null;
 let backgroundHandlerRegistered = false;
+
+export type FcmBackgroundMessageListener = (
+  remoteMessage: FirebaseMessagingTypes.RemoteMessage
+) => void | Promise<void>;
+
+let fcmBackgroundMessageListener: FcmBackgroundMessageListener | null = null;
+
+/** Optional hook for host apps (e.g. notification inbox) on Android background FCM. */
+export function setFcmBackgroundMessageListener(
+  listener: FcmBackgroundMessageListener | null
+): void {
+  fcmBackgroundMessageListener = listener;
+}
 const seenForegroundMessageIds = new Set<string>();
 const FOREGROUND_MESSAGE_CACHE_LIMIT = 50;
 const seenBackgroundMessageIds = new Set<string>();
@@ -188,18 +206,20 @@ export async function registerDeviceWithFCM(
 
     const channel_id = await AsyncStorage.getItem('mehery_channel_id');
 
-    // Include channel_id so a new initSdk identifier triggers re-register on Android.
-    const currentState = JSON.stringify({
-      token,
-      deviceId: finalDeviceId,
-      channel_id: channel_id ?? '',
-      platform: Platform.OS,
-    });
+    const buildCurrentState = () =>
+      JSON.stringify({
+        token,
+        deviceId: finalDeviceId,
+        channel_id: channel_id ?? '',
+        platform: Platform.OS,
+      });
 
-    // Skip re-register only when state is unchanged and guest user id is stored.
+    // Include channel_id so a new initSdk identifier triggers re-register on Android.
+    let currentState = buildCurrentState();
+
+    // Skip re-register only when state is unchanged and server guest id is stored.
     if (lastRegisteredState === currentState) {
-      const userId = await getEffectiveUserId();
-      if (isAcceptableEventUserId(userId)) {
+      if (await hasStoredGuestUserId()) {
         sdkLog.log('✅ Registration already valid. Skipping re-register.');
         await AsyncStorage.setItem('isRegistered', 'true');
         clearScheduledRegisterRetry();
@@ -211,7 +231,7 @@ export async function registerDeviceWithFCM(
     }
 
     const geoIP = await waitForGeoIp();
-    const payload = {
+    let payload = {
       device_id: finalDeviceId,
       channel_id: channel_id,
       platform: Platform.OS,
@@ -225,13 +245,14 @@ export async function registerDeviceWithFCM(
 
     let lastStatus = 0;
     let lastErrorText = '';
+    let rotatedForExistsConflict = false;
 
     for (let attempt = 1; attempt <= MAX_DEVICE_REGISTER_RETRIES; attempt++) {
       try {
         sdkLog.log(
           `[SDK][Register] Attempt ${attempt}/${MAX_DEVICE_REGISTER_RETRIES}`
         );
-        const { response, text } = await postAndroidDeviceRegistration(
+        let { response, text } = await postAndroidDeviceRegistration(
           apiBaseUrl,
           commonHeaders,
           payload
@@ -239,23 +260,81 @@ export async function registerDeviceWithFCM(
         lastStatus = response.status;
         lastErrorText = text;
 
+        const parsedChannelSegment = extractChannelSegment(channel_id ?? '');
+        const shouldRetryWithParsedChannel =
+          !response.ok &&
+          response.status >= 500 &&
+          parsedChannelSegment &&
+          parsedChannelSegment !== channel_id &&
+          /non-existent collection in transaction/i.test(text);
+
+        if (shouldRetryWithParsedChannel) {
+          sdkLog.warn(
+            `⚠️ /device/register failed for full identifier, retrying with parsed channel segment: ${parsedChannelSegment}`
+          );
+          payload = {
+            ...payload,
+            channel_id: parsedChannelSegment,
+          };
+          const retryResult = await postAndroidDeviceRegistration(
+            apiBaseUrl,
+            commonHeaders,
+            payload
+          );
+          response = retryResult.response;
+          text = retryResult.text;
+          lastStatus = response.status;
+          lastErrorText = text;
+          sdkLog.log('Retry response text:', text);
+        }
+
         if (!response.ok) {
           if (/device already exists/i.test(text)) {
-            sdkLog.warn(
-              'ℹ️ Device already exists on server. Treating registration as valid.'
-            );
             const parsed = tryParseRegisterResponse(text);
             if (parsed) {
               await persistRegisterIdentity(parsed);
             }
-            lastApiCallTime = Date.now();
-            await AsyncStorage.multiSet([
-              ['lastRegisteredToken', token],
-              ['lastRegisteredState', currentState],
-              ['isRegistered', 'true'],
-            ]);
-            clearScheduledRegisterRetry();
-            return true;
+            const guestUserId = guestUserIdFromRegisterResponse(parsed ?? {});
+            const hasGuestId =
+              isAcceptableEventUserId(guestUserId) ||
+              (await hasStoredGuestUserId());
+            if (hasGuestId) {
+              sdkLog.warn(
+                'ℹ️ Device already exists on server. Treating registration as valid.'
+              );
+              lastApiCallTime = Date.now();
+              await AsyncStorage.multiSet([
+                ['lastRegisteredToken', token],
+                ['lastRegisteredState', currentState],
+                ['isRegistered', 'true'],
+              ]);
+              await persistRegisteredChannelId(
+                String(payload.channel_id ?? channel_id ?? '')
+              );
+              clearScheduledRegisterRetry();
+              return true;
+            }
+            if (!rotatedForExistsConflict) {
+              rotatedForExistsConflict = true;
+              sdkLog.warn(
+                '[SDK][Register] Device exists but guest user_id missing in response; rotating device_id for fresh register.'
+              );
+              await AsyncStorage.removeItem('device_id');
+              resetCachedDeviceId();
+              finalDeviceId = await getDeviceId();
+              currentState = buildCurrentState();
+              payload = {
+                device_id: finalDeviceId,
+                channel_id: channel_id,
+                platform: Platform.OS,
+                token: token,
+                geoIP,
+              };
+              continue;
+            }
+            throw new Error(
+              `Device already exists but server returned no guest user_id: ${text.slice(0, 200)}`
+            );
           }
 
           if (
@@ -295,6 +374,9 @@ export async function registerDeviceWithFCM(
           ['lastRegisteredState', currentState],
           ['isRegistered', 'true'],
         ]);
+        await persistRegisteredChannelId(
+          String(payload.channel_id ?? channel_id ?? '')
+        );
         clearScheduledRegisterRetry();
         return true;
       } catch (err) {
@@ -316,7 +398,7 @@ export async function registerDeviceWithFCM(
       `HTTP ${lastStatus}${lastErrorText ? ` - ${lastErrorText.slice(0, 200)}` : ''} after ${MAX_DEVICE_REGISTER_RETRIES} attempts`
     );
   } catch (err) {
-    sdkLog.error('❌ Failed to register/update device:', err);
+    sdkLog.warn('❌ Failed to register/update device:', err);
     await AsyncStorage.setItem('isRegistered', 'false');
     scheduleRegisterRetry(token, deviceId || (await getDeviceId()));
     return false;
@@ -756,6 +838,14 @@ function ensureBackgroundMessageHandlerRegistered(): void {
 
     const data = remoteMessage.data || {};
     await trackPushEvent('received', data);
+
+    if (fcmBackgroundMessageListener) {
+      try {
+        await fcmBackgroundMessageListener(remoteMessage);
+      } catch (e) {
+        sdkLog.warn('[SDK] FCM background listener failed (non-fatal):', e);
+      }
+    }
 
     const { title, message } = resolvePushNotificationText(remoteMessage, data);
 

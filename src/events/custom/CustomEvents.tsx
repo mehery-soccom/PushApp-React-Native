@@ -16,6 +16,7 @@ import { sdkLog } from '../../helpers/sdkLogger';
 import { resolvePollBackgroundColor } from '../../helpers/resolvePollBackgroundColor';
 import {
   getEffectiveContactId,
+  shouldBlockInteractiveBeforeLink,
   waitForEffectiveUserId,
 } from '../../utils/user';
 
@@ -85,6 +86,14 @@ export async function sendCustomEvent(
     );
     return false;
   }
+
+  const event_type = options?.eventType ?? 'INTERACTIVE';
+  if (event_type === 'INTERACTIVE' && (await shouldBlockInteractiveBeforeLink())) {
+    sdkLog.warn(
+      `[SDK] Skipping ${event_name} event: fired before /device/link — call OnUserLogin first`
+    );
+    return false;
+  }
   const device_id = await getDeviceId();
   sdkLog.log('device id:', device_id);
 
@@ -93,7 +102,6 @@ export async function sendCustomEvent(
 
   const geoIP = await waitForGeoIp();
   const session_id = (await AsyncStorage.getItem('sessionId')) ?? '';
-  const event_type = options?.eventType ?? 'INTERACTIVE';
 
   const payload = {
     user_id,
@@ -555,7 +563,7 @@ export async function sendPollEvent() {
       }
     }
   } catch (err) {
-    sdkLog.error('❌ API error:', err);
+    sdkLog.warn('❌ API error:', err);
   }
 }
 
@@ -586,7 +594,7 @@ export async function sendAck(contactId: string, messageId: string) {
     const data = await res.json();
     sdkLog.log('✅ Acknowledgement response:', data);
   } catch (error) {
-    sdkLog.error('❌ ACK API error:', error);
+    sdkLog.warn('❌ ACK API error:', error);
   }
 }
 function showNextPoll(): void {

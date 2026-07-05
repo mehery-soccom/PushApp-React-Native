@@ -4,6 +4,11 @@ import { sdkLog } from '../helpers/sdkLogger';
 
 let cachedDeviceId: string | null = null;
 
+/** Clears in-memory cache after rotating `device_id` in AsyncStorage. */
+export function resetCachedDeviceId(): void {
+  cachedDeviceId = null;
+}
+
 export async function getDeviceId(): Promise<string> {
   if (cachedDeviceId) return cachedDeviceId;
 

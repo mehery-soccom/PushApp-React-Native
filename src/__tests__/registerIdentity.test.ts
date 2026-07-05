@@ -2,6 +2,7 @@ import {
   extractContactIdFromRegisterResponse,
   extractSessionIdFromRegisterResponse,
   extractUserIdFromRegisterResponse,
+  guestUserIdFromRegisterResponse,
   isAcceptableEventUserId,
   tryParseRegisterResponse,
 } from '../utils/registerResponse';
@@ -61,5 +62,12 @@ describe('register identity extraction', () => {
     expect(isAcceptableEventUserId('guest_1')).toBe(true);
     expect(isAcceptableEventUserId('guest')).toBe(false);
     expect(isAcceptableEventUserId('')).toBe(false);
+  });
+
+  it('guestUserIdFromRegisterResponse returns empty for error-only already-exists body', () => {
+    const parsed = tryParseRegisterResponse(
+      JSON.stringify({ error: 'Device already exists' })
+    );
+    expect(guestUserIdFromRegisterResponse(parsed)).toBe('');
   });
 });

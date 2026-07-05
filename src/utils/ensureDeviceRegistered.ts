@@ -11,7 +11,7 @@ import {
 const TOKEN_POLL_MS = 400;
 const DEFAULT_TIMEOUT_MS = 15_000;
 /** Brief pause after register so the event API can resolve the device. */
-const POST_REGISTER_SETTLE_MS = 1_000;
+export const POST_REGISTER_SETTLE_MS = 1_000;
 
 async function waitForStoredPushToken(timeoutMs: number): Promise<string> {
   const startedAt = Date.now();
@@ -44,7 +44,7 @@ async function waitForRegisteredFlag(timeoutMs: number): Promise<boolean> {
   return (await AsyncStorage.getItem('isRegistered')) === 'true';
 }
 
-function settleAfterRegister(): Promise<void> {
+export function settleAfterRegister(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, POST_REGISTER_SETTLE_MS));
 }
 

@@ -187,9 +187,13 @@ async function loadPushTokens(): Promise<{
 function HomePage({
   userId,
   onLogout,
+  pendingAuthEvent,
+  onAuthEventSent,
 }: {
   userId: string;
   onLogout: () => void;
+  pendingAuthEvent: 'signIn' | 'signUp' | null;
+  onAuthEventSent: () => void;
 }) {
   const [storedName, setStoredName] = useState('');
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
@@ -243,7 +247,24 @@ function HomePage({
 
     const bootstrapHome = async () => {
       try {
-        await OnUserLogin(userId);
+        const loginResult = await OnUserLogin(userId);
+        if (cancelled) return;
+
+        if (!loginResult.success) {
+          setProfileStatus(
+            `Device link failed: ${loginResult.error ?? 'unknown error'}`
+          );
+          return;
+        }
+
+        if (pendingAuthEvent === 'signUp') {
+          const name = await getProfileName();
+          sendCustomEvent(EVENT_NAMES.signUp, { code: userId, name });
+        } else if (pendingAuthEvent === 'signIn') {
+          sendCustomEvent(EVENT_NAMES.logIn, { code: userId });
+        }
+        onAuthEventSent();
+
         OnPageOpen('home');
 
         if (cancelled) return;
@@ -273,7 +294,7 @@ function HomePage({
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, pendingAuthEvent, onAuthEventSent]);
 
   return (
     <ScrollView
@@ -394,6 +415,10 @@ function HomePage({
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'login' | 'home'>('login');
   const [userId, setUserId] = useState<string>('');
+  const [sdkReady, setSdkReady] = useState(false);
+  const [pendingAuthEvent, setPendingAuthEvent] = useState<
+    'signIn' | 'signUp' | null
+  >(null);
 
   useEffect(() => {
     const init = async () => {
@@ -407,12 +432,14 @@ export default function App() {
       });
 
       // 4th arg `logs` (default true): pass false to silence SDK console output
-      let environment: SdkInitEnvironmentParam = 'development';
-      await initSdk(null, 'demo_1754408042569', environment);
-      console.log('SDK initialized with environment:', environment);
-      // let environment: SdkInitEnvironmentParam = false;
-      // await initSdk(null, 'demo_1780031354415', environment);
+      // let environment: SdkInitEnvironmentParam = 'development';
+      // await initSdk(null, 'demo_1754408042569', environment);
       // console.log('SDK initialized with environment:', environment);
+
+      let environment: SdkInitEnvironmentParam = false;
+      await initSdk(null, 'demo_1780031354415', environment);
+      console.log('SDK initialized with environment:', environment);
+      setSdkReady(true);
       try {
         await messaging().requestPermission();
         const token = await messaging().getToken();
@@ -426,6 +453,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!sdkReady) return;
+
     const checkStoredUser = async () => {
       const storedId = await AsyncStorage.getItem('user_id');
       if (storedId) {
@@ -434,7 +463,7 @@ export default function App() {
       }
     };
     checkStoredUser();
-  }, []);
+  }, [sdkReady]);
 
   const navigateHome = (id: string) => {
     setUserId(id);
@@ -442,16 +471,14 @@ export default function App() {
   };
 
   const handleSignIn = async (code: string) => {
-    await AsyncStorage.setItem('user_id', code);
-    sendCustomEvent(EVENT_NAMES.logIn, { code });
+    setPendingAuthEvent('signIn');
     navigateHome(code);
   };
 
   const handleSignUp = async (code: string, name: string) => {
-    await AsyncStorage.setItem('user_id', code);
     await setProfileName(name);
-    sendCustomEvent(EVENT_NAMES.signUp, { code, name });
     await setRegistrationCompleted(1);
+    setPendingAuthEvent('signUp');
     navigateHome(code);
   };
 
@@ -469,7 +496,12 @@ export default function App() {
       {currentPage === 'login' ? (
         <LoginPage onSignIn={handleSignIn} onSignUp={handleSignUp} />
       ) : (
-        <HomePage userId={userId} onLogout={handleLogout} />
+        <HomePage
+          userId={userId}
+          onLogout={handleLogout}
+          pendingAuthEvent={pendingAuthEvent}
+          onAuthEventSent={() => setPendingAuthEvent(null)}
+        />
       )}
       <PollOverlayProvider />
     </>

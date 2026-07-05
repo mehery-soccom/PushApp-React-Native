@@ -42,7 +42,7 @@ export const connectToServer = async () => {
     };
 
     socket.onerror = (error) => {
-      sdkLog.error('❌ WebSocket error:', error);
+      sdkLog.warn('❌ WebSocket error:', error);
     };
 
     socket.onclose = (e) => {

@@ -35,6 +35,12 @@ export function extractContactIdFromRegisterResponse(data: unknown): string {
   return '';
 }
 
+/** Guest id from a register response body (never Shopify login user_id). */
+export function guestUserIdFromRegisterResponse(parsed: unknown): string {
+  const userId = extractUserIdFromRegisterResponse(parsed);
+  return isAcceptableEventUserId(userId) ? userId : '';
+}
+
 export function extractSessionIdFromRegisterResponse(data: unknown): string {
   if (!data || typeof data !== 'object') return '';
   const root = data as Record<string, unknown>;
