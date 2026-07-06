@@ -540,6 +540,11 @@ export async function sendPollEvent() {
             line2FontTextStyles: style?.line2_font_text_styles || [],
             filterId: filter_id,
             messageId: message_id,
+            journiId: journi_id,
+            notificationUrl:
+              typeof style?.notification_url === 'string'
+                ? style.notification_url.trim()
+                : '',
           };
 
           renderTooltipPoll(event.event_data.compare, {

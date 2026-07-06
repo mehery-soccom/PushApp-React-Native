@@ -1,6 +1,12 @@
 import { WebView } from 'react-native-webview';
-import { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, Linking } from 'react-native';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import {
+  View,
+  StyleSheet,
+  Linking,
+  Platform,
+  Pressable,
+} from 'react-native';
 import { sendCustomEvent } from '../events/custom/CustomEvents';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
@@ -52,8 +58,8 @@ export async function renderInlinePoll(
 }
 
 const MIN_HEIGHT = 1;
-const FALLBACK_HEIGHT = 180;
-const HEIGHT_BUFFER = 8;
+const FALLBACK_HEIGHT = 120;
+const HEIGHT_BUFFER = 0;
 
 export function InlinePollContainer({
   placeholderId,
@@ -66,6 +72,9 @@ export function InlinePollContainer({
   const [contentHeight, setContentHeight] = useState<number>(FALLBACK_HEIGHT);
   const pollRef = useRef(poll);
   const lastHeightRef = useRef(0);
+  const mountTimeRef = useRef(Date.now());
+  const lastNativeTapRef = useRef(0);
+  const webViewRef = useRef<WebView>(null);
   pollRef.current = poll;
 
   // 🔄 Load poll data (memory only)
@@ -134,17 +143,23 @@ export function InlinePollContainer({
 
   const normalizeUrl = (rawUrl?: string) => {
     if (!rawUrl || typeof rawUrl !== 'string') return '';
-    const value = rawUrl.trim();
+    const value = rawUrl.trim().replace(/^['"]|['"]$/g, '');
     if (!value) return '';
     if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return value;
     if (/^https?:\/\//i.test(value)) return value;
     if (/^www\./i.test(value)) return `https://${value}`;
+    if (/^[a-z0-9.-]+\.[a-z]{2,}(\/.*)?$/i.test(value))
+      return `https://${value}`;
     return '';
   };
 
   // Reset height when poll content changes
   useEffect(() => {
-    if (poll?.htmlContent) setContentHeight(FALLBACK_HEIGHT);
+    if (poll?.htmlContent) {
+      mountTimeRef.current = Date.now();
+      lastHeightRef.current = 0;
+      setContentHeight(FALLBACK_HEIGHT);
+    }
   }, [poll?.htmlContent, poll?.updatedAt]);
 
   // 🧩 Handle messages from WebView
@@ -158,6 +173,15 @@ export function InlinePollContainer({
         typeof message.height === 'number'
       ) {
         const newHeight = Math.max(MIN_HEIGHT, message.height + HEIGHT_BUFFER);
+        const elapsed = Date.now() - mountTimeRef.current;
+        // Block late height growth (e.g. double-tap zoom) after initial layout settles
+        if (
+          lastHeightRef.current > 0 &&
+          newHeight > lastHeightRef.current &&
+          elapsed > 1000
+        ) {
+          return;
+        }
         if (Math.abs(newHeight - lastHeightRef.current) > 2) {
           lastHeightRef.current = newHeight;
           setContentHeight(newHeight);
@@ -169,16 +193,17 @@ export function InlinePollContainer({
       switch (message.type) {
         case 'imageClick': {
           const url = normalizeUrl(message.url || '');
-          sendTrackEvent('cta', 'MEDIA_CLICK');
-          sendCustomEvent('sendcta', {
-            ctaId: 'MEDIA_CLICK',
-            url: url || undefined,
-            compare: placeholderId,
-            messageId: poll?.messageId,
-            filterId: poll?.filterId,
-          });
           if (url) {
-            Linking.openURL(url).catch((err) =>
+            sendTrackEvent('cta', 'MEDIA_CLICK');
+            sendTrackEvent('openUrl', url);
+            sendCustomEvent('sendcta', {
+              ctaId: 'MEDIA_CLICK',
+              url,
+              compare: placeholderId,
+              messageId: poll?.messageId,
+              filterId: poll?.filterId,
+            });
+            Linking.openURL(encodeURI(url)).catch((err) =>
               sdkLog.error('Failed to open URL:', err)
             );
           }
@@ -199,7 +224,7 @@ export function InlinePollContainer({
             filterId: poll?.filterId,
           });
           if (url) {
-            Linking.openURL(url).catch((err) =>
+            Linking.openURL(encodeURI(url)).catch((err) =>
               sdkLog.error('❌ Failed to open URL:', err)
             );
           }
@@ -219,7 +244,7 @@ export function InlinePollContainer({
           const url = normalizeUrl(message.url);
           sendTrackEvent('openUrl', url);
           if (url) {
-            Linking.openURL(url).catch((err) =>
+            Linking.openURL(encodeURI(url)).catch((err) =>
               sdkLog.error('❌ Failed to open URL:', err)
             );
           }
@@ -247,6 +272,38 @@ export function InlinePollContainer({
     }
   }, [placeholderId, poll]);
 
+  const handleWebViewLoadEnd = useCallback(() => {
+    webViewRef.current?.injectJavaScript(
+      'if (window.__meheryInlineInitListeners) { window.__meheryInlineInitListeners(); } true;'
+    );
+  }, []);
+
+  const handleNotificationNativeTap = useCallback(() => {
+    const url = normalizeUrl(
+      typeof poll?.style?.notification_url === 'string'
+        ? poll.style.notification_url.trim()
+        : ''
+    );
+    if (!url) return;
+
+    const now = Date.now();
+    if (now - lastNativeTapRef.current < 400) return;
+    lastNativeTapRef.current = now;
+
+    sendTrackEvent('cta', 'MEDIA_CLICK');
+    sendTrackEvent('openUrl', url);
+    sendCustomEvent('sendcta', {
+      ctaId: 'MEDIA_CLICK',
+      url,
+      compare: placeholderId,
+      messageId: poll?.messageId,
+      filterId: poll?.filterId,
+    });
+    Linking.openURL(encodeURI(url)).catch((err) =>
+      sdkLog.error('Failed to open URL:', err)
+    );
+  }, [poll, placeholderId]);
+
   if (!poll?.htmlContent) return null;
 
   const inlineNotificationUrl =
@@ -257,14 +314,16 @@ export function InlinePollContainer({
   const injectedJS = `
     (function() {
       const send = (data) => window.ReactNativeWebView.postMessage(JSON.stringify(data));
+      document.addEventListener('gesturestart', function(e) { e.preventDefault(); }, { passive: false });
+      document.addEventListener('dblclick', function(e) { e.preventDefault(); }, { passive: false });
 function measureAndSend() {
-  const wrapper = document.querySelector('.preview-wrapper');
-
-  const height = wrapper
-    ? wrapper.getBoundingClientRect().height
-    : document.documentElement.scrollHeight;
-
-  send({ type: 'contentHeight', height: Math.ceil(height) });
+  var wrapper = document.querySelector('.banner-wrapper')
+    || document.querySelector('.preview-wrapper')
+    || document.body;
+  var height = wrapper
+    ? Math.ceil(wrapper.getBoundingClientRect().height)
+    : Math.ceil(document.documentElement.scrollHeight);
+  send({ type: 'contentHeight', height: height });
 }
       if (document.readyState === 'complete') {
         measureAndSend();
@@ -280,6 +339,48 @@ function measureAndSend() {
       });
       
       function initListeners() {
+        var __notificationUrl = '${inlineNotificationUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}';
+
+        document.querySelectorAll('*').forEach(function(el) {
+          if (!el || !el.style) return;
+          el.style.boxShadow = 'none';
+          el.style.webkitBoxShadow = 'none';
+          el.style.filter = 'none';
+          el.style.outline = 'none';
+        });
+
+        var shadowKill = document.getElementById('inline-poll-shadow-kill');
+        if (!shadowKill) {
+          shadowKill = document.createElement('style');
+          shadowKill.id = 'inline-poll-shadow-kill';
+          (document.body || document.documentElement).appendChild(shadowKill);
+        }
+        shadowKill.textContent = [
+          '*, *::before, *::after {',
+          '  box-shadow: none !important;',
+          '  -webkit-box-shadow: none !important;',
+          '  filter: none !important;',
+          '  -webkit-filter: none !important;',
+          '  text-shadow: none !important;',
+          '  outline: none !important;',
+          '}',
+        ].join('\\n');
+
+        document.querySelectorAll('.preview-wrapper, .banner-wrapper, .pop-up-dimensions, .pop-up-vertical-content').forEach(function(el) {
+          el.style.margin = '0';
+          el.style.padding = '0';
+          el.style.minHeight = '0';
+          el.style.border = 'none';
+        });
+
+        document.querySelectorAll('body, html, .preview-wrapper, .banner-wrapper, .media-preview, .media-item, img').forEach(function(el) {
+          el.style.pointerEvents = 'auto';
+          if (__notificationUrl) el.style.cursor = 'pointer';
+        });
+
+        if (window.__meheryInlineButtonsBound) return;
+        window.__meheryInlineButtonsBound = true;
+
         const attachClickListener = function(element) {
           element.addEventListener('click', function(e) {
             e.preventDefault();
@@ -305,67 +406,191 @@ function measureAndSend() {
         document.querySelectorAll('[data-close], .close-button, .poll-close, .close-btn').forEach(el => {
           el.addEventListener('click', () => send({ type: 'closePoll' }));
         });
-
-        var __notificationUrl = '${inlineNotificationUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}';
-        if (__notificationUrl) {
-          document.querySelectorAll('.media-item, .media-preview img').forEach(function(el) {
-            el.style.cursor = 'pointer';
-            el.addEventListener('click', function(e) {
-              e.preventDefault();
-              e.stopPropagation();
-              send({ type: 'imageClick', url: __notificationUrl });
-            });
-          });
-        }
       }
+
+      window.__meheryInlineInitListeners = initListeners;
 
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initListeners);
       } else {
         initListeners();
       }
+      window.addEventListener('load', function() {
+        initListeners();
+        setTimeout(initListeners, 300);
+      });
     })();
     true;
   `;
 
   const layoutFixStyles = `
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <style id="inline-poll-layout-fix">
-  html, body { margin: 0; padding: 0; width: 100%; height: auto !important; min-height: auto !important; overflow: visible !important; }
-  .preview-wrapper, .preview-wrapper.pop-up-dimensions, .pop-up-dimensions {
-    position: relative !important;
-    top: auto !important; left: auto !important; right: auto !important; bottom: auto !important;
-    transform: none !important;
-    width: 92% !important;
-    max-width: 420px !important;
-    margin: 0 auto;
+  *, *::before, *::after {
+    box-shadow: none !important;
+    -webkit-box-shadow: none !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    text-shadow: none !important;
+    outline: none !important;
   }
-  .banner-wrapper { height: auto !important; min-height: 100px !important; width: 100% !important; }
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
+    background: #ffffff !important;
+  }
+  .preview-wrapper,
+  .preview-wrapper.pop-up-dimensions,
+  .pop-up-dimensions,
+  .banner-wrapper,
+  .pop-up-vertical-content {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    box-shadow: none !important;
+    -webkit-box-shadow: none !important;
+    filter: none !important;
+    border: none !important;
+    background: transparent !important;
+  }
+  .banner-wrapper {
+    min-height: 0 !important;
+  }
+  .media-preview, .media-item {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
 </style>`;
 
-  const injectedHTML =
-    poll.htmlContent.indexOf('</body>') !== -1
-      ? poll.htmlContent.replace(/<\/body\s*>/i, layoutFixStyles + '$&')
-      : poll.htmlContent + layoutFixStyles;
-  const containerHeight = Math.max(FALLBACK_HEIGHT, contentHeight);
+  const injectInlineHtmlFixes = (html: string) => {
+    const shadowKillLate = `
+<style id="inline-poll-shadow-kill-late">
+  *, *::before, *::after {
+    box-shadow: none !important;
+    -webkit-box-shadow: none !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    drop-shadow: none !important;
+    text-shadow: none !important;
+    outline: none !important;
+  }
+  .preview-wrapper, .preview-wrapper.pop-up-dimensions, .pop-up-dimensions,
+  .banner-wrapper, .pop-up-vertical-content, .media-preview, .media-item,
+  [class*="wrapper"], [class*="preview"], [class*="banner"] {
+    box-shadow: none !important;
+    -webkit-box-shadow: none !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    outline: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
+</style>`;
+    let result = html;
+    if (/<\/head>/i.test(result)) {
+      result = result.replace(/<\/head>/i, `${layoutFixStyles}</head>`);
+    } else {
+      result = layoutFixStyles + result;
+    }
+    if (/<\/body>/i.test(result)) {
+      return result.replace(/<\/body>/i, `${shadowKillLate}</body>`);
+    }
+    return result + shadowKillLate;
+  };
+
+  const injectedHTML = injectInlineHtmlFixes(poll.htmlContent);
+  const containerHeight = Math.max(MIN_HEIGHT, contentHeight);
+  const hasNotificationUrl = !!inlineNotificationUrl.trim();
 
   return (
     <View
       style={[styles.container, { height: containerHeight }]}
       key={poll?.updatedAt}
+      collapsable={Platform.OS === 'android' ? false : undefined}
+      pointerEvents="box-none"
     >
       <WebView
+        ref={webViewRef}
         originWhitelist={['*']}
         source={{ html: injectedHTML }}
         injectedJavaScript={injectedJS}
+        injectedJavaScriptBeforeContentLoaded="true;"
         onMessage={onMessage}
+        onLoadEnd={handleWebViewLoadEnd}
+        pointerEvents={hasNotificationUrl ? 'none' : 'auto'}
         style={[styles.webview, { height: containerHeight }]}
         scrollEnabled={false}
+        bounces={false}
+        overScrollMode="never"
+        scalesPageToFit={false}
+        nestedScrollEnabled={Platform.OS === 'android'}
+        setSupportMultipleWindows={false}
+        mixedContentMode="always"
+        androidLayerType="software"
+        javaScriptEnabled
+        domStorageEnabled
+        backgroundColor="#ffffff"
       />
+      {hasNotificationUrl ? (
+        <Pressable
+          style={[styles.tapOverlay, { height: containerHeight }]}
+          onPress={handleNotificationNativeTap}
+          android_ripple={{ color: 'rgba(0,0,0,0.04)', borderless: true }}
+          accessibilityRole="link"
+        />
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {},
-  webview: {},
+  container: {
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#ffffff',
+    ...Platform.select({
+      android: { elevation: 0 },
+      ios: {
+        shadowColor: 'transparent',
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        shadowOffset: { width: 0, height: 0 },
+      },
+    }),
+  },
+  webview: {
+    backgroundColor: '#ffffff',
+    ...Platform.select({
+      android: { elevation: 0 },
+      ios: {
+        shadowColor: 'transparent',
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        shadowOffset: { width: 0, height: 0 },
+      },
+    }),
+  },
+  tapOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
+    backgroundColor: 'transparent',
+  },
 });

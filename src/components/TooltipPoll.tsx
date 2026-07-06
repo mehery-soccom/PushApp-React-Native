@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import type { ViewStyle, TextStyle, DimensionValue } from 'react-native';
 
 function decodeHtmlEntity(entity: string) {
@@ -29,6 +29,8 @@ interface TooltipPollProps {
   zIndex?: number;
   borderRadius?: number;
   elevation?: number;
+  notificationUrl?: string;
+  onPress?: () => void;
 }
 
 export default function TooltipPoll({
@@ -53,6 +55,8 @@ export default function TooltipPoll({
   zIndex = 450,
   borderRadius = 8,
   elevation = 3,
+  notificationUrl,
+  onPress,
 }: TooltipPollProps) {
   const [visible, setVisible] = useState(true);
 
@@ -60,7 +64,6 @@ export default function TooltipPoll({
     if (tooltipKey) setVisible(true);
   }, [tooltipKey]);
 
-  // ✅ Always call hooks unconditionally
   const containerStyle = useMemo<ViewStyle>(
     () => ({
       backgroundColor: bgColor,
@@ -110,8 +113,8 @@ export default function TooltipPoll({
 
   if (!visible) return null;
 
-  return (
-    <View style={containerStyle}>
+  const content = (
+    <>
       <Text style={line1Style}>
         {line1Icon && line1IconPosition === 'prepend'
           ? `${decodeHtmlEntity(line1Icon)} `
@@ -122,6 +125,19 @@ export default function TooltipPoll({
           : ''}
       </Text>
       {line2 ? <Text style={line2Style}>{line2}</Text> : null}
-    </View>
+    </>
   );
+
+  if (notificationUrl && onPress) {
+    return (
+      <Pressable
+        style={({ pressed }) => [containerStyle, pressed && { opacity: 0.7 }]}
+        onPress={onPress}
+      >
+        {content}
+      </Pressable>
+    );
+  }
+
+  return <View style={containerStyle}>{content}</View>;
 }

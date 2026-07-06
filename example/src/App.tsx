@@ -432,13 +432,13 @@ export default function App() {
       });
 
       // 4th arg `logs` (default true): pass false to silence SDK console output
-      // let environment: SdkInitEnvironmentParam = 'development';
-      // await initSdk(null, 'demo_1754408042569', environment);
-      // console.log('SDK initialized with environment:', environment);
-
-      let environment: SdkInitEnvironmentParam = false;
-      await initSdk(null, 'demo_1780031354415', environment);
+      let environment: SdkInitEnvironmentParam = 'development';
+      await initSdk(null, 'demo_1754408042569', environment);
       console.log('SDK initialized with environment:', environment);
+
+      // let environment: SdkInitEnvironmentParam = false;
+      // await initSdk(null, 'demo_1780031354415', environment);
+      // console.log('SDK initialized with environment:', environment);
       setSdkReady(true);
       try {
         await messaging().requestPermission();
