@@ -156,7 +156,7 @@ object NotificationCtaUtils {
         val out = mutableListOf<CtaSpec>()
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
-            val label = listOf("title", "label", "text", "name", "buttonTitle")
+            val label = listOf("button_text", "title", "label", "text", "name", "buttonTitle")
                 .firstNotNullOfOrNull { k -> o.optString(k).trim().takeIf { it.isNotEmpty() } }
                 ?: continue
             val url = listOf(
@@ -172,9 +172,9 @@ object NotificationCtaUtils {
             )
                 .firstNotNullOfOrNull { k -> o.optString(k).trim().takeIf { it.isNotEmpty() } }
                 ?: continue
-            val trackId = listOf("id", "ctaId", "cta_id", "actionId", "action_id", "value")
+            val trackId = listOf("button_id", "id", "ctaId", "cta_id", "actionId", "action_id", "value")
                 .firstNotNullOfOrNull { k -> o.optString(k).trim().takeIf { it.isNotEmpty() } }
-                ?: label
+                ?: ""
             out.add(CtaSpec(label, url, trackId))
         }
         return out
@@ -209,7 +209,8 @@ object NotificationCtaUtils {
         data: Map<String, String>,
         eventName: String,
         targetUrl: String? = null,
-        ctaId: String? = null,
+        ctaLabel: String? = null,
+        buttonId: String? = null,
         receivedAt: String? = null
     ): Intent {
         return Intent(context, NotificationActionReceiver::class.java).apply {
@@ -227,7 +228,8 @@ object NotificationCtaUtils {
                 NotificationActionReceiver.EXTRA_NOTIFICATION_ID,
                 notifId
             )
-            putExtra(NotificationActionReceiver.EXTRA_CTA_ID, ctaId.orEmpty())
+            putExtra(NotificationActionReceiver.EXTRA_CTA_LABEL, ctaLabel.orEmpty())
+            putExtra(NotificationActionReceiver.EXTRA_CTA_ID, buttonId.orEmpty())
             putExtra(NotificationActionReceiver.EXTRA_TRACK_TOKEN, trackClickToken(data))
             if (!receivedAt.isNullOrBlank()) {
                 putExtra(NotificationActionReceiver.EXTRA_RECEIVED_AT, receivedAt)
@@ -253,6 +255,7 @@ object NotificationCtaUtils {
             putExtra(NotificationActionReceiver.EXTRA_MESSAGE_ID, messageId)
             putExtra(NotificationActionReceiver.EXTRA_FILTER_ID, filterId)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
+            putExtra(NotificationActionReceiver.EXTRA_CTA_LABEL, spec.label)
             putExtra(NotificationActionReceiver.EXTRA_CTA_ID, spec.trackId)
             putExtra(NotificationActionReceiver.EXTRA_TRACK_TOKEN, trackClickToken(data))
         }
@@ -289,6 +292,7 @@ object NotificationCtaUtils {
                 putExtra(NotificationActionReceiver.EXTRA_MESSAGE_ID, messageId)
                 putExtra(NotificationActionReceiver.EXTRA_FILTER_ID, filterId)
                 putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, stableNotifId)
+                putExtra(NotificationActionReceiver.EXTRA_CTA_LABEL, "")
                 putExtra(NotificationActionReceiver.EXTRA_CTA_ID, "")
                 putExtra(
                     NotificationActionReceiver.EXTRA_TRACK_TOKEN,
@@ -308,7 +312,8 @@ object NotificationCtaUtils {
             data = data,
             eventName = "opened",
             targetUrl = null,
-            ctaId = null
+            ctaLabel = null,
+            buttonId = null
         )
         return PendingIntent.getBroadcast(
             context,
@@ -324,7 +329,8 @@ object NotificationCtaUtils {
         data: Map<String, String>,
         eventName: String,
         targetUrl: String? = null,
-        ctaId: String? = null,
+        ctaLabel: String? = null,
+        buttonId: String? = null,
         receivedAt: String? = null
     ): Intent {
         return buildActionReceiverIntent(
@@ -332,7 +338,8 @@ object NotificationCtaUtils {
             data,
             eventName,
             targetUrl,
-            ctaId,
+            ctaLabel,
+            buttonId,
             receivedAt
         )
     }

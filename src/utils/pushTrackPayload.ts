@@ -115,7 +115,11 @@ export function pushTrackReceivedAtIso(now: Date = new Date()): string {
 export function buildPushTrackBody(
   event: PushTrackEvent,
   merged: Record<string, unknown>,
-  options?: { ctaId?: string; receivedAt?: string }
+  options?: {
+    cta?: { ctaId: string; button_id: string };
+    ctaId?: string;
+    receivedAt?: string;
+  }
 ): Record<string, unknown> {
   const body: Record<string, unknown> = { event };
 
@@ -133,13 +137,19 @@ export function buildPushTrackBody(
   if (filterId) body.filterId = filterId;
   if (notificationId) body.notificationId = notificationId;
 
-  const ctaId = options?.ctaId;
-  if (ctaId) body.data = { ctaId };
+  if (options?.cta) {
+    body.data = {
+      ctaId: options.cta.ctaId,
+      button_id: options.cta.button_id,
+    };
+  } else if (options?.ctaId) {
+    body.data = { ctaId: options.ctaId, button_id: '' };
+  }
 
   return body;
 }
 
-function parseCtaButtonArray(raw: unknown): Record<string, unknown>[] {
+export function parseCtaButtonArray(raw: unknown): Record<string, unknown>[] {
   if (raw == null) return [];
   let parsed: unknown = raw;
   if (typeof raw === 'string') {
@@ -171,11 +181,12 @@ function parseCtaButtonArray(raw: unknown): Record<string, unknown>[] {
   return [];
 }
 
-function trackIdFromButton(
+export function machineIdFromButton(
   btn: Record<string, unknown>,
   fallback: string
 ): string {
   const idKeys = [
+    'button_id',
     'id',
     'ctaId',
     'cta_id',
@@ -187,7 +198,21 @@ function trackIdFromButton(
     const s = normalizedString(btn[k]);
     if (s) return s;
   }
-  const labelKeys = ['title', 'label', 'text', 'name', 'buttonTitle'] as const;
+  return fallback;
+}
+
+export function labelFromButton(
+  btn: Record<string, unknown>,
+  fallback: string
+): string {
+  const labelKeys = [
+    'button_text',
+    'title',
+    'label',
+    'text',
+    'name',
+    'buttonTitle',
+  ] as const;
   for (const k of labelKeys) {
     const s = normalizedString(btn[k]);
     if (s) return s;
@@ -195,7 +220,16 @@ function trackIdFromButton(
   return fallback;
 }
 
-function iosActionButtonIndex(actionId: string): number | null {
+function trackIdFromButton(
+  btn: Record<string, unknown>,
+  fallback: string
+): string {
+  const id = machineIdFromButton(btn, '');
+  if (id) return id;
+  return labelFromButton(btn, fallback);
+}
+
+export function pushActionButtonIndex(actionId: string): number | null {
   if (
     actionId === 'PUSHAPP_ACTION_1' ||
     actionId === 'PUSHAPP_OPT_IN' ||
@@ -222,7 +256,7 @@ function iosActionButtonIndex(actionId: string): number | null {
   return null;
 }
 
-function legacyTrackIdAtIndex(
+export function legacyLabelAtIndex(
   merged: Record<string, unknown>,
   index: number
 ): string {
@@ -254,28 +288,28 @@ export function resolveIosSemanticCtaId(
   for (let i = 1; i <= 3; i++) {
     const ak = `action${i}` as const;
     if (normalizedString(merged[ak]) === id) {
-      const label = legacyTrackIdAtIndex(merged, i - 1);
+      const label = legacyLabelAtIndex(merged, i - 1);
       return label || id;
     }
   }
 
   const buttons = parseCtaButtonArray(merged.cta_buttons ?? merged.buttons);
   if (buttons.length > 0) {
-    const idx = iosActionButtonIndex(id);
+    const idx = pushActionButtonIndex(id);
     if (idx !== null && idx >= 0 && idx < buttons.length) {
       return trackIdFromButton(buttons[idx]!, `cta_${idx + 1}`);
     }
     for (const btn of buttons) {
-      const bid = normalizedString(btn.id);
+      const bid = machineIdFromButton(btn, '');
       if (bid && bid === id) {
         return trackIdFromButton(btn, id);
       }
     }
   }
 
-  const idx = iosActionButtonIndex(id);
+  const idx = pushActionButtonIndex(id);
   if (idx !== null) {
-    const legacy = legacyTrackIdAtIndex(merged, idx);
+    const legacy = legacyLabelAtIndex(merged, idx);
     if (legacy) return legacy;
   }
 

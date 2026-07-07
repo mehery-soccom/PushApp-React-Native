@@ -8,6 +8,7 @@ import {
   resolveIosSemanticCtaId,
   resolveNotificationUrl,
 } from '../utils/pushTrackPayload';
+import { resolvePushCtaFields } from '../utils/ctaTrackPayload';
 
 describe('pushTrackPayload', () => {
   it('mergeIosNotificationPayload flattens string data JSON over top-level', () => {
@@ -158,15 +159,39 @@ describe('pushTrackPayload', () => {
     });
     expect(opened).not.toHaveProperty('receivedAt');
 
-    const cta = buildPushTrackBody('cta', merged, { ctaId: 'buy_now' });
+    const cta = buildPushTrackBody('cta', merged, {
+      cta: { ctaId: 'buy_now', button_id: 'PUSHAPP_BUY' },
+    });
     expect(cta).toEqual({
       event: 'cta',
       t: 'jwt',
       messageId: 'msg-1',
       filterId: 'flt-1',
       notificationId: 'notif-1',
-      data: { ctaId: 'buy_now' },
+      data: { ctaId: 'buy_now', button_id: 'PUSHAPP_BUY' },
     });
     expect(cta).not.toHaveProperty('receivedAt');
+  });
+
+  it('resolvePushCtaFields maps PUSHAPP_SAVE to Save via title1/action1', () => {
+    const merged = {
+      title1: 'Save',
+      action1: 'PUSHAPP_SAVE',
+    };
+    expect(resolvePushCtaFields('PUSHAPP_SAVE', merged)).toEqual({
+      ctaId: 'Save',
+      button_id: 'PUSHAPP_SAVE',
+    });
+  });
+
+  it('resolvePushCtaFields reverse-maps Save label to PUSHAPP_SAVE', () => {
+    const merged = {
+      title1: 'Save',
+      action1: 'PUSHAPP_SAVE',
+    };
+    expect(resolvePushCtaFields('Save', merged)).toEqual({
+      ctaId: 'Save',
+      button_id: 'PUSHAPP_SAVE',
+    });
   });
 });

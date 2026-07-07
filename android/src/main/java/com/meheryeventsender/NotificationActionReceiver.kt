@@ -19,7 +19,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val messageId = intent.getStringExtra(EXTRA_MESSAGE_ID).orEmpty()
         val filterId = intent.getStringExtra(EXTRA_FILTER_ID).orEmpty()
         val notificationId = intent.getStringExtra(EXTRA_NOTIFICATION_ID).orEmpty()
-        val ctaId = intent.getStringExtra(EXTRA_CTA_ID).orEmpty()
+        val ctaLabel = intent.getStringExtra(EXTRA_CTA_LABEL).orEmpty()
+        val buttonId = intent.getStringExtra(EXTRA_CTA_ID).orEmpty()
         val trackToken = intent.getStringExtra(EXTRA_TRACK_TOKEN).orEmpty()
         val receivedAt = intent.getStringExtra(EXTRA_RECEIVED_AT).orEmpty()
 
@@ -37,15 +38,16 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 messageId,
                 filterId,
                 notificationId,
-                ctaId,
+                ctaLabel,
                 trackToken,
-                receivedAt
+                receivedAt,
+                buttonId
             )
-        } else if (actionType == "cta" || ctaId.isNotBlank() || trackToken.isNotBlank()) {
+        } else if (actionType == "cta" || ctaLabel.isNotBlank() || buttonId.isNotBlank() || trackToken.isNotBlank()) {
             Log.w(
                 TAG,
                 "Push track skipped: empty api_base_url/track_base_url. " +
-                    "actionType=$actionType ctaId=$ctaId hasToken=${trackToken.isNotBlank()}"
+                    "actionType=$actionType ctaLabel=$ctaLabel buttonId=$buttonId hasToken=${trackToken.isNotBlank()}"
             )
         }
 
@@ -82,6 +84,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val EXTRA_FILTER_ID = "extra_filter_id"
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
         const val EXTRA_CTA_ID = "extra_cta_id"
+        const val EXTRA_CTA_LABEL = "extra_cta_label"
         const val EXTRA_TRACK_TOKEN = "extra_track_token"
         const val EXTRA_RECEIVED_AT = "extra_received_at"
     }

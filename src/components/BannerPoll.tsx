@@ -17,6 +17,13 @@ import {
   getPollWebViewProps,
   getTransparentContainerStyle,
 } from '../helpers/pollTransparency';
+import { buildInAppTrackData } from '../utils/inAppTrack';
+import {
+  buildCtaData,
+  buildSyntheticCtaData,
+  normalizeInAppCtaFields,
+  type CtaTrackFields,
+} from '../utils/ctaTrackPayload';
 
 export default function BannerPoll({
   html,
@@ -55,14 +62,24 @@ export default function BannerPoll({
   // Send track event helper
   const sendTrackEvent = async (
     eventType: 'cta' | 'dismissed' | 'longPress' | 'openUrl' | 'unknown',
-    ctaId?: string
+    value?: string | CtaTrackFields
   ) => {
+    let data: Record<string, unknown> = {};
+    if (eventType === 'cta' && value) {
+      data = buildInAppTrackData(
+        'cta',
+        typeof value === 'string' ? buildCtaData(value, '') : value
+      );
+    } else if (typeof value === 'string' && value) {
+      data = { ctaId: value };
+    }
+
     const payload = {
       messageId,
       filterId,
       ...(journiId ? { journiId } : {}),
       event: eventType,
-      data: ctaId ? { ctaId } : {},
+      data,
     };
 
     sdkLog.log('📤 Sending track event:', payload);
@@ -104,7 +121,7 @@ export default function BannerPoll({
 
   const fireAndForgetTrack = (
     eventType: 'cta' | 'dismissed' | 'longPress' | 'openUrl' | 'unknown',
-    value?: string
+    value?: string | CtaTrackFields
   ) => {
     sendTrackEvent(eventType, value).catch((err) => {
       sdkLog.warn(
@@ -157,7 +174,7 @@ export default function BannerPoll({
       total: ctas.length,
       forSeq,
     });
-    fireAndForgetTrack('cta', picked.label || 'fallback_cta');
+    fireAndForgetTrack('cta', buildCtaData(picked.label || 'fallback_cta', ''));
     if (picked.url) {
       try {
         await Linking.openURL(encodeURI(picked.url));
@@ -174,7 +191,7 @@ export default function BannerPoll({
     try {
       sdkLog.log('[BannerPoll][NativeIntercept] Opening URL:', url);
       markCtaHandledForCurrentTouch();
-      fireAndForgetTrack('cta', 'native_intercept');
+      fireAndForgetTrack('cta', buildSyntheticCtaData('native_intercept'));
       await Linking.openURL(encodeURI(url));
       fireAndForgetTrack('openUrl', url);
       return true;
@@ -190,10 +207,11 @@ export default function BannerPoll({
   (function() {
     window.handleClick = function (eventType, label, value) {
       var lab = typeof label === 'string' ? label : '';
+      var button_id = typeof eventType === 'string' ? eventType : '';
       var url = typeof value === 'string' ? value : '';
       if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
         window.ReactNativeWebView.postMessage(
-          JSON.stringify({ type: 'buttonClick', ctaId: lab, url: url, source: 'handleClick' })
+          JSON.stringify({ type: 'buttonClick', ctaId: lab, button_id: button_id, url: url, source: 'handleClick' })
         );
       }
     };
@@ -246,12 +264,12 @@ export default function BannerPoll({
       document.head.appendChild(style);
 
       const extractFromHandleClick = (onclickAttr) => {
-        if (!onclickAttr) return { label: '', url: '' };
+        if (!onclickAttr) return { eventType: '', label: '', url: '' };
         var m = onclickAttr.match(
           /handleClick\\s*\\(\\s*['"]([^'"]*)['"]\\s*,\\s*['"]([^'"]*)['"]\\s*,\\s*['"]([^'"]*)['"]\\s*\\)/
         );
-        if (m) return { label: m[2] || '', url: m[3] || '' };
-        return { label: '', url: '' };
+        if (m) return { eventType: m[1] || '', label: m[2] || '', url: m[3] || '' };
+        return { eventType: '', label: '', url: '' };
       };
 
       const extractUrl = (el) => {
@@ -270,13 +288,24 @@ export default function BannerPoll({
         return hrefAttr || '';
       };
 
+      const extractButtonId = (el) => {
+        var onclickAttr = el.getAttribute('onclick') || '';
+        var handled = extractFromHandleClick(onclickAttr);
+        if (handled.eventType) return handled.eventType;
+        return (
+          el.getAttribute('data-cta-id') ||
+          el.getAttribute('data-button-id') ||
+          el.getAttribute('data-action-id') ||
+          ''
+        );
+      };
+
       const extractCtaLabel = (el) => {
         var onclickAttr = el.getAttribute('onclick') || '';
         var handled = extractFromHandleClick(onclickAttr);
         if (handled.label) return handled.label;
         return (
           el.getAttribute('data-cta') ||
-          el.getAttribute('data-cta-id') ||
           el.value ||
           el.innerText ||
           el.textContent ||
@@ -361,6 +390,10 @@ export default function BannerPoll({
         __meheryLastCtaTs = now;
 
         var ctaId = String(extractCtaLabel(interactiveEl)).trim();
+        var button_id = String(extractButtonId(interactiveEl)).trim();
+        if (!button_id && ctaId && /^PUSHAPP_/.test(ctaId)) {
+          button_id = ctaId;
+        }
         var url = extractUrl(interactiveEl);
         var type =
           interactiveEl.tagName && interactiveEl.tagName.toLowerCase() === 'a'
@@ -374,7 +407,7 @@ export default function BannerPoll({
         });
         if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
           window.ReactNativeWebView.postMessage(
-            JSON.stringify({ type: type, ctaId: ctaId, url: url })
+            JSON.stringify({ type: type, ctaId: ctaId, button_id: button_id, url: url })
           );
         }
       }
@@ -773,7 +806,7 @@ export default function BannerPoll({
             if (msg.type === 'imageClick') {
               markCtaHandledForCurrentTouch();
               const url = normalizeUrl(msg.url || '');
-              fireAndForgetTrack('cta', 'MEDIA_CLICK');
+              fireAndForgetTrack('cta', buildSyntheticCtaData('MEDIA_CLICK'));
               if (url) {
                 await Linking.openURL(encodeURI(url));
                 fireAndForgetTrack('openUrl', url);
@@ -785,13 +818,12 @@ export default function BannerPoll({
             // Template posts { event: "INAPP_CTA", data: { label, value } }
             if (msg.event === 'INAPP_CTA' || msg.type === 'INAPP_CTA') {
               markCtaHandledForCurrentTouch();
-              const d = msg.data || {};
-              const ctaId = d.label || msg.ctaId || '';
-              const rawUrl = d.value || msg.url || '';
+              const cta = normalizeInAppCtaFields(msg);
+              const rawUrl = msg.data?.value || msg.url || '';
               const url = normalizeUrl(
                 typeof rawUrl === 'string' ? rawUrl : String(rawUrl || '')
               );
-              fireAndForgetTrack('cta', ctaId);
+              fireAndForgetTrack('cta', cta);
               if (url) {
                 await Linking.openURL(encodeURI(url));
                 fireAndForgetTrack('openUrl', url);
@@ -801,11 +833,11 @@ export default function BannerPoll({
 
             if (msg.type === 'buttonClick' || msg.type === 'cta') {
               markCtaHandledForCurrentTouch();
-              const ctaId = msg.ctaId || msg.value || '';
+              const cta = normalizeInAppCtaFields(msg);
               const rawUrl = msg.url || msg.value || '';
               const url = normalizeUrl(rawUrl);
 
-              fireAndForgetTrack('cta', ctaId);
+              fireAndForgetTrack('cta', cta);
               if (url) {
                 sdkLog.log('🌐 Opening CTA link:', url);
                 const finalUrl = encodeURI(url);
@@ -814,15 +846,15 @@ export default function BannerPoll({
               }
             } else if (msg.type === 'link' || msg.type === 'openUrl') {
               markCtaHandledForCurrentTouch();
-              const ctaId = String(msg.ctaId || '').trim();
+              const cta = normalizeInAppCtaFields(msg);
               const url = normalizeUrl(msg.url);
-              if (ctaId) {
+              if (cta.ctaId) {
                 sdkLog.log(
                   '[BannerPoll] CTA from link tap:',
-                  ctaId,
+                  cta.ctaId,
                   url || '(no url)'
                 );
-                fireAndForgetTrack('cta', ctaId);
+                fireAndForgetTrack('cta', cta);
               }
               if (url) {
                 sdkLog.log('🌐 Opening link:', url);

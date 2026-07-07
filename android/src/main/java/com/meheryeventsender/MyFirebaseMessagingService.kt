@@ -240,7 +240,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             data,
             eventName = "received",
             targetUrl = null,
-            ctaId = null,
+            ctaLabel = null,
+            buttonId = null,
             receivedAt = receivedAt
         )
         sendBroadcast(intent)

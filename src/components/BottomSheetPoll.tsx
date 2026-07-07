@@ -18,6 +18,13 @@ import {
   isTransparentPollBackground,
 } from '../helpers/pollTransparency';
 import { getApiBaseUrl } from '../helpers/tenantContext';
+import { buildInAppTrackData } from '../utils/inAppTrack';
+import {
+  buildCtaData,
+  buildSyntheticCtaData,
+  normalizeInAppCtaFields,
+  type CtaTrackFields,
+} from '../utils/ctaTrackPayload';
 
 const { height } = Dimensions.get('window');
 
@@ -67,14 +74,24 @@ export default function BottomSheetPoll({
   // ✅ Updated sendTrackEvent using your version
   const sendTrackEvent = async (
     eventType: 'cta' | 'dismissed' | 'longPress' | 'openUrl' | 'unknown',
-    ctaId?: string
+    value?: string | CtaTrackFields
   ) => {
+    let data: Record<string, unknown> = {};
+    if (eventType === 'cta' && value) {
+      data = buildInAppTrackData(
+        'cta',
+        typeof value === 'string' ? buildCtaData(value, '') : value
+      );
+    } else if (typeof value === 'string' && value) {
+      data = { ctaId: value };
+    }
+
     const payload = {
       messageId,
       filterId,
       ...(journiId ? { journiId } : {}),
       event: eventType,
-      data: ctaId ? { ctaId } : {},
+      data,
     };
 
     sdkLog.log('📤 Sending track event:', payload);
@@ -148,9 +165,20 @@ export default function BottomSheetPoll({
             e.stopPropagation();
 
             let value = this.innerText || this.value || '';
-            const targetUrl = extractUrl(this);
+            let button_id = this.getAttribute('data-cta-id') || this.getAttribute('data-button-id') || this.getAttribute('data-action-id') || '';
+            const onclickAttr = this.getAttribute('onclick') || '';
+            const handleMatch = onclickAttr.match(/handleClick\\s*\\(\\s*['"]([^'"]*)['"]\\s*,\\s*['"]([^'"]*)['"]\\s*,\\s*['"]([^'"]*)['"]\\s*\\)/);
+            let targetUrl = extractUrl(this);
+            if (handleMatch) {
+              button_id = handleMatch[1] || button_id;
+              value = handleMatch[2] || value;
+              targetUrl = handleMatch[3] || targetUrl;
+            }
+            if (!button_id && value && /^PUSHAPP_/.test(value)) {
+              button_id = value;
+            }
 
-            send({ type: 'buttonClick', ctaId: value, url: targetUrl });
+            send({ type: 'buttonClick', ctaId: value, button_id: button_id, url: targetUrl });
           });
         };
 
@@ -189,7 +217,7 @@ export default function BottomSheetPoll({
         case 'imageClick': {
           const url = normalizeUrl(msg.url || '');
           if (url) {
-            await sendTrackEvent('cta', 'MEDIA_CLICK');
+            await sendTrackEvent('cta', buildSyntheticCtaData('MEDIA_CLICK'));
             await sendTrackEvent('openUrl', url);
             await Linking.openURL(url);
           }
@@ -199,9 +227,9 @@ export default function BottomSheetPoll({
 
         case 'buttonClick':
         case 'cta': {
-          const ctaId = msg.ctaId || msg.value || '';
+          const cta = normalizeInAppCtaFields(msg);
           const url = normalizeUrl(msg.url || msg.value || '');
-          await sendTrackEvent('cta', ctaId);
+          await sendTrackEvent('cta', cta);
           if (url) {
             try {
               await sendTrackEvent('openUrl', url);

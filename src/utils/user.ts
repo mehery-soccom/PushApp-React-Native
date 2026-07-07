@@ -23,6 +23,7 @@ import {
   tryParseRegisterResponse,
 } from './registerResponse';
 import { waitForSdkReady } from './sdkReadiness';
+import { reauthenticateWebSocket } from '../socket/WebSock';
 
 export {
   extractContactIdFromRegisterResponse,
@@ -559,6 +560,8 @@ export async function OnUserLogin(
       if (sessionFromLink) {
         sdkLog.log('✅ session_id stored from /device/link');
       }
+
+      await reauthenticateWebSocket();
 
       OnAppOpen();
       return {

@@ -23,9 +23,10 @@ object NotificationPushTrack {
         messageId: String,
         filterId: String,
         notificationId: String,
-        ctaId: String,
+        ctaLabel: String,
         trackToken: String = "",
-        receivedAt: String = ""
+        receivedAt: String = "",
+        buttonId: String = ""
     ) {
         Thread {
             val endpoint = baseUrl.trimEnd('/') + "/v1/notification/push/track"
@@ -50,9 +51,14 @@ object NotificationPushTrack {
                 if (messageId.isNotBlank()) payload.put("messageId", messageId)
                 if (filterId.isNotBlank()) payload.put("filterId", filterId)
                 if (notificationId.isNotBlank()) payload.put("notificationId", notificationId)
-                if (ctaId.isNotBlank()) {
-                    payload.put("ctaId", ctaId)
-                    payload.put("data", JSONObject().put("ctaId", ctaId))
+                if (event == "cta" && (ctaLabel.isNotBlank() || buttonId.isNotBlank())) {
+                    val data = JSONObject()
+                    data.put("ctaId", ctaLabel)
+                    data.put("button_id", buttonId)
+                    payload.put("data", data)
+                    if (ctaLabel.isNotBlank()) {
+                        payload.put("ctaId", ctaLabel)
+                    }
                 }
 
                 if (event == "received" && receivedAt.isNotBlank()) {

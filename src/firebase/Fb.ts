@@ -23,6 +23,10 @@ import {
   mergeIosNotificationPayload,
   resolveNotificationUrl,
 } from '../utils/pushTrackPayload';
+import {
+  resolvePushCtaFields,
+  type CtaTrackFields,
+} from '../utils/ctaTrackPayload';
 import { openNotificationLink } from '../utils/notificationLink';
 import { updatePushToken } from '../utils/updateToken';
 
@@ -736,7 +740,7 @@ function getPushTrackBaseUrl(data: Record<string, any>): string {
 async function trackPushEvent(
   eventType: 'received' | 'opened' | 'cta',
   data: Record<string, any>,
-  ctaId?: string
+  cta?: CtaTrackFields
 ): Promise<void> {
   const merged = mergeIosNotificationPayload(data as Record<string, unknown>);
   let baseUrl = getPushTrackBaseUrl(merged as Record<string, any>);
@@ -755,7 +759,11 @@ async function trackPushEvent(
     return;
   }
 
-  const payload = buildPushTrackBody(eventType, merged, { ctaId });
+  const payload = buildPushTrackBody(
+    eventType,
+    merged,
+    cta ? { cta } : undefined
+  );
 
   if (eventType === 'received') {
     sdkLog.log(
@@ -1048,7 +1056,8 @@ async function handlePushNotificationInteraction(raw: any) {
       });
 
       try {
-        await trackPushEvent('cta', notificationData, String(action));
+        const cta = resolvePushCtaFields(String(action), notificationData);
+        await trackPushEvent('cta', notificationData, cta);
         log('trackPushEvent(cta) finished');
       } catch (e) {
         log('trackPushEvent(cta) error (continuing to try open URL)', e);

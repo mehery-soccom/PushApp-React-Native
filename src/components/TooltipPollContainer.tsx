@@ -5,6 +5,11 @@ import tooltipEmitter from './TooltipEmitter';
 import { sdkLog } from '../helpers/sdkLogger';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
+import { buildInAppTrackData } from '../utils/inAppTrack';
+import {
+  buildSyntheticCtaData,
+  type CtaTrackFields,
+} from '../utils/ctaTrackPayload';
 
 // ✅ External API to trigger tooltip
 export function renderTooltipPoll(placeholderId: string, tooltipData: any) {
@@ -34,16 +39,28 @@ export function TooltipPollContainer({
   const sendTrackEvent = useCallback(
     async (
       eventType: 'cta' | 'dismissed' | 'longPress' | 'openUrl' | 'unknown',
-      ctaId?: string
+      value?: string | CtaTrackFields
     ) => {
       if (!tooltipData) return;
+
+      let data: Record<string, unknown> = {};
+      if (eventType === 'cta' && value) {
+        data = buildInAppTrackData(
+          'cta',
+          typeof value === 'string'
+            ? { ctaId: value, button_id: '' }
+            : value
+        );
+      } else if (typeof value === 'string' && value) {
+        data = { ctaId: value };
+      }
 
       const payload = {
         messageId: tooltipData.messageId,
         filterId: tooltipData.filterId,
         ...(tooltipData.journiId ? { journiId: tooltipData.journiId } : {}),
         event: eventType,
-        data: ctaId ? { ctaId } : {},
+        data,
       };
 
       sdkLog.log('📤 Sending track event:', payload);
@@ -73,7 +90,7 @@ export function TooltipPollContainer({
     const url = normalizeUrl(tooltipData?.notificationUrl || '');
     if (!url) return;
 
-    await sendTrackEvent('cta', 'MEDIA_CLICK');
+    await sendTrackEvent('cta', buildSyntheticCtaData('MEDIA_CLICK'));
     await sendTrackEvent('openUrl', url);
     Linking.openURL(encodeURI(url)).catch((err) =>
       sdkLog.error('Failed to open URL:', err)

@@ -31,7 +31,8 @@ class NotificationCtaUrlActivity : Activity() {
         val filterId = intent.getStringExtra(NotificationActionReceiver.EXTRA_FILTER_ID).orEmpty()
         val notificationId =
             intent.getStringExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID).orEmpty()
-        val ctaId = intent.getStringExtra(NotificationActionReceiver.EXTRA_CTA_ID).orEmpty()
+        val ctaLabel = intent.getStringExtra(NotificationActionReceiver.EXTRA_CTA_LABEL).orEmpty()
+        val buttonId = intent.getStringExtra(NotificationActionReceiver.EXTRA_CTA_ID).orEmpty()
         val trackToken =
             intent.getStringExtra(NotificationActionReceiver.EXTRA_TRACK_TOKEN).orEmpty()
 
@@ -42,15 +43,17 @@ class NotificationCtaUrlActivity : Activity() {
                 messageId,
                 filterId,
                 notificationId,
-                ctaId,
-                trackToken
+                ctaLabel,
+                trackToken,
+                "",
+                buttonId
             )
         } else {
             Log.w(
                 TAG,
                 "Push track skipped: empty track base URL. " +
                     "Include api_base_url or track_base_url in FCM data (flat or inside a JSON `data` blob). " +
-                    "ctaId=$ctaId hasToken=${trackToken.isNotBlank()}"
+                    "ctaLabel=$ctaLabel buttonId=$buttonId hasToken=${trackToken.isNotBlank()}"
             )
         }
 

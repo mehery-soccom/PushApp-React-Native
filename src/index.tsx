@@ -104,10 +104,13 @@ import {
   buildPushTrackBody,
   getPushTrackBaseFromMerged,
   mergeIosNotificationPayload,
-  resolveIosSemanticCtaId,
   resolveNotificationUrl,
   type PushTrackEvent,
 } from './utils/pushTrackPayload';
+import {
+  resolvePushCtaFields,
+  type CtaTrackFields,
+} from './utils/ctaTrackPayload';
 import { openNotificationLink } from './utils/notificationLink';
 
 const { PushTokenManager } = NativeModules;
@@ -161,7 +164,7 @@ const normalizePayloadString = (value: unknown): string =>
 const trackIosPushEvent = async (
   event: IosPushTrackEvent,
   payload: Record<string, unknown>,
-  ctaId?: string
+  cta?: CtaTrackFields
 ) => {
   const merged = mergeIosNotificationPayload(payload);
   const messageId = normalizePayloadString(
@@ -170,7 +173,14 @@ const trackIosPushEvent = async (
   const filterId = normalizePayloadString(merged.filterId || merged.filter_id);
   const notificationId = normalizePayloadString(merged.notification_id);
 
-  const dedupeKey = [event, messageId, filterId, ctaId || '', notificationId]
+  const dedupeKey = [
+    event,
+    messageId,
+    filterId,
+    cta?.ctaId || '',
+    cta?.button_id || '',
+    notificationId,
+  ]
     .join(':')
     .toLowerCase();
   if (seenIosPushTrackEvents.has(dedupeKey)) return;
@@ -182,7 +192,11 @@ const trackIosPushEvent = async (
     if (oldest) seenIosPushTrackEvents.delete(oldest);
   }
 
-  const body = buildPushTrackBody(event, merged, { ctaId });
+  const body = buildPushTrackBody(
+    event,
+    merged,
+    cta ? { cta } : undefined
+  );
 
   if (event === 'received') {
     sdkLog.log(
@@ -340,8 +354,8 @@ export const addNotificationDebugListener = () => {
         actionId === 'com.apple.UNNotificationDismissActionIdentifier';
 
       if (actionId && !isDefaultTap && !isDismiss) {
-        const semanticCtaId = resolveIosSemanticCtaId(actionId, merged);
-        await trackIosPushEvent('cta', merged, semanticCtaId);
+        const cta = resolvePushCtaFields(actionId, merged);
+        await trackIosPushEvent('cta', merged, cta);
       } else if (!actionId) {
         sdkLog.log(
           '[PushTrack] iOS notification delivered (no tap); posting received track'

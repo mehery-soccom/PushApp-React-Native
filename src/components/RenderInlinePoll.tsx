@@ -11,6 +11,13 @@ import { sendCustomEvent } from '../events/custom/CustomEvents';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
 import { sdkLog } from '../helpers/sdkLogger';
+import { buildInAppTrackData } from '../utils/inAppTrack';
+import {
+  buildCtaData,
+  buildSyntheticCtaData,
+  normalizeInAppCtaFields,
+  type CtaTrackFields,
+} from '../utils/ctaTrackPayload';
 
 const inlinePollRegistry: Record<
   string,
@@ -108,16 +115,26 @@ export function InlinePollContainer({
   // 🛰 Track CTA and open events
   const sendTrackEvent = async (
     eventType: 'cta' | 'dismissed' | 'longPress' | 'openUrl' | 'unknown',
-    ctaId?: string
+    value?: string | CtaTrackFields
   ) => {
     if (!poll) return;
+
+    let data: Record<string, unknown> = {};
+    if (eventType === 'cta' && value) {
+      data = buildInAppTrackData(
+        'cta',
+        typeof value === 'string' ? buildCtaData(value, '') : value
+      );
+    } else if (typeof value === 'string' && value) {
+      data = { ctaId: value };
+    }
 
     const payload = {
       messageId: poll.messageId,
       filterId: poll.filterId,
       ...(poll.journiId ? { journiId: poll.journiId } : {}),
       event: eventType,
-      data: ctaId ? { ctaId } : {},
+      data,
     };
 
     sdkLog.log('📤 Sending track event:', payload);
@@ -194,10 +211,12 @@ export function InlinePollContainer({
         case 'imageClick': {
           const url = normalizeUrl(message.url || '');
           if (url) {
-            sendTrackEvent('cta', 'MEDIA_CLICK');
+            const mediaCta = buildSyntheticCtaData('MEDIA_CLICK');
+            sendTrackEvent('cta', mediaCta);
             sendTrackEvent('openUrl', url);
             sendCustomEvent('sendcta', {
-              ctaId: 'MEDIA_CLICK',
+              ctaId: mediaCta.ctaId,
+              button_id: mediaCta.button_id,
               url,
               compare: placeholderId,
               messageId: poll?.messageId,
@@ -212,12 +231,12 @@ export function InlinePollContainer({
 
         case 'buttonClick':
         case 'cta': {
-          const ctaId = message.ctaId || message.value || '';
+          const cta = normalizeInAppCtaFields(message);
           const url = normalizeUrl(message.url || message.value || '');
-          // console.log('🟢 Sending CTA button click:', ctaId, url ? `→ ${url}` : '');
-          sendTrackEvent('cta', ctaId);
+          sendTrackEvent('cta', cta);
           sendCustomEvent('sendcta', {
-            ctaId,
+            ctaId: cta.ctaId,
+            button_id: cta.button_id,
             url: url || undefined,
             compare: placeholderId,
             messageId: poll?.messageId,
@@ -290,10 +309,12 @@ export function InlinePollContainer({
     if (now - lastNativeTapRef.current < 400) return;
     lastNativeTapRef.current = now;
 
-    sendTrackEvent('cta', 'MEDIA_CLICK');
+    const mediaCta = buildSyntheticCtaData('MEDIA_CLICK');
+    sendTrackEvent('cta', mediaCta);
     sendTrackEvent('openUrl', url);
     sendCustomEvent('sendcta', {
-      ctaId: 'MEDIA_CLICK',
+      ctaId: mediaCta.ctaId,
+      button_id: mediaCta.button_id,
       url,
       compare: placeholderId,
       messageId: poll?.messageId,
@@ -386,17 +407,27 @@ function measureAndSend() {
             e.preventDefault();
             e.stopImmediatePropagation();
             var value = this.value || this.innerText || '';
+            var button_id = this.getAttribute('data-cta-id') || this.getAttribute('data-button-id') || this.getAttribute('data-action-id') || '';
             var url = '';
             var onclick = (this.getAttribute('onclick') || '');
             var href = (this.getAttribute('data-href') || this.getAttribute('href') || '');
-            
-            var match = onclick.match(/handleClick\\s*\\([^,]*,[^,]*,\\s*['"]([^'"]+)['"]\\)/) || onclick.match(/['"]((?:https?:\\/\\/|www\\.)[^'"]+)['"]/);
-            if (match) {
-              url = match[1] || '';
-            } else if (href) {
-              url = href;
+            var handleMatch = onclick.match(/handleClick\\s*\\(\\s*['"]([^'"]*)['"]\\s*,\\s*['"]([^'"]*)['"]\\s*,\\s*['"]([^'"]*)['"]\\s*\\)/);
+            if (handleMatch) {
+              button_id = handleMatch[1] || button_id;
+              value = handleMatch[2] || value;
+              url = handleMatch[3] || '';
+            } else {
+              var match = onclick.match(/handleClick\\s*\\([^,]*,[^,]*,\\s*['"]([^'"]+)['"]\\)/) || onclick.match(/['"]((?:https?:\\/\\/|www\\.)[^'"]+)['"]/);
+              if (match) {
+                url = match[1] || '';
+              } else if (href) {
+                url = href;
+              }
             }
-            send({ type: 'buttonClick', ctaId: value, url: url });
+            if (!button_id && value && /^PUSHAPP_/.test(value)) {
+              button_id = value;
+            }
+            send({ type: 'buttonClick', ctaId: value, button_id: button_id, url: url });
           }, true);
         };
 
@@ -547,7 +578,6 @@ function measureAndSend() {
         androidLayerType="software"
         javaScriptEnabled
         domStorageEnabled
-        backgroundColor="#ffffff"
       />
       {hasNotificationUrl ? (
         <Pressable

@@ -14,6 +14,12 @@ import {
 import { WebView } from 'react-native-webview';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
+import { buildInAppTrackData } from '../utils/inAppTrack';
+import {
+  buildCtaData,
+  normalizeInAppCtaFields,
+  type CtaTrackFields,
+} from '../utils/ctaTrackPayload';
 import { preparePipPollHtml } from '../helpers/preparePipPollHtml';
 import {
   getPollWebViewProps,
@@ -110,14 +116,24 @@ export default function PipPoll({
 
   const sendTrackEvent = async (
     eventType: 'cta' | 'dismissed' | 'longPress' | 'openUrl' | 'unknown',
-    ctaId?: string
+    value?: string | CtaTrackFields
   ) => {
+    let data: Record<string, unknown> = {};
+    if (eventType === 'cta' && value) {
+      data = buildInAppTrackData(
+        'cta',
+        typeof value === 'string' ? buildCtaData(value, '') : value
+      );
+    } else if (typeof value === 'string' && value) {
+      data = { ctaId: value };
+    }
+
     const payload = {
       messageId,
       filterId,
       ...(journiId ? { journiId } : {}),
       event: eventType,
-      data: ctaId ? { ctaId } : {},
+      data,
     };
     const commonHeaders = await buildCommonHeaders();
     const apiBaseUrl = await getApiBaseUrl();
@@ -163,8 +179,21 @@ export default function PipPoll({
             e.preventDefault();
             e.stopPropagation();
             const ctaId = this.value || this.innerText || '';
-            const url = extractUrl(this);
-            send({ type: 'buttonClick', ctaId, url });
+            let button_id = this.getAttribute('data-cta-id') || this.getAttribute('data-button-id') || this.getAttribute('data-action-id') || '';
+            const onclickAttr = this.getAttribute('onclick') || '';
+            const handleMatch = onclickAttr.match(/handleClick\\s*\\(\\s*['"]([^'"]*)['"]\\s*,\\s*['"]([^'"]*)['"]\\s*,\\s*['"]([^'"]*)['"]\\s*\\)/);
+            let url = extractUrl(this);
+            if (handleMatch) {
+              button_id = handleMatch[1] || button_id;
+              const label = handleMatch[2] || ctaId;
+              url = handleMatch[3] || url;
+              send({ type: 'buttonClick', ctaId: label, button_id: button_id, url });
+              return;
+            }
+            if (!button_id && ctaId && /^PUSHAPP_/.test(ctaId)) {
+              button_id = ctaId;
+            }
+            send({ type: 'buttonClick', ctaId, button_id, url });
           });
         };
 
@@ -187,9 +216,9 @@ export default function PipPoll({
       switch (msg.type) {
         case 'buttonClick':
         case 'cta': {
-          const ctaId = msg.ctaId || msg.value || '';
+          const cta = normalizeInAppCtaFields(msg);
           const url = normalizeUrl(msg.url || msg.value || '');
-          await sendTrackEvent('cta', ctaId);
+          await sendTrackEvent('cta', cta);
           if (url) {
             try {
               await sendTrackEvent('openUrl', url);
