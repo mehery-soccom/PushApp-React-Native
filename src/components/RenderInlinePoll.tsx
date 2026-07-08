@@ -498,6 +498,13 @@ function measureAndSend() {
     -webkit-box-shadow: none !important;
     filter: none !important;
     border: none !important;
+  }
+  /* Only strip background on the outer shells — keep the banner's own
+     campaign background (e.g. inline style background: rgb(0,0,0)). */
+  .preview-wrapper,
+  .preview-wrapper.pop-up-dimensions,
+  .pop-up-dimensions,
+  .pop-up-vertical-content {
     background: transparent !important;
   }
   .banner-wrapper {

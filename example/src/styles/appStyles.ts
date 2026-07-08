@@ -1,0 +1,161 @@
+import { Platform, StyleSheet } from 'react-native';
+
+export const appStyles = StyleSheet.create({
+  inlinePollSection: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  tooltipPollSection: {
+    width: '100%',
+    marginTop: 24,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  placeholderLabel: {
+    fontSize: 12,
+    color: '#888',
+    marginBottom: 8,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  tooltipAnchorWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  vex: {
+    width: 50,
+    height: 50,
+    backgroundColor: 'blue',
+    borderRadius: 50,
+  },
+  scroll: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 20,
+    paddingTop: 80,
+    paddingBottom: 100,
+  },
+  shell: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: 'white',
+    marginTop: 150,
+    justifyContent: 'center',
+  },
+  label: { fontSize: 18, marginBottom: 8 },
+  input: {
+    borderWidth: 1,
+    borderColor: '#888',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 12,
+  },
+  errorText: {
+    color: '#c00',
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  txt: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  bodyText: {
+    fontSize: 14,
+    color: '#555',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  customEventButtons: {
+    marginTop: 16,
+    width: '100%',
+    maxWidth: 320,
+    alignSelf: 'center',
+  },
+  customEventButtonSpacer: { height: 12 },
+  tokenSection: {
+    marginTop: 16,
+    width: '100%',
+    maxWidth: 320,
+    alignSelf: 'center',
+  },
+  tokenLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 10,
+    marginBottom: 4,
+    color: '#222',
+  },
+  tokenHint: {
+    fontSize: 12,
+    color: '#666',
+    lineHeight: 16,
+    marginBottom: 4,
+  },
+  tokenInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    backgroundColor: '#f8f8f8',
+    padding: 10,
+    borderRadius: 5,
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    minHeight: 72,
+    textAlignVertical: 'top',
+  },
+  profileSection: {
+    marginTop: 20,
+    width: '100%',
+    maxWidth: 320,
+    alignSelf: 'center',
+  },
+  profileHint: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 18,
+  },
+  profileStatus: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#333',
+    lineHeight: 18,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+    backgroundColor: '#fafafa',
+    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+    paddingTop: 8,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  tabItemActive: {
+    borderTopWidth: 2,
+    borderTopColor: '#007AFF',
+    marginTop: -1,
+  },
+  tabLabel: {
+    fontSize: 13,
+    color: '#666',
+  },
+  tabLabelActive: {
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+});

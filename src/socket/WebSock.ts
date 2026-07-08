@@ -7,6 +7,11 @@ import { sdkLog } from '../helpers/sdkLogger';
 
 let socket: WebSocket | null = null;
 let skipNextAutoReconnect = false;
+let lastAuthedCompositeId: string | null = null;
+
+function buildCompositeId(userID: string, device_id: string): string {
+  return `${userID}_${device_id}`;
+}
 
 function sendWebSocketAuth(userID: string, device_id: string): void {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
@@ -14,8 +19,9 @@ function sendWebSocketAuth(userID: string, device_id: string): void {
     return;
   }
 
-  const userId = `${userID}_${device_id}`;
+  const userId = buildCompositeId(userID, device_id);
   socket.send(JSON.stringify({ type: 'auth', userId }));
+  lastAuthedCompositeId = userId;
   sdkLog.log('🔐 WebSocket auth sent:', userId);
 }
 
@@ -28,6 +34,7 @@ function closeSocket(options?: { suppressAutoReconnect?: boolean }): void {
 
   const existing = socket;
   socket = null;
+  lastAuthedCompositeId = null;
   existing.onopen = null;
   existing.onmessage = null;
   existing.onerror = null;
@@ -125,9 +132,26 @@ export const reauthenticateWebSocket = async () => {
     `🔐 Now authenticating WebSocket with user_id: ${userID}, device_id: ${device_id}`
   );
 
+  const nextCompositeId = buildCompositeId(userID, device_id);
+
   if (socket?.readyState === WebSocket.OPEN) {
-    sdkLog.log('🔄 WebSocket re-authenticating after login');
-    sendWebSocketAuth(userID, device_id);
+    // Identity unchanged: safe to re-send auth on the existing socket.
+    if (lastAuthedCompositeId === nextCompositeId) {
+      sdkLog.log('🔄 WebSocket re-authenticating after login (same identity)');
+      sendWebSocketAuth(userID, device_id);
+      return;
+    }
+
+    // Identity changed (e.g. guest → real user): the server binds a
+    // connection to the identity from its first auth and ignores later
+    // auth frames, so force a fresh connection. `onopen` will then send
+    // auth with the new composite id and the server issues a fresh
+    // auth_response.
+    sdkLog.log(
+      `🔄 WebSocket identity changed (${lastAuthedCompositeId ?? 'none'} → ${nextCompositeId}); reconnecting`
+    );
+    closeSocket({ suppressAutoReconnect: true });
+    await connectToServer();
     return;
   }
 
