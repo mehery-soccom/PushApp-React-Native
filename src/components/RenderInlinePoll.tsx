@@ -18,6 +18,7 @@ import {
   normalizeInAppCtaFields,
   type CtaTrackFields,
 } from '../utils/ctaTrackPayload';
+import inlinePollEmitter from './InlinePollEmitter';
 
 const inlinePollRegistry: Record<
   string,
@@ -45,6 +46,7 @@ export async function renderInlinePoll(
   if (!htmlContent) {
     delete inlinePollRegistry[placeholderId];
     sdkLog.log(`🧹 Cleared inline poll for ${placeholderId}`);
+    inlinePollEmitter.emit('inlinePollUpdated', { placeholderId, poll: null });
     return;
   }
 
@@ -62,6 +64,10 @@ export async function renderInlinePoll(
   sdkLog.log(
     `💾 Saved inline poll in memory for ${placeholderId} @ ${pollData.updatedAt}`
   );
+  inlinePollEmitter.emit('inlinePollUpdated', {
+    placeholderId,
+    poll: pollData,
+  });
 }
 
 const MIN_HEIGHT = 1;
@@ -77,39 +83,35 @@ export function InlinePollContainer({
     inlinePollRegistry[placeholderId] || null
   );
   const [contentHeight, setContentHeight] = useState<number>(FALLBACK_HEIGHT);
-  const pollRef = useRef(poll);
   const lastHeightRef = useRef(0);
   const mountTimeRef = useRef(Date.now());
   const lastNativeTapRef = useRef(0);
   const webViewRef = useRef<WebView>(null);
-  pollRef.current = poll;
 
-  // 🔄 Load poll data (memory only)
+  // 🔄 Load poll data on mount / placeholder change, and react immediately to updates
   useEffect(() => {
-    const memPoll = inlinePollRegistry[placeholderId];
-    setPoll(memPoll?.htmlContent ? memPoll : null);
-  }, [placeholderId]);
+    const applyPoll = (memPoll: (typeof inlinePollRegistry)[string] | null) => {
+      setPoll(memPoll?.htmlContent ? memPoll : null);
+    };
 
-  // 🔁 Watch for in-memory updates every 3s
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const memPoll = inlinePollRegistry[placeholderId];
-      const currentPoll = pollRef.current;
-      if (!memPoll && currentPoll) {
-        setPoll(null);
-        return;
-      }
-      if (
-        memPoll &&
-        JSON.stringify(memPoll.htmlContent) !==
-          JSON.stringify(currentPoll?.htmlContent)
-      ) {
-        sdkLog.log(`🔄 Poll updated to latest for ${placeholderId}`);
-        setPoll(memPoll);
-      }
-    }, 3000);
+    applyPoll(inlinePollRegistry[placeholderId] || null);
 
-    return () => clearInterval(interval);
+    const onUpdated = ({
+      placeholderId: updatedId,
+      poll: nextPoll,
+    }: {
+      placeholderId: string;
+      poll: (typeof inlinePollRegistry)[string] | null;
+    }) => {
+      if (updatedId !== placeholderId) return;
+      sdkLog.log(`🔄 Inline poll updated for ${placeholderId}`);
+      applyPoll(nextPoll);
+    };
+
+    inlinePollEmitter.on('inlinePollUpdated', onUpdated);
+    return () => {
+      inlinePollEmitter.off('inlinePollUpdated', onUpdated);
+    };
   }, [placeholderId]);
 
   // 🛰 Track CTA and open events

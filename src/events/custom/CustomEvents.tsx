@@ -495,16 +495,18 @@ export async function sendPollEvent() {
 
         sendAck(poll.contactId, message_id);
 
-        if (code.includes('inline') && event?.event_data?.compare) {
-          const placeholderId = event.event_data.compare;
+        // Prefer journey event compare; fall back to template style.placeholder_id
+        // (WS/poll often delivers event: null for inline/tooltip campaigns).
+        const placeholderId =
+          event?.event_data?.compare || style?.placeholder_id || '';
 
+        if (code.includes('inline') && placeholderId) {
           renderInlinePoll(placeholderId, htmlContent, style, {
             filterId: filter_id,
             messageId: message_id,
             journiId: journi_id,
           });
-          // setTimeout(() => {}, 2000);
-        } else if (event?.event_data?.compare && code.includes('tooltip')) {
+        } else if (code.includes('tooltip') && placeholderId) {
           const interpolationContext = {
             ...templateModelData,
             ...(event?.event_data ?? {}),
@@ -521,7 +523,7 @@ export async function sendPollEvent() {
             interpolationContext
           );
           const tooltipData = {
-            compare: event.event_data.compare,
+            compare: placeholderId,
             html: style?.html,
             width: style?.width || 70,
             align: style?.align || 'center',
@@ -547,9 +549,9 @@ export async function sendPollEvent() {
                 : '',
           };
 
-          renderTooltipPoll(event.event_data.compare, {
+          renderTooltipPoll(placeholderId, {
             ...tooltipData,
-            tooltipKey: event.eventId || Date.now(),
+            tooltipKey: event?.eventId || Date.now(),
           });
         } else if (isOverlayPollCode(code)) {
           pollQueue.push({

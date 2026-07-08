@@ -2,6 +2,10 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, Linking } from 'react-native';
 import TooltipPoll from './TooltipPoll';
 import tooltipEmitter from './TooltipEmitter';
+import {
+  getCachedTooltipPoll,
+  renderTooltipPoll,
+} from './TooltipPollManager';
 import { sdkLog } from '../helpers/sdkLogger';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
@@ -11,10 +15,7 @@ import {
   type CtaTrackFields,
 } from '../utils/ctaTrackPayload';
 
-// ✅ External API to trigger tooltip
-export function renderTooltipPoll(placeholderId: string, tooltipData: any) {
-  tooltipEmitter.emit('showTooltip', { placeholderId, tooltipData });
-}
+export { renderTooltipPoll };
 
 function normalizeUrl(rawUrl?: string) {
   if (!rawUrl || typeof rawUrl !== 'string') return '';
@@ -97,8 +98,14 @@ export function TooltipPollContainer({
     );
   }, [tooltipData, sendTrackEvent]);
 
-  // 🔹 Listen for tooltip show events
+  // 🔹 Apply cached tooltip immediately, then listen for live updates
   useEffect(() => {
+    const cached = getCachedTooltipPoll(placeholderId);
+    if (cached) {
+      sdkLog.log(`[SDK] Tooltip cache hit for ${placeholderId}, showing it`);
+      setTooltipData(cached);
+    }
+
     const handler = ({ placeholderId: id, tooltipData: data }: any) => {
       if (id !== placeholderId) return;
 
