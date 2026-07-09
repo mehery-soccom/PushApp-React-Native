@@ -45,7 +45,6 @@ class NotificationCtaUrlActivity : Activity() {
                 notificationId,
                 ctaLabel,
                 trackToken,
-                "",
                 buttonId
             )
         } else {

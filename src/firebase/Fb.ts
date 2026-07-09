@@ -738,7 +738,7 @@ function getPushTrackBaseUrl(data: Record<string, any>): string {
 }
 
 async function trackPushEvent(
-  eventType: 'received' | 'opened' | 'cta',
+  eventType: 'opened' | 'cta',
   data: Record<string, any>,
   cta?: CtaTrackFields
 ): Promise<void> {
@@ -765,17 +765,6 @@ async function trackPushEvent(
     cta ? { cta } : undefined
   );
 
-  if (eventType === 'received') {
-    sdkLog.log(
-      '[PushTrack] captured receivedAt:',
-      payload.receivedAt,
-      'messageId=',
-      payload.messageId ?? '(none)',
-      'notificationId=',
-      payload.notificationId ?? '(none)'
-    );
-  }
-
   try {
     const commonHeaders = await buildCommonHeaders();
     const endpoint = `${baseUrl.replace(/\/$/, '')}/v1/notification/push/track`;
@@ -798,7 +787,7 @@ async function trackPushEvent(
 }
 
 /**
- * Register the FCM background handler (logging + `trackPushEvent` received). Safe to call from
+ * Register the FCM background handler (logging + local notification display). Safe to call from
  * `index.js` before `AppRegistry` so the handler is installed as early as RN Firebase recommends;
  * `configurePushNotifications` also calls this (no-op if already registered).
  */
@@ -830,8 +819,6 @@ function ensureBackgroundMessageHandlerRegistered(): void {
     const messageId = remoteMessage?.messageId || '';
     if (messageId && seenBackgroundMessageIds.has(messageId)) {
       sdkLog.log('⏭️ Duplicate background FCM message ignored:', messageId);
-      const data = remoteMessage.data || {};
-      await trackPushEvent('received', data);
       return;
     }
     if (messageId) {
@@ -845,7 +832,6 @@ function ensureBackgroundMessageHandlerRegistered(): void {
     }
 
     const data = remoteMessage.data || {};
-    await trackPushEvent('received', data);
 
     if (fcmBackgroundMessageListener) {
       try {
@@ -1190,8 +1176,6 @@ export function setupForegroundNotificationListener(): () => void {
         { keys: Object.keys(data) }
       );
     }
-    trackPushEvent('received', data).catch(() => undefined);
-
     const { title, message } = resolvePushNotificationText(remoteMessage, data);
 
     const image =

@@ -105,12 +105,7 @@ export function extractClickTrackToken(
   return undefined;
 }
 
-export type PushTrackEvent = 'received' | 'opened' | 'cta';
-
-/** ISO 8601 UTC timestamp for push delivery (`received` event body field). */
-export function pushTrackReceivedAtIso(now: Date = new Date()): string {
-  return now.toISOString();
-}
+export type PushTrackEvent = 'opened' | 'cta';
 
 export function buildPushTrackBody(
   event: PushTrackEvent,
@@ -118,14 +113,9 @@ export function buildPushTrackBody(
   options?: {
     cta?: { ctaId: string; button_id: string };
     ctaId?: string;
-    receivedAt?: string;
   }
 ): Record<string, unknown> {
   const body: Record<string, unknown> = { event };
-
-  if (event === 'received') {
-    body.receivedAt = options?.receivedAt ?? pushTrackReceivedAtIso();
-  }
 
   const clickToken = extractClickTrackToken(merged);
   if (clickToken) body.t = clickToken;

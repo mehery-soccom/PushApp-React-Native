@@ -210,8 +210,7 @@ object NotificationCtaUtils {
         eventName: String,
         targetUrl: String? = null,
         ctaLabel: String? = null,
-        buttonId: String? = null,
-        receivedAt: String? = null
+        buttonId: String? = null
     ): Intent {
         return Intent(context, NotificationActionReceiver::class.java).apply {
             putExtra(NotificationActionReceiver.EXTRA_ACTION_TYPE, eventName)
@@ -231,9 +230,6 @@ object NotificationCtaUtils {
             putExtra(NotificationActionReceiver.EXTRA_CTA_LABEL, ctaLabel.orEmpty())
             putExtra(NotificationActionReceiver.EXTRA_CTA_ID, buttonId.orEmpty())
             putExtra(NotificationActionReceiver.EXTRA_TRACK_TOKEN, trackClickToken(data))
-            if (!receivedAt.isNullOrBlank()) {
-                putExtra(NotificationActionReceiver.EXTRA_RECEIVED_AT, receivedAt)
-            }
         }
     }
 
@@ -320,27 +316,6 @@ object NotificationCtaUtils {
             ("open_" + requestKey).hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    }
-
-    /** For [android.content.Context.sendBroadcast] (e.g. received tracking). */
-    fun intentForPushTrackEvent(
-        context: Context,
-        data: Map<String, String>,
-        eventName: String,
-        targetUrl: String? = null,
-        ctaLabel: String? = null,
-        buttonId: String? = null,
-        receivedAt: String? = null
-    ): Intent {
-        return buildActionReceiverIntent(
-            context,
-            data,
-            eventName,
-            targetUrl,
-            ctaLabel,
-            buttonId,
-            receivedAt
         )
     }
 }

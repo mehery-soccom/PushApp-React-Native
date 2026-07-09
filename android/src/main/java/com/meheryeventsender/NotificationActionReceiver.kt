@@ -22,16 +22,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val ctaLabel = intent.getStringExtra(EXTRA_CTA_LABEL).orEmpty()
         val buttonId = intent.getStringExtra(EXTRA_CTA_ID).orEmpty()
         val trackToken = intent.getStringExtra(EXTRA_TRACK_TOKEN).orEmpty()
-        val receivedAt = intent.getStringExtra(EXTRA_RECEIVED_AT).orEmpty()
 
         if (trackBaseUrl.isNotBlank()) {
-            if (actionType == "received" && receivedAt.isNotBlank()) {
-                Log.i(
-                    TAG,
-                    "Push track received dispatch receivedAt=$receivedAt " +
-                        "messageId=$messageId notificationId=$notificationId"
-                )
-            }
             NotificationPushTrack.sendPushTrackEvent(
                 trackBaseUrl,
                 actionType,
@@ -40,7 +32,6 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 notificationId,
                 ctaLabel,
                 trackToken,
-                receivedAt,
                 buttonId
             )
         } else if (actionType == "cta" || ctaLabel.isNotBlank() || buttonId.isNotBlank() || trackToken.isNotBlank()) {
@@ -86,7 +77,6 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val EXTRA_CTA_ID = "extra_cta_id"
         const val EXTRA_CTA_LABEL = "extra_cta_label"
         const val EXTRA_TRACK_TOKEN = "extra_track_token"
-        const val EXTRA_RECEIVED_AT = "extra_received_at"
     }
 
     private fun openApp(context: Context) {

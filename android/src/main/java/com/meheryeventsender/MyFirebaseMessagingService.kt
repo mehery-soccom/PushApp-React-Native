@@ -5,7 +5,6 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import android.util.Log
-import java.time.Instant
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -209,7 +208,6 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         NotificationCtaUtils.appendCtaActions(this, builder, data)
 
         notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
-        sendReceivedTracking(data)
     }
 
     private fun decorateWithOpenTrackingIntent(
@@ -217,34 +215,6 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         data: Map<String, String>
     ) {
         builder.setContentIntent(NotificationCtaUtils.buildOpenPendingIntent(this, data))
-    }
-
-    private fun sendReceivedTracking(data: Map<String, String>) {
-        val trackBase = NotificationCtaUtils.trackBaseUrl(this, data)
-        if (trackBase.isBlank()) {
-            Log.i(TAG, "Push track received skipped: no track_base_url / api_base_url")
-            return
-        }
-        val receivedAt = Instant.now().toString()
-        val messageId = data["messageId"].orEmpty().ifBlank { data["message_id"].orEmpty() }
-        val notificationId = data["notification_id"].orEmpty().ifBlank {
-            data["notificationId"].orEmpty()
-        }
-        Log.i(
-            TAG,
-            "Push track received captured receivedAt=$receivedAt " +
-                "messageId=$messageId notificationId=$notificationId"
-        )
-        val intent = NotificationCtaUtils.intentForPushTrackEvent(
-            this,
-            data,
-            eventName = "received",
-            targetUrl = null,
-            ctaLabel = null,
-            buttonId = null,
-            receivedAt = receivedAt
-        )
-        sendBroadcast(intent)
     }
 
     private fun handleLiveActivityNotification(data: Map<String, String>) {
@@ -301,7 +271,6 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 notification.setOnlyAlertOnce(true)
             }
             notificationManager.notify(notificationId, notification.build())
-            sendReceivedTracking(data)
         } catch (e: Exception) {
             Log.e("MySdk", "Live activity error: ${e.message}", e)
         }
@@ -322,7 +291,6 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 body = data["body"]?.trim().orEmpty(),
                 ctaData = data
             )
-            sendReceivedTracking(data)
             return
         }
 
@@ -365,7 +333,6 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         decorateWithOpenTrackingIntent(builder, data)
         NotificationCtaUtils.appendCtaActions(this, builder, data)
         notificationManager.notify(notificationId, builder.build())
-        sendReceivedTracking(data)
     }
 
     private fun handleBigPictureNotification(data: Map<String, String>) {
@@ -416,11 +383,9 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                     builder
                 }).setOnlyAlertOnce(true)
                 notificationManager.notify(notificationId, finalBuilder.build())
-                sendReceivedTracking(data)
             }
         } else {
             notificationManager.notify(notificationId, builder.build())
-            sendReceivedTracking(data)
         }
     }
 }

@@ -198,17 +198,6 @@ const trackIosPushEvent = async (
     cta ? { cta } : undefined
   );
 
-  if (event === 'received') {
-    sdkLog.log(
-      '[PushTrack] iOS captured receivedAt:',
-      body.receivedAt,
-      'messageId=',
-      body.messageId ?? '(none)',
-      'notificationId=',
-      body.notificationId ?? '(none)'
-    );
-  }
-
   try {
     const commonHeaders = await buildCommonHeaders();
     let apiBaseUrl = getPushTrackBaseFromMerged(merged);
@@ -356,11 +345,6 @@ export const addNotificationDebugListener = () => {
       if (actionId && !isDefaultTap && !isDismiss) {
         const cta = resolvePushCtaFields(actionId, merged);
         await trackIosPushEvent('cta', merged, cta);
-      } else if (!actionId) {
-        sdkLog.log(
-          '[PushTrack] iOS notification delivered (no tap); posting received track'
-        );
-        await trackIosPushEvent('received', merged);
       } else if (isDefaultTap) {
         await trackIosPushEvent('opened', merged);
         const bodyUrl = resolveNotificationUrl(merged);

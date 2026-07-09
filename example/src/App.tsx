@@ -35,9 +35,14 @@ export default function App() {
         area: { name: 'Parel' },
       });
 
-      const environment: SdkInitEnvironmentParam = 'development';
-      await initSdk(null, 'demo_1754408042569', environment);
+      // const environment: SdkInitEnvironmentParam = 'development';
+      // await initSdk(null, 'demo_1754408042569', environment);
+      // console.log('SDK initialized with environment:', environment);
+
+      const environment: SdkInitEnvironmentParam = false;
+      await initSdk(null, 'demo_1780031354415', false);
       console.log('SDK initialized with environment:', environment);
+
       setSdkReady(true);
 
       try {

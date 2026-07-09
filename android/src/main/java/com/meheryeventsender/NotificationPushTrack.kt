@@ -25,7 +25,6 @@ object NotificationPushTrack {
         notificationId: String,
         ctaLabel: String,
         trackToken: String = "",
-        receivedAt: String = "",
         buttonId: String = ""
     ) {
         Thread {
@@ -42,9 +41,6 @@ object NotificationPushTrack {
                 val payload = JSONObject()
                 val event = actionType.ifBlank { "opened" }
                 payload.put("event", event)
-                if (event == "received" && receivedAt.isNotBlank()) {
-                    payload.put("receivedAt", receivedAt)
-                }
                 if (trackToken.isNotBlank()) {
                     payload.put("t", trackToken)
                 }
@@ -61,14 +57,6 @@ object NotificationPushTrack {
                     }
                 }
 
-                if (event == "received" && receivedAt.isNotBlank()) {
-                    Log.i(
-                        TAG,
-                        "Push track POST event=received receivedAt=$receivedAt " +
-                            "messageId=$messageId notificationId=$notificationId"
-                    )
-                }
-
                 conn.outputStream.use { os ->
                     os.write(payload.toString().toByteArray(Charsets.UTF_8))
                 }
@@ -76,13 +64,7 @@ object NotificationPushTrack {
                 if (code in 200..299) {
                     Log.i(
                         TAG,
-                        "Push track OK HTTP $code event=$event" +
-                            if (event == "received" && receivedAt.isNotBlank()) {
-                                " receivedAt=$receivedAt"
-                            } else {
-                                ""
-                            } +
-                            " endpoint=$endpoint"
+                        "Push track OK HTTP $code event=$event endpoint=$endpoint"
                     )
                 } else {
                     val errBody = try {
