@@ -8,6 +8,12 @@ export { setGeoIP } from './utils/geoIpContext';
 export { updatePushToken } from './utils/updateToken';
 export type { GeoIpInput, GeoIpPayload } from './types/geoIp';
 export type { SdkInitEnvironmentParam } from './helpers/tenantContext';
+export { pushappAuth } from './helpers/pushappAuth';
+export {
+  readCredentialsForEnvironment,
+  readNativeAppCredentials,
+  sdkEnvironmentToNativeLabel,
+} from './helpers/readNativeAppCredentials';
 
 export {
   logUserDetails,
@@ -192,11 +198,7 @@ const trackIosPushEvent = async (
     if (oldest) seenIosPushTrackEvents.delete(oldest);
   }
 
-  const body = buildPushTrackBody(
-    event,
-    merged,
-    cta ? { cta } : undefined
-  );
+  const body = buildPushTrackBody(event, merged, cta ? { cta } : undefined);
 
   try {
     const commonHeaders = await buildCommonHeaders();

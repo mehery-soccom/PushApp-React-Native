@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">MeheryEventSenderExample</string>
+    <string name="mehery_prod_app_id" translatable="false">pa_5d564c07005fcefb8b3798eda26fd71743e07abcf0eebbe5</string>
+    <string name="mehery_prod_app_key" translatable="false">pas_346259d345a4d26a6dff6e7e1c86bf9133f77c562905cdbea15195c061f99ca817600466ed78a2eabe92d2a13c425353</string>
+    <string name="mehery_sandbox_app_id" translatable="false">pa_5d564c07005fcefb8b3798eda26fd71743e07abcf0eebbe5</string>
+    <string name="mehery_sandbox_app_key" translatable="false">pas_346259d345a4d26a6dff6e7e1c86bf9133f77c562905cdbea15195c061f99ca817600466ed78a2eabe92d2a13c425353</string>
+    <string name="mehery_dev_app_id" translatable="false">pa_6b490b617d4f988ae7284957206d7eb7cb9a42239256672b</string>
+    <string name="mehery_dev_app_key" translatable="false">pas_d30dd43cc1f0d38585fc052f210d22a35fbd48f8e95287cf81fad0b8a7d5a1629b91b84f0e28a54c4e8e8af0398e2978</string>
 </resources>

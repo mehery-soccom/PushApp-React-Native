@@ -7,6 +7,7 @@ import {
   resetResolveDeviceHeadersCacheForTests,
   resolveDeviceHeaders,
 } from '../utils/resolveDeviceHeaders';
+import { getPushappAuthHeaders } from '../helpers/pushappAuth';
 
 jest.mock('react-native', () => ({
   Dimensions: {
@@ -42,9 +43,20 @@ jest.mock('../utils/resolveDeviceHeaders', () => ({
   resetResolveDeviceHeadersCacheForTests: jest.fn(),
 }));
 
+jest.mock('../helpers/pushappAuth', () => ({
+  getPushappAuthHeaders: jest.fn(async () => ({})),
+  redactPushappAuthHeadersForLog: (headers: Record<string, string>) => {
+    const out = { ...headers };
+    if (out['x-api-id']) out['x-api-id'] = '***hidden***';
+    if (out['x-api-key']) out['x-api-key'] = '***hidden***';
+    return out;
+  },
+}));
+
 describe('buildCommonHeaders', () => {
   beforeEach(() => {
     jest.mocked(getDeviceMetadata).mockReturnValue({});
+    jest.mocked(getPushappAuthHeaders).mockResolvedValue({});
   });
 
   it('includes dynamic SDK framework and version headers in both formats', async () => {
@@ -88,6 +100,19 @@ describe('buildCommonHeaders', () => {
     expect(jest.mocked(getDeviceId)).toHaveBeenCalled();
     expect(jest.mocked(Dimensions.get)).toHaveBeenCalledWith('window');
     expect(Platform.OS).toBe('ios');
+  });
+
+  it('includes pushapp auth headers when configured', async () => {
+    jest.mocked(getPushappAuthHeaders).mockResolvedValue({
+      'x-api-id': 'pa_test_app_id',
+      'x-api-key': 'pas_test_secret',
+    });
+
+    const headers = await buildCommonHeaders();
+
+    expect(headers['x-api-id']).toBe('pa_test_app_id');
+    expect(headers['x-api-key']).toBe('pas_test_secret');
+    expect(jest.mocked(getPushappAuthHeaders)).toHaveBeenCalled();
   });
 });
 

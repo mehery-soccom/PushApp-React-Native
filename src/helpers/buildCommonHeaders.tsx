@@ -4,6 +4,10 @@ import { getDeviceId } from '../utils/device';
 import { resolveDeviceHeaders } from '../utils/resolveDeviceHeaders';
 import { SDK_FRAMEWORK, SDK_VERSION } from './sdkInfo';
 import { sdkLog } from './sdkLogger';
+import {
+  getPushappAuthHeaders,
+  redactPushappAuthHeadersForLog,
+} from './pushappAuth';
 
 export async function buildCommonHeaders() {
   const { width, height } = Dimensions.get('window');
@@ -19,8 +23,8 @@ export async function buildCommonHeaders() {
   const runtimeHeaders: Record<string, string> = {
     'X-SDK-Framework': SDK_FRAMEWORK,
     'X-SDK-Version': SDK_VERSION,
-    sdk_framework: SDK_FRAMEWORK,
-    sdk_version: SDK_VERSION,
+    'sdk_framework': SDK_FRAMEWORK,
+    'sdk_version': SDK_VERSION,
 
     'X-Screen-Resolution': `${Math.round(width)}x${Math.round(height)}`,
     'X-Device-Orientation': orientation,
@@ -35,14 +39,16 @@ export async function buildCommonHeaders() {
 
   const deviceHeaders = await resolveDeviceHeaders();
   const deviceMetadata = getDeviceMetadata?.() ?? {};
+  const authHeaders = await getPushappAuthHeaders();
 
   const headers = {
     ...runtimeHeaders,
     ...deviceHeaders,
     ...deviceMetadata,
+    ...authHeaders,
   };
 
-  sdkLog.log('[SDK] Common headers:', headers);
+  sdkLog.log('[SDK] Common headers:', redactPushappAuthHeadersForLog(headers));
 
   return headers;
 }

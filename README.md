@@ -13,6 +13,8 @@ Your example/consumer app must include all of the following:
 - `@react-native-firebase/app` + `@react-native-firebase/messaging`
 - `@react-native-async-storage/async-storage`
 - `react-native-push-notification`
+- App credentials in native config — **three pairs** (prod, sandbox, dev) matching your `initSdk` environment
+- `readCredentialsForEnvironment(environment)` + `pushappAuth(xApiId, xApiKey)` on every app launch **before** `initSdk`
 - SDK initialization in app startup (`initSdk`)
 - `PollOverlayProvider` mounted once at app root
 - iOS background mode for remote notifications (`remote-notification` in `Info.plist`)
@@ -109,13 +111,86 @@ In your iOS `Info.plist`, include:
 
 Also enable Push Notifications capability in Xcode for your app target.
 
-### 5) Initialize SDK in app startup
+### 4a) App credentials (required)
 
-The third argument selects which **pushapp** host the SDK uses for API and WebSocket calls (`{tenant}.pushapp.…`):
+Store **three** PushApp credential pairs in native config — one per `initSdk` environment. Use the **same** `environment` variable to pick credentials and to call `initSdk` so API host and auth always match.
+
+| `initSdk` env | Host | iOS keys | Android strings |
+| --- | --- | --- | --- |
+| `false` | `pushapp.ai` | `MeheryProdAppId` / `MeheryProdAppKey` | `mehery_prod_app_id` / `mehery_prod_app_key` |
+| `true` | `pushapp.net.in` | `MeherySandboxAppId` / `MeherySandboxAppKey` | `mehery_sandbox_app_id` / `mehery_sandbox_app_key` |
+| `'development'` | `pushapp.co.in` | `MeheryDevAppId` / `MeheryDevAppKey` | `mehery_dev_app_id` / `mehery_dev_app_key` |
+
+Legacy single-key names (`MeheryAppId` / `MeheryAppSecretKey`, `mehery_app_id` / `mehery_app_secret_key`) still work as a **production fallback** only.
+
+**iOS** — add to your app target `Info.plist`:
+
+```xml
+<key>MeheryProdAppId</key>
+<string>pa_your_prod_app_id</string>
+<key>MeheryProdAppKey</key>
+<string>pas_your_prod_app_key</string>
+<key>MeherySandboxAppId</key>
+<string>pa_your_sandbox_app_id</string>
+<key>MeherySandboxAppKey</key>
+<string>pas_your_sandbox_app_key</string>
+<key>MeheryDevAppId</key>
+<string>pa_your_dev_app_id</string>
+<key>MeheryDevAppKey</key>
+<string>pas_your_dev_app_key</string>
+```
+
+**Android** — add to `android/app/src/main/res/values/strings.xml`:
+
+```xml
+<string name="mehery_prod_app_id" translatable="false">pa_your_prod_app_id</string>
+<string name="mehery_prod_app_key" translatable="false">pas_your_prod_app_key</string>
+<string name="mehery_sandbox_app_id" translatable="false">pa_your_sandbox_app_id</string>
+<string name="mehery_sandbox_app_key" translatable="false">pas_your_sandbox_app_key</string>
+<string name="mehery_dev_app_id" translatable="false">pa_your_dev_app_id</string>
+<string name="mehery_dev_app_key" translatable="false">pas_your_dev_app_key</string>
+```
+
+Rebuild the native app after changing these values.
+
+> **Do not generate new API keys unless you must.** Credentials are stored in native config (`Info.plist` / `strings.xml`), not fetched at runtime from a server. If you create a new `pa_` / `pas_` pair in the PushApp dashboard, you must update the matching native values and **ship a new app release** — existing installs will keep using the old credentials until users update. Prefer keeping your current keys; only rotate when required for security.
+
+> **Match credentials to environment.** If you pass sandbox credentials while `initSdk(..., false)` points at production, requests will hit the wrong host with the wrong app identity.
+
+### 5) Authenticate and initialize SDK in app startup
+
+On every cold start, read credentials for your chosen environment, call `pushappAuth`, then `initSdk` with the **same** `environment`. Every API request then includes `x-api-id` and `x-api-key` headers automatically.
+
+```tsx
+import { useEffect } from 'react';
+import {
+  pushappAuth,
+  initSdk,
+  readCredentialsForEnvironment,
+  type SdkInitEnvironmentParam,
+} from 'react-native-mehery-event-sender';
+
+useEffect(() => {
+  const bootstrap = async () => {
+    const environment: SdkInitEnvironmentParam = false; // production
+    const { xApiId, xApiKey } =
+      await readCredentialsForEnvironment(environment);
+    await pushappAuth(xApiId, xApiKey);
+    await initSdk(null, 'your_tenant_your_channel_id', environment);
+  };
+  bootstrap();
+}, []);
+```
+
+Optional manual override (e.g. testing): `await pushappAuth('pa_your_app_id', 'pas_your_app_key')` without reading native config.
+
+`pushappAuth()` with no arguments reads **production** credentials only (legacy / single-env apps).
+
+The third argument to `initSdk` selects which **pushapp** host the SDK uses for API and WebSocket calls (`{tenant}.pushapp.…`):
 
 - `false` — production: `pushapp.ai`
-- `true` — sandbox: `pushapp.xyz` (default)
-- `'development'` — development: `pushapp.in`
+- `true` — sandbox: `pushapp.net.in` (default)
+- `'development'` — development: `pushapp.co.in`
 
 The fourth argument controls SDK console logging:
 
@@ -126,15 +201,49 @@ Native Android FCM logcat lines are unaffected (native code).
 
 ```tsx
 import { useEffect } from 'react';
-import { initSdk } from 'react-native-mehery-event-sender';
+import {
+  pushappAuth,
+  initSdk,
+  readCredentialsForEnvironment,
+  type SdkInitEnvironmentParam,
+} from 'react-native-mehery-event-sender';
 
 useEffect(() => {
-  // identifier format: "<tenant>_<channel>"
-  initSdk(null, 'demo_1754408042569', false);              // production, logs on (default)
-  // initSdk(null, 'demo_1754408042569', false, false);   // production, logs off
-  // initSdk(null, 'demo_1754408042569', true);           // sandbox
-  // initSdk(null, 'demo_1754408042569', 'development');  // development
+  const bootstrap = async () => {
+    const environment: SdkInitEnvironmentParam = false;
+    const { xApiId, xApiKey } =
+      await readCredentialsForEnvironment(environment);
+    await pushappAuth(xApiId, xApiKey);
+    // identifier format: "<tenant>_<channel>"
+    await initSdk(null, 'your_tenant_your_channel_id', environment);
+    // await initSdk(null, 'your_tenant_your_channel_id', true);           // sandbox
+    // await initSdk(null, 'your_tenant_your_channel_id', 'development'); // development
+  };
+  bootstrap();
 }, []);
+```
+
+`initSdk` is async — always `await` it so device registration and WebSocket connect finish before you rely on SDK state.
+
+Optional geo context before init (used by register and event payloads):
+
+```tsx
+import { setGeoIP } from 'react-native-mehery-event-sender';
+
+setGeoIP({
+  ip: '203.0.113.1',
+  location: { lat: 19.076, lng: 72.8777 },
+  country: { iso_code: 'IN', name: 'India' },
+});
+```
+
+Wait for init to complete before login if needed:
+
+```tsx
+import { waitForSdkReady } from 'react-native-mehery-event-sender';
+
+await waitForSdkReady();
+await OnUserLogin('user_123');
 ```
 
 ### 6) Mount poll overlay once at root
@@ -227,15 +336,42 @@ Use:
 - `InlinePollContainer` where inline poll cards should render.
 - `TooltipPollContainer` around UI elements that should receive tooltip polls.
 
+## Public API reference
+
+| API | Description |
+| --- | --- |
+| `pushappAuth(appId?, appSecretKey?)` | Persist credentials locally, inject `x-api-id` / `x-api-key` headers on every API call |
+| `readCredentialsForEnvironment(environment)` | Read prod / sandbox / dev credentials from native config for the given `initSdk` environment |
+| `readNativeAppCredentials()` | Read production credentials only (legacy / single-env) |
+| `initSdk(context, identifier, environment?, logs?)` | Initialize SDK; `identifier` format `"<tenant>_<channel>"` |
+| `waitForSdkReady()` | Resolves when `initSdk` has finished |
+| `setGeoIP(geo)` | Set geo context for register/events |
+| `OnUserLogin(userId)` / `OnUserLogOut(userId)` | Link or delink device to host user |
+| `OnPageOpen(name)` / `OnPageClose(name)` | Screen lifecycle events |
+| `OnAppOpen()` / `OnAppLaunch()` | App lifecycle events |
+| `sendCustomEvent(name, data?, options?)` | Custom business events |
+| `updateUserProfile(additionalInfo, cohorts?, options?)` | Sync profile to PushApp |
+| `updatePushToken(token?)` | Refresh FCM/APNs token with backend |
+| `setDeviceMetadata(headers)` | Merge extra string headers into every request |
+| `getDeviceId()` | Persistent SDK device UUID |
+| `PollOverlayProvider`, `showPollOverlay`, `hidePollOverlay` | Poll overlay UI |
+| `InlinePollContainer`, `TooltipPollContainer` | Inline / tooltip poll placeholders |
+| `registerFcmBackgroundHandler()` | Register background FCM handler early in `index.js` |
+| `ensureAndroidNotificationPermission()` | Request POST_NOTIFICATIONS on Android 13+ |
+| `setNotificationUrlHandler`, `configureNotificationLinkRewrites`, `openNotificationLink` | Notification deep-link helpers |
+| `triggerCarouselNotification`, `triggerLiveActivity` | Local test helpers for rich push / Live Activity |
+
+Types exported: `SdkInitEnvironmentParam`, `GeoIpInput`, `GeoIpPayload`, `OnUserLoginResult`, `SendCustomEventOptions`, `UpdateUserProfileOptions`, `UpdateUserProfileResult`, `TriggerCarouselNotificationParams`, `NotificationLinkRewrite`, `FcmBackgroundMessageListener`.
+
 ### Example app: iOS notification extensions (reference)
 
 The `example/ios` project ships with native targets you can use as a starting point when wiring push, rich notifications, and Live Activities. Copy or adapt the Swift, plists, and assets into your own app; **branding and UI design are yours**—these paths only show where the hooks and data live.
 
-| Area | Path |
-| --- | --- |
-| Rich notification UI (content extension) | `example/ios/ImagePreviewExtension/NotificationViewController.swift` (and `MainInterface.storyboard`, `Assets.xcassets` in the same folder) |
-| Modify notification content before display (service extension) | `example/ios/ImageServiceExtension/NotificationService.swift` |
-| Live Activity / delivery-style widget data and UI | `example/ios/DeliveryActivity/` (Swift sources, `Info.plist`, `Assets.xcassets`) |
+| Area                                                           | Path                                                                                                                                        |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rich notification UI (content extension)                       | `example/ios/ImagePreviewExtension/NotificationViewController.swift` (and `MainInterface.storyboard`, `Assets.xcassets` in the same folder) |
+| Modify notification content before display (service extension) | `example/ios/ImageServiceExtension/NotificationService.swift`                                                                               |
+| Live Activity / delivery-style widget data and UI              | `example/ios/DeliveryActivity/` (Swift sources, `Info.plist`, `Assets.xcassets`)                                                            |
 
 Mirror the same targets and capabilities in Xcode on your app if you are not using the example workspace directly.
 
@@ -262,10 +398,10 @@ When the push payload includes `notification_url` (or `notificationUrl`), tappin
 
 The SDK resolves the body URL from the root payload and from Mehery template nests: `style.notification_url`, stringified `style`, `templateData`, and `template.style` / `template.data` (same shape as the template API `style` object).
 
-| Platform | Payload field | Body tap handler |
-| -------- | ------------- | ---------------- |
-| Android | FCM `data.notification_url` (or nested `style` / `templateData`) | Native `NotificationCtaUrlActivity` + foreground JS `Linking.openURL` |
-| iOS | APNS / FCM `data` (root or nested `style` / `templateData`) | Example [`AppDelegate.swift`](example/ios/MeheryEventSenderExample/AppDelegate.swift) `urlForNotificationBody` + JS `Linking.openURL` fallback |
+| Platform | Payload field                                                    | Body tap handler                                                                                                                               |
+| -------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Android  | FCM `data.notification_url` (or nested `style` / `templateData`) | Native `NotificationCtaUrlActivity` + foreground JS `Linking.openURL`                                                                          |
+| iOS      | APNS / FCM `data` (root or nested `style` / `templateData`)      | Example [`AppDelegate.swift`](example/ios/MeheryEventSenderExample/AppDelegate.swift) `urlForNotificationBody` + JS `Linking.openURL` fallback |
 
 **Push server requirement:** `/send-notification` must include `notification_url` on the device payload (flattened in FCM `data` is best). If it only exists in the template `style` object, the send step must still forward that object (or flatten it) so iOS/Android can read it on tap. Mapping only `buttons` → `url1` / `title1` / `action1` is not enough.
 

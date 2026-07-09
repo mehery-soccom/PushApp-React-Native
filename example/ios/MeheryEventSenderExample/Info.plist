@@ -33,6 +33,18 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>MeheryProdAppId</key>
+	<string>pa_5d564c07005fcefb8b3798eda26fd71743e07abcf0eebbe5</string>
+	<key>MeheryProdAppKey</key>
+	<string>pas_8e63c05a3f499a1360f91ba8533927d64b1559e81885465311b92a1dba082401a7cf8f59dcfffcfc50c9843bee233693</string>
+	<key>MeherySandboxAppId</key>
+	<string>pa_6b490b617d4f988ae7284957206d7eb7cb9a42239256672b</string>
+	<key>MeherySandboxAppKey</key>
+	<string>pas_d30dd43cc1f0d38585fc052f210d22a35fbd48f8e95287cf81fad0b8a7d5a1629b91b84f0e28a54c4e8e8af0398e2978</string>
+	<key>MeheryDevAppId</key>
+	<string>pa_6b490b617d4f988ae7284957206d7eb7cb9a42239256672b</string>
+	<key>MeheryDevAppKey</key>
+	<string>pas_d30dd43cc1f0d38585fc052f210d22a35fbd48f8e95287cf81fad0b8a7d5a1629b91b84f0e28a54c4e8e8af0398e2978</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>
 	<key>NSSupportsLiveActivities</key>

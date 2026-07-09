@@ -10,7 +10,8 @@ class MeheryEventSenderPackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
       return listOf(
             LiveActivityModule(reactContext),
-            MeheryPushTrackModule(reactContext)
+            MeheryPushTrackModule(reactContext),
+            MeheryAppConfigModule(reactContext)
       )
   }
 

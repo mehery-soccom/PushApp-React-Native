@@ -3,8 +3,9 @@
   <h1>Mehery Event Sender Documentation</h1>
   <p><strong>A Premium SDK for Push Notifications, In-App Notifications, Polls, and Real-time Event Tracking.</strong></p>
 
-  [![npm version](https://img.shields.io/npm/v/react-native-mehery-event-sender.svg?style=flat-square)](https://www.npmjs.com/package/react-native-mehery-event-sender)
-  [![license](https://img.shields.io/npm/l/react-native-mehery-event-sender.svg?style=flat-square)](https://github.com/mehery-soccom/PushApp-React-Native/blob/main/LICENSE)
+[![npm version](https://img.shields.io/npm/v/react-native-mehery-event-sender.svg?style=flat-square)](https://www.npmjs.com/package/react-native-mehery-event-sender)
+[![license](https://img.shields.io/npm/l/react-native-mehery-event-sender.svg?style=flat-square)](https://github.com/mehery-soccom/PushApp-React-Native/blob/main/LICENSE)
+
 </div>
 
 ---
@@ -14,6 +15,7 @@
 The **Mehery Event Sender SDK** provides a comprehensive suite of tools to engage your users through smart notifications and interactive polls. Whether you need to track user behavior, manage deep-linked push notifications, or deploy real-time feedback loops, this SDK is designed for performance and ease of integration.
 
 ### **✨ Key Features**
+
 - **🔔 Advanced Push Notifications:** Support for rich media, carousels, and action buttons.
 - **📊 Interactive Polls:** Seamlessly mount poll overlays and inline feedback forms.
 - **🎯 Precise Event Tracking:** Capture user journeys with login, page open, and custom event markers.
@@ -36,6 +38,8 @@ Before you begin, ensure your project has the following configured:
 - [ ] **Required Dependencies:** Firebase Core, Messaging, and Async Storage.
 - [ ] **Permissions:** Notification and Network permissions in Manifest/Plist.
 - [ ] **Background Modes:** `remote-notification` enabled on iOS.
+- [ ] **App Credentials:** prod, sandbox, and dev pairs in Info.plist (iOS) and `strings.xml` (Android) — see table in App credentials section.
+- [ ] **Authentication:** `readCredentialsForEnvironment(environment)` → `pushappAuth(xApiId, xApiKey)` before `initSdk` on every app launch.
 
 ---
 
@@ -53,6 +57,7 @@ npm install @react-native-async-storage/async-storage react-native-push-notifica
 ```
 
 **For iOS developers:**
+
 ```bash
 cd ios && pod install
 ```
@@ -64,7 +69,9 @@ cd ios && pod install
 ### **1. Android Setup**
 
 #### **Gradle Configuration**
+
 Update your project-level `android/build.gradle`:
+
 ```gradle
 buildscript {
   dependencies {
@@ -75,12 +82,15 @@ buildscript {
 ```
 
 Update your app-level `android/app/build.gradle`:
+
 ```gradle
 apply plugin: 'com.google.gms.google-services'
 ```
 
 #### **Manifest Permissions**
+
 Ensure `AndroidManifest.xml` includes these essential permissions:
+
 ```xml
 <uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -88,6 +98,7 @@ Ensure `AndroidManifest.xml` includes these essential permissions:
 ```
 
 #### **One Firebase MESSAGING_EVENT service (background rich push)**
+
 React Native Firebase registers `io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService` (no-op `onMessageReceived`). The SDK’s `com.meheryeventsender.MyFirebaseMessagingService` subclasses it. If two `MESSAGING_EVENT` services remain in the final merged manifest, background delivery can hit the wrong one and **images and CTA buttons will not show**. In your **app** `AndroidManifest.xml`, inside `<application>`, add `xmlns:tools` on the manifest element and:
 
 ```xml
@@ -100,6 +111,7 @@ React Native Firebase registers `io.invertase.firebase.messaging.ReactNativeFire
 ### **2. iOS Setup**
 
 #### **Capabilities & Info.plist**
+
 Enable **Push Notifications** and **Background Modes** (Remote notifications) in your Xcode project settings. Then, ensure your `Info.plist` contains:
 
 ```xml
@@ -109,34 +121,114 @@ Enable **Push Notifications** and **Background Modes** (Remote notifications) in
 </array>
 ```
 
+#### **App credentials**
+
+Add **three** PushApp credential pairs to native config — one per `initSdk` environment:
+
+| `initSdk` env | Host | iOS keys | Android strings |
+| --- | --- | --- | --- |
+| `false` | `pushapp.ai` | `MeheryProdAppId` / `MeheryProdAppKey` | `mehery_prod_app_id` / `mehery_prod_app_key` |
+| `true` | `pushapp.net.in` | `MeherySandboxAppId` / `MeherySandboxAppKey` | `mehery_sandbox_app_id` / `mehery_sandbox_app_key` |
+| `'development'` | `pushapp.co.in` | `MeheryDevAppId` / `MeheryDevAppKey` | `mehery_dev_app_id` / `mehery_dev_app_key` |
+
+**Info.plist:**
+
+```xml
+<key>MeheryProdAppId</key>
+<string>pa_your_prod_app_id</string>
+<key>MeheryProdAppKey</key>
+<string>pas_your_prod_app_key</string>
+<key>MeherySandboxAppId</key>
+<string>pa_your_sandbox_app_id</string>
+<key>MeherySandboxAppKey</key>
+<string>pas_your_sandbox_app_key</string>
+<key>MeheryDevAppId</key>
+<string>pa_your_dev_app_id</string>
+<key>MeheryDevAppKey</key>
+<string>pas_your_dev_app_key</string>
+```
+
+**Android `strings.xml`:**
+
+```xml
+<string name="mehery_prod_app_id" translatable="false">pa_your_prod_app_id</string>
+<string name="mehery_prod_app_key" translatable="false">pas_your_prod_app_key</string>
+<string name="mehery_sandbox_app_id" translatable="false">pa_your_sandbox_app_id</string>
+<string name="mehery_sandbox_app_key" translatable="false">pas_your_sandbox_app_key</string>
+<string name="mehery_dev_app_id" translatable="false">pa_your_dev_app_id</string>
+<string name="mehery_dev_app_key" translatable="false">pas_your_dev_app_key</string>
+```
+
+Rebuild the native app after changing these values.
+
+> **Do not generate new API keys unless you must.** Credentials live in native config, not a remote config service. A new `pa_` / `pas_` pair from the dashboard requires updating the matching native values and **releasing a new app version** — users on older builds keep the old credentials until they update. Keep your existing keys when possible.
+
+> **Match credentials to environment.** Use the same `environment` value for `readCredentialsForEnvironment`, `pushappAuth`, and `initSdk`.
+
 ---
 
 ## 📖 Basic Usage
 
+### **🔐 App authentication (`pushappAuth`)**
+
+On every cold start **before** `initSdk`, read credentials for your environment and pass them to `pushappAuth`. The SDK compares them with locally stored values and updates storage only when they change. Headers `x-api-id` and `x-api-key` are then included on every API request.
+
+```tsx
+import {
+  pushappAuth,
+  readCredentialsForEnvironment,
+  type SdkInitEnvironmentParam,
+} from 'react-native-mehery-event-sender';
+
+const environment: SdkInitEnvironmentParam = false;
+const { xApiId, xApiKey } = await readCredentialsForEnvironment(environment);
+await pushappAuth(xApiId, xApiKey);
+```
+
+Optional manual override: `await pushappAuth('pa_your_app_id', 'pas_your_app_key')`.
+
+`pushappAuth()` with no arguments reads **production** credentials only (legacy / single-env apps).
+
 ### **🚀 SDK Initialization**
+
 Initialize the SDK as early as possible in your app lifecycle (e.g., in `App.tsx` or `index.js`).
 
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `context` | `any` | — | Reserved; pass `null` |
-| `identifier` | `string` | — | Channel ID, format `"<tenant>_<channel>"` |
-| `environment` | `boolean \| 'development'` | `true` | Host: `false` = production, `true` = sandbox, `'development'` = dev |
-| `logs` | `boolean` | `true` | Enable or disable SDK console logging |
+| Param         | Type                       | Default | Description                                                         |
+| ------------- | -------------------------- | ------- | ------------------------------------------------------------------- |
+| `context`     | `any`                      | —       | Reserved; pass `null`                                               |
+| `identifier`  | `string`                   | —       | Channel ID, format `"<tenant>_<channel>"`                           |
+| `environment` | `boolean \| 'development'` | `true`  | Host: `false` = `pushapp.ai`, `true` = `pushapp.net.in`, `'development'` = `pushapp.co.in` |
+| `logs`        | `boolean`                  | `true`  | Enable or disable SDK console logging                               |
 
 ```tsx
 import { useEffect } from 'react';
-import { initSdk } from 'react-native-mehery-event-sender';
+import {
+  pushappAuth,
+  initSdk,
+  readCredentialsForEnvironment,
+  type SdkInitEnvironmentParam,
+} from 'react-native-mehery-event-sender';
 
 const App = () => {
   useEffect(() => {
-    initSdk(null, 'your_tenant_id', false, false); // production, logs off
+    const bootstrap = async () => {
+      const environment: SdkInitEnvironmentParam = false;
+      const { xApiId, xApiKey } =
+        await readCredentialsForEnvironment(environment);
+      await pushappAuth(xApiId, xApiKey);
+      await initSdk(null, 'your_tenant_your_channel_id', environment, false);
+    };
+    bootstrap();
   }, []);
 
   return <MainNavigator />;
 };
 ```
 
+Other startup helpers: `setGeoIP()` (geo context before init), `waitForSdkReady()` (gate code until init finishes), `updatePushToken()` (refresh push token with backend).
+
 ### **🗳 Mounting Polls**
+
 To show interactive polls, mount the `PollOverlayProvider` once at the root of your application.
 
 ```tsx
@@ -160,6 +252,7 @@ export default function App() {
 The SDK provides powerful methods to track user behavior across their entire journey.
 
 ### **1. Authentication Events**
+
 Link user actions to their identity or clear state on sign-out.
 
 ```tsx
@@ -173,6 +266,7 @@ await OnUserLogOut('unique_user_id_123');
 ```
 
 ### **2. User Profile Enrichment**
+
 Sync user metadata to create targeted notification segments. The SDK keeps the last successfully pushed profile locally and only calls `PUT /v1/customer/profile` when `additionalInfo` or `cohorts` change; the snapshot is cleared on logout.
 
 ```tsx
@@ -185,6 +279,7 @@ await updateUserProfile(
 ```
 
 ### **3. Engagement & Navigation**
+
 Track screen views and custom interactions.
 
 ```tsx
@@ -197,7 +292,7 @@ OnPageOpen('dashboard_main');
 sendCustomEvent('purchase_completed', {
   item_id: 'prod_99',
   value: 49.99,
-  currency: 'USD'
+  currency: 'USD',
 });
 ```
 
@@ -205,11 +300,11 @@ sendCustomEvent('purchase_completed', {
 
 ## 🎨 UI Components
 
-| Component | Description |
-| :--- | :--- |
-| **`InlinePollContainer`** | Renders poll cards directly within your scrolling content. |
+| Component                  | Description                                                              |
+| :------------------------- | :----------------------------------------------------------------------- |
+| **`InlinePollContainer`**  | Renders poll cards directly within your scrolling content.               |
 | **`TooltipPollContainer`** | A wrapper that shows polls as tooltips relative to specific UI elements. |
-| **`PollOverlayProvider`** | The global provider for full-screen or popup polls. |
+| **`PollOverlayProvider`**  | The global provider for full-screen or popup polls.                      |
 
 ---
 
@@ -217,11 +312,11 @@ sendCustomEvent('purchase_completed', {
 
 The `example/ios` project contains reference implementations for advanced iOS features:
 
-| Area | Reference Path |
-| :--- | :--- |
-| **Notification UI** | `example/ios/ImagePreviewExtension/NotificationViewController.swift` |
-| **Service Extension** | `example/ios/ImageServiceExtension/NotificationService.swift` |
-| **Live Activities** | `example/ios/DeliveryActivity/` |
+| Area                  | Reference Path                                                       |
+| :-------------------- | :------------------------------------------------------------------- |
+| **Notification UI**   | `example/ios/ImagePreviewExtension/NotificationViewController.swift` |
+| **Service Extension** | `example/ios/ImageServiceExtension/NotificationService.swift`        |
+| **Live Activities**   | `example/ios/DeliveryActivity/`                                      |
 
 ---
 
@@ -235,15 +330,20 @@ The `example/ios` project contains reference implementations for advanced iOS fe
 - **Verification (manual / QA):** With app backgrounded, send a data-only test push; filter logcat: `MyFirebaseMessagingService` — you should see `onMessageReceived` and `Message data payload`. Send the same with a FCM `notification` block: service often will not run in background; tray shows a basic system notification. That contrast explains “works in foreground, not in background.”
 
 ### **Android Notification Keys**
+
 For images in high-priority notifications:
+
 - **Single:** `image`, `imageUrl`, `image_url`
 - **Carousel:** `imageUrls`, `image_urls`, `carousel_images`
 
 ### **iOS Action Categories**
+
 Trigger multiple response buttons by sending the `THREE_BUTTON_CATEGORY` key.
+
 - **Actions:** `PUSHAPP_ACTION_1`, `PUSHAPP_ACTION_2`, `PUSHAPP_ACTION_3`
 
 ### **ProGuard Rules**
+
 ```pro
 -keep class com.mehery.pushapp.** { *; }
 ```
@@ -253,6 +353,7 @@ Trigger multiple response buttons by sending the `THREE_BUTTON_CATEGORY` key.
 ## 🆘 Support
 
 Need help? We're here for you.
+
 - 🐛 **Bugs:** [GitHub Issues](https://github.com/mehery-soccom/PushApp-React-Native/issues)
 - 💡 **Feedback:** Feel free to reach out via our repository discussion board.
 

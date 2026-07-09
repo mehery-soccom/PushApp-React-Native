@@ -4,6 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   initSdk,
   OnUserLogOut,
+  pushappAuth,
+  readCredentialsForEnvironment,
   setGeoIP,
   PollOverlayProvider,
   type SdkInitEnvironmentParam,
@@ -40,7 +42,10 @@ export default function App() {
       // console.log('SDK initialized with environment:', environment);
 
       const environment: SdkInitEnvironmentParam = false;
-      await initSdk(null, 'demo_1780031354415', false);
+      const { xApiId, xApiKey } =
+        await readCredentialsForEnvironment(environment);
+      await pushappAuth(xApiId, xApiKey);
+      await initSdk(null, 'demo_1780031354415', environment);
       console.log('SDK initialized with environment:', environment);
 
       setSdkReady(true);
