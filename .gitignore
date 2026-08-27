@@ -93,3 +93,13 @@ android/java_pid*.hprof
 
 *.tgz
 example/android/app/build/
+.gstack/
+
+# Generated documentation
+DOCUMENTATION.md
+DOCUMENTATION.html
+SDK-OVERVIEW.md
+SDK-OVERVIEW.html
+SDK-OVERVIEW.pdf
+SDK-OVERVIEW-1pager.md
+SDK-OVERVIEW-1pager.html

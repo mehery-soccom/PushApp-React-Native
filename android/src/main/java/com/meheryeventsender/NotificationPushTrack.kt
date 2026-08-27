@@ -27,6 +27,15 @@ object NotificationPushTrack {
         trackToken: String = "",
         buttonId: String = ""
     ) {
+        if (trackToken.isBlank()) {
+            Log.w(
+                TAG,
+                "Push track skipped: missing click token (t / click_token). " +
+                    "actionType=${actionType.ifBlank { "opened" }}"
+            )
+            return
+        }
+
         Thread {
             val endpoint = baseUrl.trimEnd('/') + "/v1/notification/push/track"
             var conn: HttpURLConnection? = null
@@ -41,9 +50,7 @@ object NotificationPushTrack {
                 val payload = JSONObject()
                 val event = actionType.ifBlank { "opened" }
                 payload.put("event", event)
-                if (trackToken.isNotBlank()) {
-                    payload.put("t", trackToken)
-                }
+                payload.put("t", trackToken)
                 if (messageId.isNotBlank()) payload.put("messageId", messageId)
                 if (filterId.isNotBlank()) payload.put("filterId", filterId)
                 if (notificationId.isNotBlank()) payload.put("notificationId", notificationId)

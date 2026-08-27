@@ -69,17 +69,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
                    fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
     print("📦 Background push received: \(userInfo)")
 
-    // ✅ Detect silent daily ping
-  if let type = userInfo["type"] as? String,
-     type == "silent_daily_ping" {
-
-    PushTokenManager.sendNotificationEventOrQueue(dictToAnyHashable(mergedNotificationFields(userInfo)))
-
-    // 🚫 DO NOT start Live Activity
-    completionHandler(.newData)
-    return
-  }
     let merged = mergedNotificationFields(userInfo)
+
+    // Keep-alive / legacy daily silent: forward to JS for pong, never show UI or Live Activity.
+    if isSilentNoUiPush(merged: merged, userInfo: userInfo) {
+      PushTokenManager.sendNotificationEventOrQueue(dictToAnyHashable(merged))
+      completionHandler(.newData)
+      return
+    }
+
     PushTokenManager.sendNotificationEventOrQueue(dictToAnyHashable(merged))
 
     // Data-only FCM (no `aps.alert`) reaches the app but iOS never draws a banner — schedule one.
@@ -121,16 +119,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     let userInfo = notification.request.content.userInfo
     print("📢 Notification received in foreground")
 
-    if let type = userInfo["type"] as? String,
-     type == "silent_daily_ping" {
+    let merged = mergedNotificationFields(userInfo)
+    PushTokenManager.sendNotificationEventOrQueue(dictToAnyHashable(merged))
 
-    // ✅ Silent = no UI
-    PushTokenManager.sendNotificationEventOrQueue(dictToAnyHashable(mergedNotificationFields(userInfo)))
-    completionHandler([])
-    return
-  }
-
-    PushTokenManager.sendNotificationEventOrQueue(dictToAnyHashable(mergedNotificationFields(userInfo)))
+    // Silent keep-alive must not show a blank banner.
+    if isSilentNoUiPush(merged: merged, userInfo: userInfo) {
+      completionHandler([])
+      return
+    }
 
     completionHandler([.banner, .sound, .badge, .list])
   }
@@ -195,6 +191,31 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
 
     completionHandler()
   }
+
+  /// Keep-alive (`silent_keepalive`) and legacy `silent_daily_ping` — no banner / local schedule.
+  private func isSilentNoUiPush(merged: [String: Any], userInfo: [AnyHashable: Any]) -> Bool {
+    let candidates = [
+      stringFromAny(merged["type"]),
+      stringFromAny(userInfo["type"]),
+    ]
+    if let dataDict = userInfo["data"] as? [AnyHashable: Any] {
+      if let t = stringFromAny(dataDict["type"]), Self.silentNoUiTypes.contains(t) {
+        return true
+      }
+    } else if let dataStr = userInfo["data"] as? String,
+              let d = dataStr.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let t = stringFromAny(obj["type"]),
+              Self.silentNoUiTypes.contains(t) {
+      return true
+    }
+    return candidates.compactMap { $0 }.contains { Self.silentNoUiTypes.contains($0) }
+  }
+
+  private static let silentNoUiTypes: Set<String> = [
+    "silent_keepalive",
+    "silent_daily_ping",
+  ]
 
   /// Flatten `userInfo` plus optional nested `data` (string JSON or dict) so CTAs match Android / `Fb.ts`.
   private func mergedNotificationFields(_ userInfo: [AnyHashable: Any]) -> [String: Any] {

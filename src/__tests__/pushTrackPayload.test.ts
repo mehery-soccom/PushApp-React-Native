@@ -122,6 +122,11 @@ describe('pushTrackPayload', () => {
     expect(resolveIosSemanticCtaId('PUSHAPP_LATER', merged)).toBe('Later');
   });
 
+  it('extractClickTrackToken returns undefined when token missing', () => {
+    expect(extractClickTrackToken({})).toBeUndefined();
+    expect(extractClickTrackToken({ t: '  ' })).toBeUndefined();
+  });
+
   it('buildPushTrackBody builds opened and cta payloads', () => {
     const merged = {
       message_id: 'msg-1',

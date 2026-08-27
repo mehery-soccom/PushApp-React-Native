@@ -135,6 +135,11 @@ class PushTokenManager: RCTEventEmitter {
     identifierPrefix: String = "mehery",
     deliverToJs: Bool = true
   ) {
+    if isSilentNoUiType(data["type"]) {
+      print("⏭️ Mehery: skip scheduleDisplayNotification for silent keep-alive")
+      return
+    }
+
     let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
     let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
     let imageUrls = extractImageUrlStrings(from: data)
@@ -285,11 +290,16 @@ class PushTokenManager: RCTEventEmitter {
 
   @objc func showForegroundNotification(_ payload: NSDictionary) {
     DispatchQueue.main.async {
+      let data = payload["data"] as? [String: Any] ?? [:]
+      if Self.isSilentNoUiType(payload["type"]) || Self.isSilentNoUiType(data["type"]) {
+        print("⏭️ Mehery: skip showForegroundNotification for silent keep-alive")
+        return
+      }
+
       let title = (payload["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
       let body = (payload["body"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
       let category = (payload["category"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         ?? "CAROUSEL_CATEGORY"
-      let data = payload["data"] as? [String: Any] ?? [:]
 
       PushTokenManager.scheduleDisplayNotification(
         title: title,
@@ -299,6 +309,11 @@ class PushTokenManager: RCTEventEmitter {
         identifierPrefix: "mehery-fg"
       )
     }
+  }
+
+  private static func isSilentNoUiType(_ value: Any?) -> Bool {
+    guard let s = value as? String else { return false }
+    return s == "silent_keepalive" || s == "silent_daily_ping"
   }
 
   private static func extractImageUrlStrings(from data: [String: Any]) -> [String] {

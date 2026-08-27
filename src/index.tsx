@@ -27,6 +27,7 @@ export {
   OnPageClose,
   OnPageOpen,
   sendCustomEvent,
+  flushPendingCustomEvents,
   OnAppOpen,
 } from './events/custom/CustomEvents';
 export type { SendCustomEventOptions } from './events/custom/CustomEvents';
@@ -75,7 +76,6 @@ import { getDeviceId as fetchDeviceId } from './utils/device';
 // import { registerDeviceWithFCM } from './utils/registerDevice';
 import { registerDeviceWithAPNS } from './firebase/IosAPNS';
 import { updatePushToken } from './utils/updateToken';
-import messaging from '@react-native-firebase/messaging';
 // import { showPollOverlay, hidePollOverlay } from './components/PollOverlay';
 // 🛡 Safe NativeEventEmitter setup
 import { PollOverlayProvider } from './components/PollOverlay';
@@ -108,6 +108,7 @@ import {
 } from './helpers/tenantContext';
 import {
   buildPushTrackBody,
+  extractClickTrackToken,
   getPushTrackBaseFromMerged,
   mergeIosNotificationPayload,
   resolveNotificationUrl,
@@ -118,6 +119,10 @@ import {
   type CtaTrackFields,
 } from './utils/ctaTrackPayload';
 import { openNotificationLink } from './utils/notificationLink';
+import {
+  isSilentKeepAlive,
+  replySilentKeepAlive,
+} from './utils/silentKeepAlive';
 
 const { PushTokenManager } = NativeModules;
 // const pushEmitter = PushTokenManager
@@ -198,6 +203,14 @@ const trackIosPushEvent = async (
     if (oldest) seenIosPushTrackEvents.delete(oldest);
   }
 
+  if (!extractClickTrackToken(merged)) {
+    sdkLog.log(
+      '[PushTrack] iOS skipped (missing click token t / click_token in payload)',
+      event
+    );
+    return;
+  }
+
   const body = buildPushTrackBody(event, merged, cta ? { cta } : undefined);
 
   try {
@@ -232,100 +245,6 @@ const trackIosPushEvent = async (
   }
 };
 
-/* -------------------------------------------------------------------------- */
-/*                    SILENT NOTIFICATION DAILY LOGIC                           */
-/* -------------------------------------------------------------------------- */
-
-const SILENT_PING_KEY = 'mehery_last_silent_ping_date';
-
-const isAfterNoon = () => {
-  const now = new Date();
-
-  const noon = new Date();
-  noon.setHours(12, 0, 0, 0); // 12:00 PM local time
-
-  return now >= noon;
-};
-
-const shouldRunSilentPingToday = async (): Promise<boolean> => {
-  const lastRun = await AsyncStorage.getItem(SILENT_PING_KEY);
-  const today = new Date().toISOString().split('T')[0];
-
-  if (lastRun === today) return false;
-
-  await AsyncStorage.setItem(SILENT_PING_KEY, today ?? '');
-  return true;
-};
-
-const sendDailyPing = async () => {
-  try {
-    const channelId = await AsyncStorage.getItem('mehery_channel_id');
-    const contactId = await AsyncStorage.getItem('contact_id');
-
-    if (!channelId || !contactId) {
-      sdkLog.warn('⚠️ Missing channel_id or contact_id. Skipping ping.');
-      return;
-    }
-
-    const payload = {
-      channel_id: channelId,
-      contact_id: contactId,
-    };
-
-    sdkLog.log('📡 Sending silent daily ping:', payload);
-    const commonHeaders = await buildCommonHeaders();
-
-    const apiBaseUrl = await getApiBaseUrl();
-    await fetch(`${apiBaseUrl}/ping`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...commonHeaders,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    sdkLog.log('✅ Silent daily ping sent');
-
-    const currentToken = await messaging().getToken();
-    if (currentToken) {
-      updatePushToken(currentToken);
-    }
-  } catch (err) {
-    sdkLog.error('❌ Silent ping failed:', err);
-  }
-};
-
-// export const addNotificationDebugListener = () => {
-//   if (!PushTokenManager) {
-//     console.warn('⚠️ PushTokenManager not available for notification listener');
-//     return;
-//   }
-
-//   if (notificationListenerAdded) {
-//     console.log('ℹ️ Notification listener already added');
-//     return;
-//   }
-
-//   const emitter = new NativeEventEmitter(PushTokenManager);
-
-//   console.log('🔔 Setting up notification payload listener');
-
-//   emitter.addListener('PushNotificationEvent', async (payload) => {
-//     console.log(
-//       '📦 [SDK][JS] Notification payload received:',
-//       JSON.stringify(payload, null, 2)
-//     );
-//     console.log('🚨 LISTENER FIRED');
-//     console.log('📦 Payload raw:', payload);
-
-//     // 🚀 Send to Slack
-//     // await sendPayloadToSlack(payload);
-//   });
-
-//   notificationListenerAdded = true;
-// };
-
 export const addNotificationDebugListener = () => {
   if (!PushTokenManager) return;
   if (notificationListenerAdded) return;
@@ -335,58 +254,45 @@ export const addNotificationDebugListener = () => {
   emitter.addListener('PushNotificationEvent', async (payload) => {
     sdkLog.log('📦 Push payload received:', payload);
 
-    if (payload?.type !== 'silent_daily_ping') {
-      const raw = payload as Record<string, unknown>;
-      const merged = mergeIosNotificationPayload(raw);
-      const actionId = normalizePayloadString(merged.actionIdentifier);
-      const isDefaultTap =
-        actionId === 'com.apple.UNNotificationDefaultActionIdentifier';
-      const isDismiss =
-        actionId === 'com.apple.UNNotificationDismissActionIdentifier';
+    if (isSilentKeepAlive(payload)) {
+      await replySilentKeepAlive(payload);
+      return;
+    }
 
-      if (actionId && !isDefaultTap && !isDismiss) {
-        const cta = resolvePushCtaFields(actionId, merged);
-        await trackIosPushEvent('cta', merged, cta);
-      } else if (isDefaultTap) {
-        await trackIosPushEvent('opened', merged);
-        const bodyUrl = resolveNotificationUrl(merged);
-        if (bodyUrl) {
-          try {
-            await openNotificationLink(bodyUrl);
-            sdkLog.log(
-              '[PushNotificationEvent] iOS body tap opened notification_url:',
-              bodyUrl
-            );
-          } catch (e) {
-            sdkLog.warn(
-              '[PushNotificationEvent] iOS openNotificationLink failed:',
-              e
-            );
-          }
-        } else {
+    const raw = payload as Record<string, unknown>;
+    const merged = mergeIosNotificationPayload(raw);
+    const actionId = normalizePayloadString(merged.actionIdentifier);
+    const isDefaultTap =
+      actionId === 'com.apple.UNNotificationDefaultActionIdentifier';
+    const isDismiss =
+      actionId === 'com.apple.UNNotificationDismissActionIdentifier';
+
+    if (actionId && !isDefaultTap && !isDismiss) {
+      const cta = resolvePushCtaFields(actionId, merged);
+      await trackIosPushEvent('cta', merged, cta);
+    } else if (isDefaultTap) {
+      await trackIosPushEvent('opened', merged);
+      const bodyUrl = resolveNotificationUrl(merged);
+      if (bodyUrl) {
+        try {
+          await openNotificationLink(bodyUrl);
+          sdkLog.log(
+            '[PushNotificationEvent] iOS body tap opened notification_url:',
+            bodyUrl
+          );
+        } catch (e) {
           sdkLog.warn(
-            '[PushNotificationEvent] iOS body tap: no notification_url in payload (checked style/templateData). Keys:',
-            Object.keys(merged).join(', ')
+            '[PushNotificationEvent] iOS openNotificationLink failed:',
+            e
           );
         }
+      } else {
+        sdkLog.warn(
+          '[PushNotificationEvent] iOS body tap: no notification_url in payload (checked style/templateData). Keys:',
+          Object.keys(merged).join(', ')
+        );
       }
-      return;
     }
-
-    // ⏰ Ensure it's after 12 noon
-    if (!isAfterNoon()) {
-      sdkLog.log('⏳ Silent ping received before 12 noon, skipping');
-      return;
-    }
-
-    // 🧠 Ensure only once per day
-    const shouldRun = await shouldRunSilentPingToday();
-    if (!shouldRun) {
-      sdkLog.log('⏭️ Silent ping already executed today');
-      return;
-    }
-
-    await sendDailyPing();
   });
 
   notificationListenerAdded = true;

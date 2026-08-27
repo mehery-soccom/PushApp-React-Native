@@ -1,48 +1,62 @@
 # react-native-mehery-event-sender
 
-React Native SDK for push notifications, in-app notifications, polls, and event tracking.
+[![npm version](https://img.shields.io/npm/v/react-native-mehery-event-sender.svg?style=flat-square)](https://www.npmjs.com/package/react-native-mehery-event-sender)
+[![license](https://img.shields.io/npm/l/react-native-mehery-event-sender.svg?style=flat-square)](https://github.com/mehery-soccom/PushApp-React-Native/blob/main/LICENSE)
 
-## What your app must add (quick checklist)
+React Native SDK for push notifications, in-app notifications, interactive polls, and real-time event tracking.
 
-Your example/consumer app must include all of the following:
+![Mehery Event Sender Logo](./assets/mehery_sdk_logo.png)
 
-- Firebase config files:
+## Overview
+
+The Mehery Event Sender SDK helps you engage users with rich push notifications, in-app polls, and precise journey tracking. Use it to register devices, authenticate against PushApp, sync user profiles, and deliver interactive feedback overlays.
+
+### Key features
+
+- Advanced push notifications with rich media, carousels, and action buttons
+- Interactive polls via overlay, inline, and tooltip containers
+- Event tracking for login, page open, app lifecycle, and custom business events
+- User lifecycle management: link/unlink devices and sync profile segments
+- Background-optimized notification handling on Android and iOS
+
+## Prerequisites checklist
+
+> **Important:** Your app will not receive notifications correctly if these steps are skipped.
+
+Before integrating, ensure the consumer app has:
+
+- [ ] Firebase config files:
   - Android: `android/app/google-services.json`
   - iOS: `ios/GoogleService-Info.plist`
-- Google Services Gradle plugins on Android (`com.google.gms.google-services`)
-- `@react-native-firebase/app` + `@react-native-firebase/messaging`
-- `@react-native-async-storage/async-storage`
-- `react-native-push-notification`
-- App credentials in native config — **three pairs** (prod, sandbox, dev) matching your `initSdk` environment
-- `readCredentialsForEnvironment(environment)` + `pushappAuth(xApiId, xApiKey)` on every app launch **before** `initSdk`
-- SDK initialization in app startup (`initSdk`)
-- `PollOverlayProvider` mounted once at app root
-- iOS background mode for remote notifications (`remote-notification` in `Info.plist`)
+- [ ] Google Services Gradle plugin enabled (`com.google.gms.google-services`)
+- [ ] Peer dependencies: `@react-native-firebase/app`, `@react-native-firebase/messaging`, `@react-native-async-storage/async-storage`, `react-native-push-notification`
+- [ ] Notification and network permissions in Manifest / Info.plist
+- [ ] iOS Background Modes: `remote-notification`
+- [ ] App credentials: prod, sandbox, and development pairs in Info.plist (iOS) and `strings.xml` (Android)
+- [ ] On every cold start: `readCredentialsForEnvironment(environment)` → `pushappAuth(xApiId, xApiKey)` **before** `initSdk`
+- [ ] `PollOverlayProvider` mounted once at the app root
 
 ## Installation
 
-```sh
+```bash
 npm install react-native-mehery-event-sender
 npm install @react-native-firebase/app @react-native-firebase/messaging
 npm install @react-native-async-storage/async-storage react-native-push-notification
 ```
 
-Then for iOS:
+For iOS:
 
-```sh
+```bash
 cd ios && pod install
 ```
 
-## Step-by-step setup for example app
+## Platform configuration
 
-### 1) Add Firebase files
+### Android
 
-- Place `google-services.json` in `android/app/`
-- Place `GoogleService-Info.plist` in your iOS app target
+#### Gradle
 
-### 2) Android Gradle setup
-
-In `android/build.gradle`, add:
+Project-level `android/build.gradle`:
 
 ```gradle
 buildscript {
@@ -52,15 +66,15 @@ buildscript {
 }
 ```
 
-In `android/app/build.gradle`, add:
+App-level `android/app/build.gradle`:
 
 ```gradle
 apply plugin: 'com.google.gms.google-services'
 ```
 
-### 3) Android manifest permissions
+#### Manifest permissions
 
-Make sure your app has notification/network permissions in `AndroidManifest.xml`:
+In `AndroidManifest.xml`:
 
 ```xml
 <uses-permission android:name="android.permission.INTERNET" />
@@ -68,11 +82,13 @@ Make sure your app has notification/network permissions in `AndroidManifest.xml`
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 ```
 
-### 3a) Android: one Firebase messaging service (required for background rich notifications)
+#### One Firebase messaging service (required for background rich push)
 
-`@react-native-firebase/messaging` registers `ReactNativeFirebaseMessagingService` with an empty `onMessageReceived`. This SDK provides `com.meheryeventsender.MyFirebaseMessagingService` (subclass) for BigPicture, CTAs, and rich layout. If **both** services stay in the merged manifest, only one may receive FCM, and you can get **no custom images or action buttons in the background**.
+React Native Firebase registers `io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService` with a no-op `onMessageReceived`. This SDK provides `com.meheryeventsender.MyFirebaseMessagingService` (a subclass) for BigPicture, custom layouts, and CTA actions.
 
-Add `xmlns:tools` on the root `<manifest>` if needed, then inside `<application>` **remove** the default RNFB service so only the Mehery service remains:
+If **both** services remain in the merged manifest, background delivery can hit the wrong service and **images and action buttons will not show**.
+
+Add `xmlns:tools` on the root `<manifest>` if needed, then inside `<application>` remove the default RNFB service:
 
 ```xml
 <service
@@ -81,26 +97,33 @@ Add `xmlns:tools` on the root `<manifest>` if needed, then inside `<application>
     tools:node="remove" />
 ```
 
-### 3b) Android: native FCM logs (logcat)
+#### Native FCM logs (logcat)
 
-The SDK logs FCM handling at **INFO** from `MyFirebaseMessagingService` (not Debug), so default logcat filters that hide `Log.d` still show them.
+The SDK logs FCM handling at **INFO** from `MyFirebaseMessagingService` (not Debug), so default filters that hide `Log.d` still show them.
 
 ```text
 # Quote '*:S' on zsh (otherwise the shell treats * as a glob and errors).
 adb logcat '*:S' 'MyFirebaseMessagingService:I'
 ```
 
-Simpler (shows only that tag at Info+; also safe in zsh):
+Simpler (also safe in zsh):
 
 ```text
 adb logcat -s MyFirebaseMessagingService:I
 ```
 
-If you see **no** lines tagged `MyFirebaseMessagingService` when a push arrives in the background, **`onMessageReceived` did not run** for that delivery. Common causes: a top-level FCM **`notification`** payload while the app is backgrounded (the OS may show a stock notification and not call your service), or a missing **`tools:node="remove"`** so the wrong `FirebaseMessagingService` handles the message. Use **data-only**, high-priority FCM for Android and confirm the manifest step in **3a**. Also look for `Mehery FCM: onNewToken` after install/token refresh; that proves this service class is active.
+If you see **no** lines tagged `MyFirebaseMessagingService` when a push arrives in the background, `onMessageReceived` did not run. Common causes:
 
-### 4) iOS capabilities
+- A top-level FCM `notification` payload while the app is backgrounded (the OS may show a stock tray notification and skip your service)
+- Missing `tools:node="remove"` so the wrong `FirebaseMessagingService` handles the message
 
-In your iOS `Info.plist`, include:
+Use **data-only**, high-priority FCM for Android and confirm the manifest step above. Look for `Mehery FCM: onNewToken` after install or token refresh to confirm this service class is active.
+
+### iOS
+
+#### Capabilities and Info.plist
+
+Enable **Push Notifications** and **Background Modes** (Remote notifications) in Xcode for your app target. Ensure `Info.plist` includes:
 
 ```xml
 <key>UIBackgroundModes</key>
@@ -109,11 +132,9 @@ In your iOS `Info.plist`, include:
 </array>
 ```
 
-Also enable Push Notifications capability in Xcode for your app target.
+#### App credentials
 
-### 4a) App credentials (required)
-
-Store **three** PushApp credential pairs in native config — one per `initSdk` environment. Use the **same** `environment` variable to pick credentials and to call `initSdk` so API host and auth always match.
+Store **three** PushApp credential pairs in native config — one per `initSdk` environment. Use the **same** `environment` value for `readCredentialsForEnvironment`, `pushappAuth`, and `initSdk` so API host and auth always match.
 
 | `initSdk` env | Host | iOS keys | Android strings |
 | --- | --- | --- | --- |
@@ -153,13 +174,42 @@ Legacy single-key names (`MeheryAppId` / `MeheryAppSecretKey`, `mehery_app_id` /
 
 Rebuild the native app after changing these values.
 
-> **Do not generate new API keys unless you must.** Credentials are stored in native config (`Info.plist` / `strings.xml`), not fetched at runtime from a server. If you create a new `pa_` / `pas_` pair in the PushApp dashboard, you must update the matching native values and **ship a new app release** — existing installs will keep using the old credentials until users update. Prefer keeping your current keys; only rotate when required for security.
+> **Do not generate new API keys unless you must.** Credentials live in native config (`Info.plist` / `strings.xml`), not a remote config service. A new `pa_` / `pas_` pair from the dashboard requires updating the matching native values and **shipping a new app release** — existing installs keep the old credentials until users update. Prefer keeping your current keys; only rotate when required for security.
 
-> **Match credentials to environment.** If you pass sandbox credentials while `initSdk(..., false)` points at production, requests will hit the wrong host with the wrong app identity.
+> **Match credentials to environment.** If you pass sandbox credentials while `initSdk(..., false)` points at production, requests hit the wrong host with the wrong app identity.
 
-### 5) Authenticate and initialize SDK in app startup
+## Authenticate and initialize
 
-On every cold start, read credentials for your chosen environment, call `pushappAuth`, then `initSdk` with the **same** `environment`. Every API request then includes `x-api-id` and `x-api-key` headers automatically.
+### App authentication (`pushappAuth`)
+
+On every cold start **before** `initSdk`, read credentials for your environment and pass them to `pushappAuth`. The SDK compares them with locally stored values and updates storage only when they change. Headers `x-api-id` and `x-api-key` are then included on every API request.
+
+```tsx
+import {
+  pushappAuth,
+  readCredentialsForEnvironment,
+  type SdkInitEnvironmentParam,
+} from 'react-native-mehery-event-sender';
+
+const environment: SdkInitEnvironmentParam = false; // production
+const { xApiId, xApiKey } = await readCredentialsForEnvironment(environment);
+await pushappAuth(xApiId, xApiKey);
+```
+
+Optional manual override (for testing): `await pushappAuth('pa_your_app_id', 'pas_your_app_key')`.
+
+`pushappAuth()` with no arguments reads **production** credentials only (legacy / single-env apps).
+
+### SDK initialization (`initSdk`)
+
+Initialize as early as possible (for example in `App.tsx` or `index.js`). Always `await` `initSdk` so device registration and WebSocket connect finish before you rely on SDK state.
+
+| Param | Type | Default | Description |
+| --- | --- | --- | --- |
+| `context` | `any` | — | Reserved; pass `null` |
+| `identifier` | `string` | — | Channel ID, format `"<tenant>_<channel>"` |
+| `environment` | `boolean \| 'development'` | `true` | Host: `false` = `pushapp.ai`, `true` = `pushapp.net.in`, `'development'` = `pushapp.co.in` |
+| `logs` | `boolean` | `true` | Enable or disable SDK console logging |
 
 ```tsx
 import { useEffect } from 'react';
@@ -170,62 +220,41 @@ import {
   type SdkInitEnvironmentParam,
 } from 'react-native-mehery-event-sender';
 
-useEffect(() => {
-  const bootstrap = async () => {
-    const environment: SdkInitEnvironmentParam = false; // production
-    const { xApiId, xApiKey } =
-      await readCredentialsForEnvironment(environment);
-    await pushappAuth(xApiId, xApiKey);
-    await initSdk(null, 'your_tenant_your_channel_id', environment);
-  };
-  bootstrap();
-}, []);
+const App = () => {
+  useEffect(() => {
+    const bootstrap = async () => {
+      const environment: SdkInitEnvironmentParam = false;
+      const { xApiId, xApiKey } =
+        await readCredentialsForEnvironment(environment);
+      await pushappAuth(xApiId, xApiKey);
+      // identifier format: "<tenant>_<channel>"
+      await initSdk(null, 'your_tenant_your_channel_id', environment, false);
+      // await initSdk(null, 'your_tenant_your_channel_id', true);           // sandbox
+      // await initSdk(null, 'your_tenant_your_channel_id', 'development'); // development
+    };
+    bootstrap();
+  }, []);
+
+  return <MainNavigator />;
+};
 ```
 
-Optional manual override (e.g. testing): `await pushappAuth('pa_your_app_id', 'pas_your_app_key')` without reading native config.
-
-`pushappAuth()` with no arguments reads **production** credentials only (legacy / single-env apps).
-
-The third argument to `initSdk` selects which **pushapp** host the SDK uses for API and WebSocket calls (`{tenant}.pushapp.…`):
+Environment host mapping:
 
 - `false` — production: `pushapp.ai`
 - `true` — sandbox: `pushapp.net.in` (default)
 - `'development'` — development: `pushapp.co.in`
 
-The fourth argument controls SDK console logging:
+Logging (`logs` fourth argument):
 
 - `true` — SDK debug output is printed to the JS console (default)
 - `false` — all SDK-owned `console.log` / `warn` / `error` calls are suppressed
 
 Native Android FCM logcat lines are unaffected (native code).
 
-```tsx
-import { useEffect } from 'react';
-import {
-  pushappAuth,
-  initSdk,
-  readCredentialsForEnvironment,
-  type SdkInitEnvironmentParam,
-} from 'react-native-mehery-event-sender';
+### Optional startup helpers
 
-useEffect(() => {
-  const bootstrap = async () => {
-    const environment: SdkInitEnvironmentParam = false;
-    const { xApiId, xApiKey } =
-      await readCredentialsForEnvironment(environment);
-    await pushappAuth(xApiId, xApiKey);
-    // identifier format: "<tenant>_<channel>"
-    await initSdk(null, 'your_tenant_your_channel_id', environment);
-    // await initSdk(null, 'your_tenant_your_channel_id', true);           // sandbox
-    // await initSdk(null, 'your_tenant_your_channel_id', 'development'); // development
-  };
-  bootstrap();
-}, []);
-```
-
-`initSdk` is async — always `await` it so device registration and WebSocket connect finish before you rely on SDK state.
-
-Optional geo context before init (used by register and event payloads):
+Set geo context before init (used by register and event payloads):
 
 ```tsx
 import { setGeoIP } from 'react-native-mehery-event-sender';
@@ -240,13 +269,31 @@ setGeoIP({
 Wait for init to complete before login if needed:
 
 ```tsx
-import { waitForSdkReady } from 'react-native-mehery-event-sender';
+import { waitForSdkReady, OnUserLogin } from 'react-native-mehery-event-sender';
 
 await waitForSdkReady();
 await OnUserLogin('user_123');
 ```
 
-### 6) Mount poll overlay once at root
+Register the FCM background handler early in `index.js` when you need JS background message handling:
+
+```tsx
+import { registerFcmBackgroundHandler } from 'react-native-mehery-event-sender';
+
+registerFcmBackgroundHandler();
+```
+
+On Android 13+, request notification permission when appropriate:
+
+```tsx
+import { ensureAndroidNotificationPermission } from 'react-native-mehery-event-sender';
+
+await ensureAndroidNotificationPermission();
+```
+
+## Mount polls
+
+Mount `PollOverlayProvider` once at the root of your application for full-screen / popup polls.
 
 ```tsx
 import { PollOverlayProvider } from 'react-native-mehery-event-sender';
@@ -254,75 +301,14 @@ import { PollOverlayProvider } from 'react-native-mehery-event-sender';
 export default function App() {
   return (
     <>
-      {/* your app routes/screens */}
+      <MainLayout />
       <PollOverlayProvider />
     </>
   );
 }
 ```
 
-### 7) Link user and page/session events
-
-```tsx
-import {
-  OnUserLogin,
-  OnUserLogOut,
-  OnPageOpen,
-  sendCustomEvent,
-  updateUserProfile,
-} from 'react-native-mehery-event-sender';
-```
-
-Call each event where it best matches the user journey:
-
-**a) User login event**
-
-```tsx
-// Call after successful sign-in/signup to map this device/session to your user ID
-await OnUserLogin('user_123');
-```
-
-**b) Profile update**
-
-```tsx
-// Call after login when you have customer fields or cohorts to sync.
-// Uses `user_id` and channel from storage (set by init + login), PUTs `/v1/customer/profile`.
-// The SDK stores the last successful push locally and only calls the API when profile data changed.
-await updateUserProfile(
-  { name: 'Jane Doe', email: 'jane@example.com', city: 'Mumbai' },
-  { segment: 'trial', plan: 'free' }
-);
-```
-
-**c) Page open event**
-
-```tsx
-// Call when a screen/page is shown (use your route/screen name)
-OnPageOpen('home');
-```
-
-**d) Custom event**
-
-```tsx
-// Call for user actions you want to track with extra metadata.
-// You can send any custom keys that match your analytics/business needs.
-sendCustomEvent('login_clicked', {
-  source: 'welcome_screen',
-  method: 'google',
-  campaign_id: 'spring_launch_2026', // custom key
-  button_variant: 'primary', // custom key
-  plan_type: 'trial', // custom key
-});
-```
-
-**e) User logout event**
-
-```tsx
-// Call before/after clearing local auth state when user signs out
-await OnUserLogOut('user_123');
-```
-
-### 8) (Optional) Render in-app poll placeholders
+Optional in-app poll placeholders:
 
 ```tsx
 import {
@@ -331,79 +317,158 @@ import {
 } from 'react-native-mehery-event-sender';
 ```
 
-Use:
+| Component | Description |
+| --- | --- |
+| `PollOverlayProvider` | Global provider for full-screen or popup polls |
+| `InlinePollContainer` | Renders poll cards inside scrolling content |
+| `TooltipPollContainer` | Shows polls as tooltips relative to specific UI elements |
 
-- `InlinePollContainer` where inline poll cards should render.
-- `TooltipPollContainer` around UI elements that should receive tooltip polls.
+## Track user events
+
+### Authentication events
+
+```tsx
+import { OnUserLogin, OnUserLogOut } from 'react-native-mehery-event-sender';
+
+// After successful sign-in or sign-up — map this device/session to your user ID
+await OnUserLogin('unique_user_id_123');
+
+// Before or after clearing local auth state on sign-out
+await OnUserLogOut('unique_user_id_123');
+```
+
+### User profile enrichment
+
+Sync user metadata for targeted segments. The SDK keeps the last successfully pushed profile locally and only calls `PUT /v1/customer/profile` when `additionalInfo` or `cohorts` change. The snapshot is cleared on logout.
+
+```tsx
+import { updateUserProfile } from 'react-native-mehery-event-sender';
+
+await updateUserProfile(
+  { name: 'Jane Doe', email: 'jane@example.com', city: 'Mumbai' },
+  { segment: 'premium', plan: 'enterprise' }
+);
+```
+
+### Engagement and navigation
+
+```tsx
+import {
+  OnPageOpen,
+  OnPageClose,
+  OnAppOpen,
+  OnAppLaunch,
+  sendCustomEvent,
+} from 'react-native-mehery-event-sender';
+
+// Prefer: await OnUserLogin(...) first, then track screens.
+// Interactive events fired during the /device/link window are queued in memory
+// and flushed automatically after a successful login (or after login failure
+// clears the stuck pre-link user_id so guest identity can send).
+const cancelPageOpen = OnPageOpen('dashboard_main');
+// On unmount / blur, cancel the delayed send if the screen left early:
+// cancelPageOpen();
+
+// When leaving a page
+OnPageClose('dashboard_main');
+
+// App lifecycle helpers
+OnAppOpen();
+await OnAppLaunch();
+
+// Custom business events — any keys your analytics needs
+sendCustomEvent('purchase_completed', {
+  item_id: 'prod_99',
+  value: 49.99,
+  currency: 'USD',
+  campaign_id: 'spring_launch_2026',
+});
+```
 
 ## Public API reference
 
 | API | Description |
 | --- | --- |
-| `pushappAuth(appId?, appSecretKey?)` | Persist credentials locally, inject `x-api-id` / `x-api-key` headers on every API call |
+| `pushappAuth(appId?, appSecretKey?)` | Persist credentials locally; inject `x-api-id` / `x-api-key` on every API call |
 | `readCredentialsForEnvironment(environment)` | Read prod / sandbox / dev credentials from native config for the given `initSdk` environment |
 | `readNativeAppCredentials()` | Read production credentials only (legacy / single-env) |
 | `initSdk(context, identifier, environment?, logs?)` | Initialize SDK; `identifier` format `"<tenant>_<channel>"` |
 | `waitForSdkReady()` | Resolves when `initSdk` has finished |
-| `setGeoIP(geo)` | Set geo context for register/events |
+| `setGeoIP(geo)` | Set geo context for register / events |
 | `OnUserLogin(userId)` / `OnUserLogOut(userId)` | Link or delink device to host user |
-| `OnPageOpen(name)` / `OnPageClose(name)` | Screen lifecycle events |
+| `OnPageOpen(name)` / `OnPageClose(name?)` | Screen lifecycle events (`OnPageOpen` returns a cancel fn; interactive events during pre-link are queued and flushed after login) |
 | `OnAppOpen()` / `OnAppLaunch()` | App lifecycle events |
 | `sendCustomEvent(name, data?, options?)` | Custom business events |
+| `flushPendingCustomEvents()` | Drain interactive events queued while register/link was unavailable |
 | `updateUserProfile(additionalInfo, cohorts?, options?)` | Sync profile to PushApp |
-| `updatePushToken(token?)` | Refresh FCM/APNs token with backend |
+| `updatePushToken(token)` | Refresh FCM / APNs token with backend |
 | `setDeviceMetadata(headers)` | Merge extra string headers into every request |
 | `getDeviceId()` | Persistent SDK device UUID |
 | `PollOverlayProvider`, `showPollOverlay`, `hidePollOverlay` | Poll overlay UI |
 | `InlinePollContainer`, `TooltipPollContainer` | Inline / tooltip poll placeholders |
 | `registerFcmBackgroundHandler()` | Register background FCM handler early in `index.js` |
-| `ensureAndroidNotificationPermission()` | Request POST_NOTIFICATIONS on Android 13+ |
+| `ensureAndroidNotificationPermission()` | Request `POST_NOTIFICATIONS` on Android 13+ |
 | `setNotificationUrlHandler`, `configureNotificationLinkRewrites`, `openNotificationLink` | Notification deep-link helpers |
 | `triggerCarouselNotification`, `triggerLiveActivity` | Local test helpers for rich push / Live Activity |
 
-Types exported: `SdkInitEnvironmentParam`, `GeoIpInput`, `GeoIpPayload`, `OnUserLoginResult`, `SendCustomEventOptions`, `UpdateUserProfileOptions`, `UpdateUserProfileResult`, `TriggerCarouselNotificationParams`, `NotificationLinkRewrite`, `FcmBackgroundMessageListener`.
+**Exported types:** `SdkInitEnvironmentParam`, `GeoIpInput`, `GeoIpPayload`, `OnUserLoginResult`, `SendCustomEventOptions`, `UpdateUserProfileOptions`, `UpdateUserProfileResult`, `TriggerCarouselNotificationParams`, `NotificationLinkRewrite`, `FcmBackgroundMessageListener`.
 
-### Example app: iOS notification extensions (reference)
+## Example app and iOS extensions
 
-The `example/ios` project ships with native targets you can use as a starting point when wiring push, rich notifications, and Live Activities. Copy or adapt the Swift, plists, and assets into your own app; **branding and UI design are yours**—these paths only show where the hooks and data live.
+The `example/ios` project ships native targets you can adapt for rich notifications and Live Activities. Copy or adapt the Swift, plists, and assets into your own app; branding and UI design are yours — these paths only show where the hooks and data live.
 
-| Area                                                           | Path                                                                                                                                        |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rich notification UI (content extension)                       | `example/ios/ImagePreviewExtension/NotificationViewController.swift` (and `MainInterface.storyboard`, `Assets.xcassets` in the same folder) |
-| Modify notification content before display (service extension) | `example/ios/ImageServiceExtension/NotificationService.swift`                                                                               |
-| Live Activity / delivery-style widget data and UI              | `example/ios/DeliveryActivity/` (Swift sources, `Info.plist`, `Assets.xcassets`)                                                            |
+| Area | Path |
+| --- | --- |
+| Rich notification UI (content extension) | `example/ios/ImagePreviewExtension/NotificationViewController.swift` (and `MainInterface.storyboard`, `Assets.xcassets` in the same folder) |
+| Modify notification content before display (service extension) | `example/ios/ImageServiceExtension/NotificationService.swift` |
+| Live Activity / delivery-style widget | `example/ios/DeliveryActivity/` (Swift sources, `Info.plist`, `Assets.xcassets`) |
 
-Mirror the same targets and capabilities in Xcode on your app if you are not using the example workspace directly.
+Mirror the same targets and capabilities in Xcode if you are not using the example workspace directly.
 
 ## Notification payload notes
 
 ### Android: FCM data-only for rich background notifications
 
-**Foreground** vs **background** use different code paths. When the app is in the **foreground**, JavaScript (`messaging().onMessage`) can show a local notification with big-picture image and CTA actions from the payload. When the app is in the **background** (or not running), **only** the native `FirebaseMessagingService` (`MyFirebaseMessagingService`) can add BigPicture, custom layouts, and `NotificationCompat` actions.
+**Foreground** and **background** use different code paths.
 
-On Android, Firebase will **not** call `onMessageReceived` for messages that use a top-level FCM **`notification`** block while the app is in the background; the system shows a default tray notification instead, which does not include this SDK’s custom images or action buttons. To get rich background notifications, send **data-only** messages: put everything the app needs (title, body, `image` / `imageUrl` / `image_url`, `cta_buttons` or `title1` / `url1`, etc.) as **string** fields in the FCM `data` map, and set **high priority** for the Android message (FCM HTTP v1: e.g. `android.priority: HIGH`) so delivery is not deferred too long under Doze.
+- **Foreground:** JavaScript (`messaging().onMessage`) can show a local notification with big-picture image and CTA actions from the payload.
+- **Background / not running:** Only the native `MyFirebaseMessagingService` can add BigPicture, custom layouts, and `NotificationCompat` actions.
 
-If you need a **`notification`** payload for iOS or other platforms, use **per-platform** FCM overrides (e.g. data-only for Android, `notification` + APNs for iOS). The `setBackgroundMessageHandler` in JS does not replace this: it cannot make `onMessageReceived` run when the system does not deliver the message to your service.
+On Android, Firebase will **not** call `onMessageReceived` for messages that use a top-level FCM **`notification`** block while the app is in the background. The system shows a default tray notification instead, without this SDK’s custom images or action buttons.
 
-**How to verify:** With the app in the background, send a **data-only** test push, then `adb logcat -s MyFirebaseMessagingService:I` (or `adb logcat '*:S' 'MyFirebaseMessagingService:I'`) — you should see `Mehery FCM: onMessageReceived` and `FCM[raw]` / `FCM[merged]` lines. With a `notification` block, the service often will **not** log in background, and the tray will show a basic system notification. Compare with the same content sent as data-only to confirm images and CTA actions.
+To get rich background notifications:
+
+1. Send **data-only** FCM messages: put title, body, image URL, and CTA fields as **string** values in the FCM `data` map.
+2. Set **high priority** for the Android message (FCM HTTP v1: e.g. `android.priority: HIGH`) so delivery is not deferred too long under Doze.
+3. If iOS still needs a `notification` or APNs block, use **per-platform** FCM overrides (data-only for Android; `notification` + APNs for iOS).
+
+Do not rely on `setBackgroundMessageHandler` alone to draw rich Android notifications; it cannot make `onMessageReceived` run when the system does not deliver the message to your service.
+
+**How to verify:** With the app backgrounded, send a data-only test push, then:
+
+```text
+adb logcat -s MyFirebaseMessagingService:I
+```
+
+You should see `Mehery FCM: onMessageReceived` and `FCM[raw]` / `FCM[merged]` lines. With a `notification` block, the service often will **not** log in background, and the tray shows a basic system notification. That contrast explains “works in foreground, not in background.”
 
 ### Android image keys
 
 - Single image: `image`, `imageUrl`, `image_url`
-- Carousel: `imageUrls`, `image_urls`, `carousel_images`, or `image1`, `image2`, ...
+- Carousel: `imageUrls`, `image_urls`, `carousel_images`, or `image1`, `image2`, …
 
-### Body tap opens a link (`notification_url`) — Android and iOS
+### Body tap opens a link (`notification_url`)
 
-When the push payload includes `notification_url` (or `notificationUrl`), tapping the **notification body** (title/message area) opens that URL in the system browser. CTA action buttons still use their own URLs (`cta_buttons` / `url1`–`url3` on Android; `buttons` array / action IDs on iOS). Without `notification_url`, body tap only launches the app (unchanged).
+When the push payload includes `notification_url` (or `notificationUrl`), tapping the **notification body** (title/message area) opens that URL in the system browser. CTA action buttons still use their own URLs (`cta_buttons` / `url1`–`url3` on Android; `buttons` array / action IDs on iOS). Without `notification_url`, body tap only launches the app.
 
 The SDK resolves the body URL from the root payload and from Mehery template nests: `style.notification_url`, stringified `style`, `templateData`, and `template.style` / `template.data` (same shape as the template API `style` object).
 
-| Platform | Payload field                                                    | Body tap handler                                                                                                                               |
-| -------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Android  | FCM `data.notification_url` (or nested `style` / `templateData`) | Native `NotificationCtaUrlActivity` + foreground JS `Linking.openURL`                                                                          |
-| iOS      | APNS / FCM `data` (root or nested `style` / `templateData`)      | Example [`AppDelegate.swift`](example/ios/MeheryEventSenderExample/AppDelegate.swift) `urlForNotificationBody` + JS `Linking.openURL` fallback |
+| Platform | Payload field | Body tap handler |
+| --- | --- | --- |
+| Android | FCM `data.notification_url` (or nested `style` / `templateData`) | Native `NotificationCtaUrlActivity` + foreground JS `Linking.openURL` |
+| iOS | APNs / FCM `data` (root or nested `style` / `templateData`) | Example [`AppDelegate.swift`](example/ios/MeheryEventSenderExample/AppDelegate.swift) `urlForNotificationBody` + JS `Linking.openURL` fallback |
 
-**Push server requirement:** `/send-notification` must include `notification_url` on the device payload (flattened in FCM `data` is best). If it only exists in the template `style` object, the send step must still forward that object (or flatten it) so iOS/Android can read it on tap. Mapping only `buttons` → `url1` / `title1` / `action1` is not enough.
+> **Push server requirement:** `/send-notification` must include `notification_url` on the device payload (flattened in FCM `data` is best). If it only exists in the template `style` object, the send step must still forward that object (or flatten it) so iOS/Android can read it on tap. Mapping only `buttons` → `url1` / `title1` / `action1` is not enough.
 
 **iOS Live Activity:** The example app only starts a Live Activity when `activity_id` is set **and** the payload looks like a live template (`message1`–`message3`, `progressPercent`, `live_activity=true`, or a hero image URL). Simple templates with only `activity_id` no longer show an empty Live Activity before the banner.
 
@@ -420,12 +485,19 @@ Example payload after correct server mapping:
 }
 ```
 
-**iOS host apps:** The npm package does not ship `AppDelegate` — merge `urlForNotificationBody` and the default-action URL open from the example app into your target’s `AppDelegate` (see [Example app: iOS notification extensions](#example-app-ios-notification-extensions-reference)).
+**iOS host apps:** The npm package does not ship `AppDelegate`. Merge `urlForNotificationBody` and the default-action URL open from the example app into your target’s `AppDelegate` (see [Example app and iOS extensions](#example-app-and-ios-extensions)).
 
-### iOS action category example
+**Silent keep-alive (no blank banner):** The server may send a data-only push with `type` / `data.type` = `silent_keepalive` (no title/body). The SDK replies with `POST /pushapp/silent/ping` and must **not** show a notification. Host `AppDelegate` must treat that type as silent:
 
-To show 3 action buttons, send category `THREE_BUTTON_CATEGORY` in APNs payload.
-Action IDs received in JS/native tap handling are:
+1. Forward the payload to JS (`PushNotificationEvent` / `PushTokenManager.sendNotificationEventOrQueue`).
+2. In `userNotificationCenter(_:willPresent:…)`, call `completionHandler([])` (no banner).
+3. In `application(_:didReceiveRemoteNotification:fetchCompletionHandler:)`, do **not** schedule a local notification; call `completionHandler(.newData)` and return.
+
+Copy the pattern from the example [`AppDelegate.swift`](example/ios/MeheryEventSenderExample/AppDelegate.swift) (`isSilentNoUiPush`). Skipping this step can show an empty/blank banner even though the JS pong succeeds.
+
+### iOS action categories
+
+To show three action buttons, send category `THREE_BUTTON_CATEGORY` in the APNs payload. Action IDs received in JS / native tap handling:
 
 - `PUSHAPP_ACTION_1`
 - `PUSHAPP_ACTION_2`
@@ -439,4 +511,4 @@ Action IDs received in JS/native tap handling are:
 
 ## Support
 
-Raise issues or feature requests in [GitHub Issues](https://github.com/mehery-soccom/PushApp-React-Native/issues).
+Raise bugs or feature requests in [GitHub Issues](https://github.com/mehery-soccom/PushApp-React-Native/issues).

@@ -20,6 +20,7 @@ import {
 } from '../utils/registerResponse';
 import {
   buildPushTrackBody,
+  extractClickTrackToken,
   mergeIosNotificationPayload,
   resolveNotificationUrl,
 } from '../utils/pushTrackPayload';
@@ -29,6 +30,10 @@ import {
 } from '../utils/ctaTrackPayload';
 import { openNotificationLink } from '../utils/notificationLink';
 import { updatePushToken } from '../utils/updateToken';
+import {
+  isSilentKeepAlive,
+  replySilentKeepAlive,
+} from '../utils/silentKeepAlive';
 
 import { NativeModules, Platform } from 'react-native';
 import { ensureAndroidNotificationPermission } from '../native/LiveActivity';
@@ -759,6 +764,14 @@ async function trackPushEvent(
     return;
   }
 
+  if (!extractClickTrackToken(merged)) {
+    sdkLog.log(
+      '[PushTrack] skipped (missing click token t / click_token in payload)',
+      eventType
+    );
+    return;
+  }
+
   const payload = buildPushTrackBody(
     eventType,
     merged,
@@ -832,6 +845,14 @@ function ensureBackgroundMessageHandlerRegistered(): void {
     }
 
     const data = remoteMessage.data || {};
+
+    if (isSilentKeepAlive(data) || isSilentKeepAlive(remoteMessage)) {
+      await replySilentKeepAlive({
+        ...data,
+        messageId: remoteMessage?.messageId,
+      });
+      return;
+    }
 
     if (fcmBackgroundMessageListener) {
       try {
@@ -1170,6 +1191,13 @@ export function setupForegroundNotificationListener(): () => void {
             rawData as Record<string, unknown>
           ) as Record<string, any>)
         : rawData;
+    if (isSilentKeepAlive(data)) {
+      void replySilentKeepAlive({
+        ...data,
+        messageId: remoteMessage.messageId,
+      });
+      return;
+    }
     if (Platform.OS === 'android' && !resolveNotificationUrl(data)) {
       pushCtaLog(
         'FCM data has no notification_url — body tap will open the app, not a browser link',

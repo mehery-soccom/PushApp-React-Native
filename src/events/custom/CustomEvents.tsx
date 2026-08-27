@@ -24,6 +24,65 @@ export type SendCustomEventOptions = {
   eventType?: 'INTERACTIVE' | 'LOG';
 };
 
+type PendingCustomEvent = {
+  event_name: string;
+  event_data: object;
+  options?: SendCustomEventOptions;
+};
+
+const PENDING_CUSTOM_EVENT_QUEUE_CAP = 50;
+const pendingCustomEvents: PendingCustomEvent[] = [];
+let flushingPendingCustomEvents = false;
+
+function enqueuePendingCustomEvent(
+  event_name: string,
+  event_data: object,
+  options?: SendCustomEventOptions
+): void {
+  if (pendingCustomEvents.length >= PENDING_CUSTOM_EVENT_QUEUE_CAP) {
+    const dropped = pendingCustomEvents.shift();
+    sdkLog.warn(
+      `[SDK] Pending event queue full; dropped oldest: ${dropped?.event_name}`
+    );
+  }
+
+  pendingCustomEvents.push({ event_name, event_data, options });
+  sdkLog.log(
+    `[SDK] Queued ${event_name} for later send (pending=${pendingCustomEvents.length})`
+  );
+}
+
+/** Drain events queued while user_id/link was unavailable. Safe to call repeatedly. */
+export async function flushPendingCustomEvents(): Promise<void> {
+  if (flushingPendingCustomEvents) return;
+  if (pendingCustomEvents.length === 0) return;
+
+  flushingPendingCustomEvents = true;
+  sdkLog.log(
+    `[SDK] Flushing ${pendingCustomEvents.length} pending custom event(s)`
+  );
+
+  try {
+    const batch = pendingCustomEvents.splice(0, pendingCustomEvents.length);
+    for (const item of batch) {
+      await sendCustomEvent(item.event_name, item.event_data, item.options);
+    }
+  } finally {
+    flushingPendingCustomEvents = false;
+  }
+}
+
+/** Test helper — not part of the public SDK surface. */
+export function __resetPendingCustomEventsForTests(): void {
+  pendingCustomEvents.length = 0;
+  flushingPendingCustomEvents = false;
+}
+
+/** Test helper — not part of the public SDK surface. */
+export function __getPendingCustomEventCountForTests(): number {
+  return pendingCustomEvents.length;
+}
+
 function htmlToPlainText(value: unknown): string {
   if (typeof value !== 'string') return '';
   return value
@@ -84,14 +143,19 @@ export async function sendCustomEvent(
     sdkLog.warn(
       `[SDK] Skipping ${event_name} event: server user_id unavailable (wait for /device/register).`
     );
+    enqueuePendingCustomEvent(event_name, event_data, options);
     return false;
   }
 
   const event_type = options?.eventType ?? 'INTERACTIVE';
-  if (event_type === 'INTERACTIVE' && (await shouldBlockInteractiveBeforeLink())) {
+  if (
+    event_type === 'INTERACTIVE' &&
+    (await shouldBlockInteractiveBeforeLink())
+  ) {
     sdkLog.warn(
       `[SDK] Skipping ${event_name} event: fired before /device/link — call OnUserLogin first`
     );
+    enqueuePendingCustomEvent(event_name, event_data, options);
     return false;
   }
   const device_id = await getDeviceId();
@@ -133,6 +197,10 @@ export async function sendCustomEvent(
 
     if (event_type !== 'LOG') {
       schedulePollCheck(`after-event:${event_name}`);
+    }
+
+    if (!flushingPendingCustomEvents && pendingCustomEvents.length > 0) {
+      void flushPendingCustomEvents();
     }
     return true;
   } catch (err) {
@@ -646,12 +714,10 @@ function getAlignment(style: any) {
 
   return `${verticalPart}-${horizontalPart}`;
 }
-export function OnPageOpen(page_name: string) {
-  setTimeout(() => {
+/** Fires page_open (+ widget_open) after 2s. Returns a cancel fn for unmount cleanup. */
+export function OnPageOpen(page_name: string): () => void {
+  const timer = setTimeout(() => {
     try {
-      // sendCustomEvent('app_open');
-      // sendCustomEvent('app_open', { page: page_name });
-
       sendCustomEvent('page_open', { page: page_name });
       sendCustomEvent('widget_open', { compare: 'center' });
       sendCustomEvent('widget_open', { compare: 'login_banner' });
@@ -659,10 +725,12 @@ export function OnPageOpen(page_name: string) {
       sdkLog.log(`Error sending events for page: ${page_name}`, error);
     }
   }, 2000); // 2000ms = 2 seconds
+
+  return () => clearTimeout(timer);
 }
 
-export function OnPageClose() {
-  sendCustomEvent('page_closed', { page: 'login' });
+export function OnPageClose(page_name = 'login') {
+  return sendCustomEvent('page_closed', { page: page_name });
 }
 
 export function OnAppOpen() {

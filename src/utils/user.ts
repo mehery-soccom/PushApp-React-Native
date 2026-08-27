@@ -1,6 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { OnAppOpen } from '../events/custom/CustomEvents';
+import {
+  OnAppOpen,
+  flushPendingCustomEvents,
+} from '../events/custom/CustomEvents';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { sdkLog } from '../helpers/sdkLogger';
 import {
@@ -82,6 +85,18 @@ export async function shouldBlockInteractiveBeforeLink(): Promise<boolean> {
   return Boolean(loginUserId && !userLoggedIn);
 }
 
+/**
+ * Clear pre-link login user_id so interactive events are not stuck blocked.
+ * Leaves user_id in place if UserLoggedIn is already true (e.g. failed re-link).
+ */
+async function rollbackPreLinkUserIdIfNeeded(): Promise<void> {
+  const userLoggedIn =
+    (await AsyncStorage.getItem('UserLoggedIn'))?.toLowerCase() === 'true';
+  if (userLoggedIn) return;
+  await AsyncStorage.removeItem('user_id');
+  sdkLog.log('🔄 Cleared pre-link user_id after login failure');
+}
+
 export async function persistRegisterIdentity(data: unknown): Promise<void> {
   const registeredUserId = extractUserIdFromRegisterResponse(data);
   const contactId = extractContactIdFromRegisterResponse(data);
@@ -141,9 +156,7 @@ export async function waitForEffectiveUserId(
   return isAcceptableEventUserId(finalUserId) ? finalUserId.trim() : '';
 }
 
-export async function getEffectiveContactId(
-  deviceId: string
-): Promise<string> {
+export async function getEffectiveContactId(deviceId: string): Promise<string> {
   const trimmedDeviceId = deviceId.trim();
   if (!trimmedDeviceId) return '';
 
@@ -229,9 +242,7 @@ async function recoverDeviceRegistration(
 ): Promise<boolean> {
   const { token, fcmToken } = await waitForStoredRegistrationToken();
   if (!token) {
-    sdkLog.warn(
-      '⚠️ Cannot auto-register device: token is missing in storage.'
-    );
+    sdkLog.warn('⚠️ Cannot auto-register device: token is missing in storage.');
     return false;
   }
 
@@ -308,9 +319,7 @@ export function logUserDetails(details: UserDetails) {
   storedUserDetails = details;
 }
 
-export async function OnUserLogin(
-  user_id: string
-): Promise<OnUserLoginResult> {
+export async function OnUserLogin(user_id: string): Promise<OnUserLoginResult> {
   const normalizedUserId = user_id.trim();
   if (!normalizedUserId) {
     sdkLog.warn('⏭️ [SDK][OnUserLogin] Skipped: user_id is missing/empty.');
@@ -327,8 +336,10 @@ export async function OnUserLogin(
 
   sdkLog.log('userid from front end:', normalizedUserId);
 
+  let userIdStoredForLogin = false;
   try {
     await AsyncStorage.setItem('user_id', normalizedUserId);
+    userIdStoredForLogin = true;
     sdkLog.log('✅ user_id stored:', normalizedUserId);
   } catch (err) {
     sdkLog.error('❌ Failed to store user_id:', err);
@@ -336,13 +347,23 @@ export async function OnUserLogin(
     return { success: false, error: 'failed to store user_id' };
   }
 
+  const failAfterStoringUserId = async (
+    error: string
+  ): Promise<OnUserLoginResult> => {
+    if (userIdStoredForLogin) {
+      await rollbackPreLinkUserIdIfNeeded();
+    }
+    await flushPendingCustomEvents();
+    return { success: false, error };
+  };
+
   try {
     const sdkReady = await waitForSdkReady();
     if (!sdkReady) {
       sdkLog.warn(
         '⏭️ [SDK][OnUserLogin] Skipped: initSdk has not completed yet.'
       );
-      return { success: false, error: 'SDK not ready — wait for initSdk' };
+      return failAfterStoringUserId('SDK not ready — wait for initSdk');
     }
 
     const registered = await ensureDeviceRegistered();
@@ -350,10 +371,7 @@ export async function OnUserLogin(
       sdkLog.warn(
         '⏭️ [SDK][OnUserLogin] Skipped: device registration not confirmed.'
       );
-      return {
-        success: false,
-        error: 'device registration not confirmed',
-      };
+      return failAfterStoringUserId('device registration not confirmed');
     }
 
     await settleAfterRegister();
@@ -364,31 +382,35 @@ export async function OnUserLogin(
     const loginUserId = (userID || normalizedUserId).trim();
 
     if (!device_id) {
-      sdkLog.warn(
-        '⏭️ [SDK][OnUserLogin] Skipped: device_id is not available.'
-      );
-      return { success: false, error: 'device_id is not available' };
+      sdkLog.warn('⏭️ [SDK][OnUserLogin] Skipped: device_id is not available.');
+      return failAfterStoringUserId('device_id is not available');
     }
     if (!loginUserId) {
       sdkLog.warn(
         '⏭️ [SDK][OnUserLogin] Skipped: user_id unavailable after storage.'
       );
-      return { success: false, error: 'user_id unavailable after storage' };
+      return failAfterStoringUserId('user_id unavailable after storage');
     }
 
     const currentContactId = `${loginUserId}_${device_id}`;
-    const initChannelId = (await AsyncStorage.getItem('mehery_channel_id')) ?? '';
+    const initChannelId =
+      (await AsyncStorage.getItem('mehery_channel_id')) ?? '';
     const linkChannelId = await getEffectiveLinkChannelId();
     const currentHostRoot =
       (await AsyncStorage.getItem(MEHERY_PUSHAPP_HOST_ROOT_KEY))?.trim() ?? '';
-    const [storedContactId, userLoggedInFlag, storedSessionId, lastLinkedChannel, lastLinkedHost] =
-      await AsyncStorage.multiGet([
-        'contact_id',
-        'UserLoggedIn',
-        SESSION_ID_STORAGE_KEY,
-        LAST_LINKED_CHANNEL_KEY,
-        LAST_LINKED_HOST_KEY,
-      ]).then((entries) => entries.map(([_, v]) => v || ''));
+    const [
+      storedContactId,
+      userLoggedInFlag,
+      storedSessionId,
+      lastLinkedChannel,
+      lastLinkedHost,
+    ] = await AsyncStorage.multiGet([
+      'contact_id',
+      'UserLoggedIn',
+      SESSION_ID_STORAGE_KEY,
+      LAST_LINKED_CHANNEL_KEY,
+      LAST_LINKED_HOST_KEY,
+    ]).then((entries) => entries.map(([_, v]) => v || ''));
     const isUserLoggedIn = (userLoggedInFlag ?? '').toLowerCase() === 'true';
     const loginContextMatches =
       storedContactId === currentContactId &&
@@ -406,6 +428,7 @@ export async function OnUserLogin(
           host: currentHostRoot,
         })
       );
+      await flushPendingCustomEvents();
       return {
         success: true,
         sessionId: storedSessionId || undefined,
@@ -469,7 +492,7 @@ export async function OnUserLogin(
     };
 
     try {
-      let { response, text } = (await retryLinkOnNotFound(primaryChannelId));
+      let { response, text } = await retryLinkOnNotFound(primaryChannelId);
       sdkLog.log('Response text:', text);
 
       const parsedChannelSegment = extractChannelSegment(primaryChannelId);
@@ -564,6 +587,7 @@ export async function OnUserLogin(
       await reauthenticateWebSocket();
 
       OnAppOpen();
+      await flushPendingCustomEvents();
       return {
         success: true,
         sessionId: sessionFromLink || undefined,
@@ -572,7 +596,7 @@ export async function OnUserLogin(
       const message =
         error instanceof Error ? error.message : String(error ?? 'unknown');
       sdkLog.warn('❌ Error registering device:', message);
-      return { success: false, error: message };
+      return failAfterStoringUserId(message);
     }
   } finally {
     loginInProgress = false;

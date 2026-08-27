@@ -42,11 +42,23 @@ export const appStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'white',
   },
+  shellContent: {
+    flex: 1,
+  },
+  shellLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  shellLoadingText: {
+    fontSize: 15,
+    color: '#666',
+  },
   container: {
     flex: 1,
     padding: 20,
     backgroundColor: 'white',
-    marginTop: 150,
     justifyContent: 'center',
   },
   label: { fontSize: 18, marginBottom: 8 },
@@ -137,7 +149,7 @@ export const appStyles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#ddd',
     backgroundColor: '#fafafa',
-    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+    paddingBottom: 8,
     paddingTop: 8,
   },
   tabItem: {

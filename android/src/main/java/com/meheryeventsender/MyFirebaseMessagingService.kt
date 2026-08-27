@@ -57,6 +57,11 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         NotificationPayloadUtils.mergeEmbeddedJsonObjectStringsInto(data)
 
+        if (data["type"] == "silent_keepalive") {
+            Log.i(TAG, "Silent keep-alive: skip tray notification (JS pong)")
+            return
+        }
+
         if (data.isEmpty()) {
             Log.w(TAG, "FCM: merged data empty after notification merge; nothing to display")
             return

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { View, StyleSheet } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -37,16 +38,19 @@ export default function App() {
         area: { name: 'Parel' },
       });
 
-      // const environment: SdkInitEnvironmentParam = 'development';
-      // await initSdk(null, 'demo_1754408042569', environment);
-      // console.log('SDK initialized with environment:', environment);
-
-      const environment: SdkInitEnvironmentParam = false;
+      // const environment: SdkInitEnvironmentParam = false;
+      const environment: SdkInitEnvironmentParam = 'development';
       const { xApiId, xApiKey } =
         await readCredentialsForEnvironment(environment);
       await pushappAuth(xApiId, xApiKey);
-      await initSdk(null, 'demo_1780031354415', environment);
+
+      //development
+      await initSdk(null, 'demo_1754408042569', environment);
       console.log('SDK initialized with environment:', environment);
+
+      //production
+      // await initSdk(null, 'demo_1780031354415', environment);
+      // console.log('SDK initialized with environment:', environment);
 
       setSdkReady(true);
 
@@ -102,7 +106,7 @@ export default function App() {
   };
 
   return (
-    <>
+    <View style={styles.root}>
       {!isLoggedIn ? (
         <LoginScreen onSignIn={handleSignIn} onSignUp={handleSignUp} />
       ) : (
@@ -114,6 +118,13 @@ export default function App() {
         />
       )}
       <PollOverlayProvider />
-    </>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+});
