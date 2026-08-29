@@ -58,7 +58,12 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         NotificationPayloadUtils.mergeEmbeddedJsonObjectStringsInto(data)
 
         if (data["type"] == "silent_keepalive") {
-            Log.i(TAG, "Silent keep-alive: skip tray notification (JS pong)")
+            Log.i(
+                TAG,
+                "[Mehery SDK] silent ping: FCM received type=silent_keepalive " +
+                    "(skip tray; JS replySilentKeepAlive should POST /pushapp/silent/ping) " +
+                    "messageId=${remoteMessage.messageId} dataKeys=${data.keys.joinToString(",")}"
+            )
             return
         }
 
