@@ -1,5 +1,6 @@
 import {
   extractContactIdFromRegisterResponse,
+  extractProfileIdFromRegisterResponse,
   extractSessionIdFromRegisterResponse,
   extractUserIdFromRegisterResponse,
   guestUserIdFromRegisterResponse,
@@ -15,6 +16,7 @@ const sampleRegisterResponse = {
       'guest_1_-mehery-13bacd12-481d-478e-943e-962d7a3476a8__1782222635394',
     user_id: 'guest_1',
     session_id: '6a3a8f2eeb16f028bb4ea7a1',
+    p_id: 'profile-doc-1',
   },
 };
 
@@ -37,6 +39,21 @@ describe('register identity extraction', () => {
     );
   });
 
+  it('extracts p_id from device.p_id', () => {
+    expect(extractProfileIdFromRegisterResponse(sampleRegisterResponse)).toBe(
+      'profile-doc-1'
+    );
+  });
+
+  it('falls back to top-level p_id / profile_id', () => {
+    expect(extractProfileIdFromRegisterResponse({ p_id: 'top-pid' })).toBe(
+      'top-pid'
+    );
+    expect(
+      extractProfileIdFromRegisterResponse({ profile_id: 'legacy-pid' })
+    ).toBe('legacy-pid');
+  });
+
   it('falls back to top-level session_id', () => {
     expect(
       extractSessionIdFromRegisterResponse({
@@ -49,6 +66,7 @@ describe('register identity extraction', () => {
     expect(extractUserIdFromRegisterResponse(null)).toBe('');
     expect(extractContactIdFromRegisterResponse(undefined)).toBe('');
     expect(extractSessionIdFromRegisterResponse({})).toBe('');
+    expect(extractProfileIdFromRegisterResponse({})).toBe('');
   });
 
   it('tryParseRegisterResponse parses JSON bodies', () => {

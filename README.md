@@ -398,6 +398,7 @@ sendCustomEvent('purchase_completed', {
 | `OnUserLogin(userId)` / `OnUserLogOut(userId)` | Link or delink device to host user |
 | `OnPageOpen(name)` / `OnPageClose(name?)` | Screen lifecycle events (`OnPageOpen` returns a cancel fn; interactive events during pre-link are queued and flushed after login) |
 | `OnAppOpen()` / `OnAppLaunch()` | App lifecycle events |
+| `trackAppEnter(...)` | Attributed `app_enter` when the app is opened from a push or deep/universal link (also fired automatically by the SDK) |
 | `sendCustomEvent(name, data?, options?)` | Custom business events |
 | `flushPendingCustomEvents()` | Drain interactive events queued while register/link was unavailable |
 | `updateUserProfile(additionalInfo, cohorts?, options?)` | Sync profile to PushApp |

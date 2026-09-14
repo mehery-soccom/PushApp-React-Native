@@ -16,12 +16,15 @@ import { sdkLog } from '../../helpers/sdkLogger';
 import { resolvePollBackgroundColor } from '../../helpers/resolvePollBackgroundColor';
 import {
   getEffectiveContactId,
+  PROFILE_ID_STORAGE_KEY,
   shouldBlockInteractiveBeforeLink,
   waitForEffectiveUserId,
 } from '../../utils/user';
 
 export type SendCustomEventOptions = {
   eventType?: 'INTERACTIVE' | 'LOG';
+  /** One-shot profile id when storage is empty (e.g. from push payload). */
+  p_id?: string;
 };
 
 type PendingCustomEvent = {
@@ -166,8 +169,12 @@ export async function sendCustomEvent(
 
   const geoIP = await waitForGeoIp();
   const session_id = (await AsyncStorage.getItem('sessionId')) ?? '';
+  const storedPId =
+    (await AsyncStorage.getItem(PROFILE_ID_STORAGE_KEY))?.trim() ||
+    options?.p_id?.trim() ||
+    '';
 
-  const payload = {
+  const payload: Record<string, unknown> = {
     user_id,
     channel_id,
     event_name,
@@ -176,6 +183,9 @@ export async function sendCustomEvent(
     event_type,
     geoIP,
   };
+  if (storedPId) {
+    payload.p_id = storedPId;
+  }
 
   sdkLog.log(`📡 Sending ${event_name} event:`, payload);
   const commonHeaders = await buildCommonHeaders();

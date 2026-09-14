@@ -63,6 +63,7 @@ const mockShouldBlockInteractiveBeforeLink = jest.fn();
 
 jest.mock('../utils/user', () => ({
   getEffectiveContactId: jest.fn().mockResolvedValue('contact-1'),
+  PROFILE_ID_STORAGE_KEY: 'p_id',
   waitForEffectiveUserId: (...args: unknown[]) =>
     mockWaitForEffectiveUserId(...args),
   shouldBlockInteractiveBeforeLink: (...args: unknown[]) =>
@@ -166,5 +167,45 @@ describe('pending custom event queue', () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.event_name).toBe('page_closed');
     expect(body.event_data).toEqual({ page: 'account' });
+  });
+
+  it('includes p_id on event envelope when stored', async () => {
+    (AsyncStorage.getItem as jest.Mock).mockImplementation(
+      async (key: string) => {
+        if (key === 'p_id') return 'stored-profile-id';
+        if (key === 'mehery_channel_id') return 'ch_1';
+        if (key === 'sessionId') return 'sess-1';
+        return '';
+      }
+    );
+
+    await sendCustomEvent(
+      'app_enter',
+      { event_referrer: {} },
+      { eventType: 'LOG' }
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.p_id).toBe('stored-profile-id');
+    expect(body.event_name).toBe('app_enter');
+  });
+
+  it('uses options.p_id when storage is empty', async () => {
+    await sendCustomEvent(
+      'app_enter',
+      { event_referrer: {} },
+      { eventType: 'LOG', p_id: 'from-push' }
+    );
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.p_id).toBe('from-push');
+  });
+
+  it('omits p_id when neither storage nor options provide it', async () => {
+    await sendCustomEvent('page_open', { page: 'home' });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.p_id).toBeUndefined();
   });
 });

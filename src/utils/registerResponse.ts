@@ -10,7 +10,9 @@ const FORBIDDEN_EVENT_USER_IDS = new Set(['guest']);
 
 export function isAcceptableEventUserId(userId: string): boolean {
   const trimmed = userId.trim();
-  return Boolean(trimmed) && !FORBIDDEN_EVENT_USER_IDS.has(trimmed.toLowerCase());
+  return (
+    Boolean(trimmed) && !FORBIDDEN_EVENT_USER_IDS.has(trimmed.toLowerCase())
+  );
 }
 
 export function extractUserIdFromRegisterResponse(data: unknown): string {
@@ -54,6 +56,25 @@ export function extractSessionIdFromRegisterResponse(data: unknown): string {
   }
   if (typeof root.sessionId === 'string' && root.sessionId.trim()) {
     return root.sessionId.trim();
+  }
+  return '';
+}
+
+/** Profile document id from register/link (`device.p_id` / top-level). */
+export function extractProfileIdFromRegisterResponse(data: unknown): string {
+  if (!data || typeof data !== 'object') return '';
+  const root = data as Record<string, unknown>;
+  const device = root.device;
+  if (device && typeof device === 'object') {
+    const d = device as Record<string, unknown>;
+    for (const key of ['p_id', 'profile_id', 'profileId'] as const) {
+      const v = d[key];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+  }
+  for (const key of ['p_id', 'profile_id', 'profileId'] as const) {
+    const v = root[key];
+    if (typeof v === 'string' && v.trim()) return v.trim();
   }
   return '';
 }

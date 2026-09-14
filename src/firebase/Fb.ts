@@ -34,6 +34,7 @@ import {
   isSilentKeepAlive,
   replySilentKeepAlive,
 } from '../utils/silentKeepAlive';
+import { trackAppEnter } from '../events/default/LifecycleEvents';
 
 import { NativeModules, Platform } from 'react-native';
 import { ensureAndroidNotificationPermission } from '../native/LiveActivity';
@@ -957,6 +958,21 @@ export async function getFcmToken(): Promise<string | null> {
  * the native module only re-launches the app and **never** forwards `action` / `__actionMap` to JS,
  * so Yes/No style buttons appear to do nothing.
  */
+function trackAppEnterFromPush(
+  merged: Record<string, unknown>,
+  url?: string | null
+): void {
+  const bodyUrl =
+    (typeof url === 'string' && url.trim()) ||
+    resolveNotificationUrl(merged) ||
+    '';
+  void trackAppEnter({
+    sourceType: 'PUSH',
+    payload: merged,
+    url: bodyUrl || null,
+  }).catch(() => undefined);
+}
+
 async function handlePushNotificationInteraction(raw: any) {
   const log = pushCtaLog;
 
@@ -1007,6 +1023,7 @@ async function handlePushNotificationInteraction(raw: any) {
       }
 
       const bodyUrl = resolveNotificationUrl(notificationData);
+      trackAppEnterFromPush(notificationData, bodyUrl);
       if (bodyUrl) {
         log('body tap notification_url — opening in app', bodyUrl);
         try {
@@ -1069,6 +1086,8 @@ async function handlePushNotificationInteraction(raw: any) {
       } catch (e) {
         log('trackPushEvent(cta) error (continuing to try open URL)', e);
       }
+
+      trackAppEnterFromPush(notificationData, targetUrl);
 
       if (targetUrl) {
         log('calling openNotificationLink', targetUrl);
@@ -1409,7 +1428,9 @@ export function setupNotificationOpenTracking(): () => void {
 
   const unsubscribe = messaging().onNotificationOpenedApp((remoteMessage) => {
     const data = (remoteMessage?.data || {}) as Record<string, unknown>;
+    const merged = mergeIosNotificationPayload(data);
     trackPushEvent('opened', data).catch(() => undefined);
+    trackAppEnterFromPush(merged);
     openIosNotificationBodyUrl(data).catch(() => undefined);
   });
 
@@ -1418,7 +1439,9 @@ export function setupNotificationOpenTracking(): () => void {
     .then((remoteMessage) => {
       if (remoteMessage?.data) {
         const data = remoteMessage.data as Record<string, unknown>;
+        const merged = mergeIosNotificationPayload(data);
         trackPushEvent('opened', data).catch(() => undefined);
+        trackAppEnterFromPush(merged);
         openIosNotificationBodyUrl(data).catch(() => undefined);
       }
     })

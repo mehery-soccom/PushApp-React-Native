@@ -18,6 +18,8 @@ import { appStyles } from '../styles/appStyles';
 type PostLoginShellProps = {
   userId: string;
   pendingAuthEvent: 'signIn' | 'signUp' | null;
+  deepLinkPageId?: PageId | null;
+  onDeepLinkConsumed?: () => void;
   onAuthEventSent: () => void;
   onLogout: () => void;
 };
@@ -25,19 +27,35 @@ type PostLoginShellProps = {
 export function PostLoginShell({
   userId,
   pendingAuthEvent,
+  deepLinkPageId = null,
+  onDeepLinkConsumed,
   onAuthEventSent,
   onLogout,
 }: PostLoginShellProps) {
-  const [activePageId, setActivePageId] = useState<PageId>(DEFAULT_PAGE_ID);
+  const [activePageId, setActivePageId] = useState<PageId>(
+    deepLinkPageId ?? DEFAULT_PAGE_ID
+  );
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [bootstrapDone, setBootstrapDone] = useState(false);
+
+  useEffect(() => {
+    if (!deepLinkPageId) return;
+    setActivePageId(deepLinkPageId);
+    onDeepLinkConsumed?.();
+  }, [deepLinkPageId, onDeepLinkConsumed]);
 
   useEffect(() => {
     let cancelled = false;
 
     const bootstrap = async () => {
+      const normalizedUserId = userId.trim();
+      if (!normalizedUserId) {
+        setBootstrapDone(true);
+        return;
+      }
+
       try {
-        const loginResult = await OnUserLogin(userId);
+        const loginResult = await OnUserLogin(normalizedUserId);
         if (cancelled) return;
 
         if (!loginResult.success) {
@@ -50,9 +68,12 @@ export function PostLoginShell({
 
         if (pendingAuthEvent === 'signUp') {
           const name = await getProfileName();
-          sendCustomEvent(EVENT_NAMES.signUp, { code: userId, name });
+          sendCustomEvent(EVENT_NAMES.signUp, {
+            code: normalizedUserId,
+            name,
+          });
         } else if (pendingAuthEvent === 'signIn') {
-          sendCustomEvent(EVENT_NAMES.logIn, { code: userId });
+          sendCustomEvent(EVENT_NAMES.logIn, { code: normalizedUserId });
         }
         onAuthEventSent();
 

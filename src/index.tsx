@@ -36,8 +36,10 @@ export {
   SDK_EVENT_NAMES,
   OnAppLaunch,
   trackAppInstallIfNeeded,
+  trackAppEnter,
   trackDefaultLifecycleEvents,
 } from './events/default/LifecycleEvents';
+export type { TrackAppEnterOptions } from './events/default/LifecycleEvents';
 
 export {
   updateUserProfile,
@@ -61,7 +63,12 @@ import { AppRegistry } from 'react-native';
 import { sdkLog, setSdkLogging } from './helpers/sdkLogger';
 
 // 🛠 Imports
-import { Platform, NativeModules, NativeEventEmitter } from 'react-native';
+import {
+  Platform,
+  NativeModules,
+  NativeEventEmitter,
+  Linking,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   requestUserPermission,
@@ -79,7 +86,10 @@ import { updatePushToken } from './utils/updateToken';
 // import { showPollOverlay, hidePollOverlay } from './components/PollOverlay';
 // 🛡 Safe NativeEventEmitter setup
 import { PollOverlayProvider } from './components/PollOverlay';
-import { trackDefaultLifecycleEvents } from './events/default/LifecycleEvents';
+import {
+  trackAppEnter,
+  trackDefaultLifecycleEvents,
+} from './events/default/LifecycleEvents';
 import { markSdkReady, resetSdkReady } from './utils/sdkReadiness';
 
 export { TooltipPollContainer } from './components/TooltipPollContainer';
@@ -343,6 +353,39 @@ let sdkMounted = false;
 //   }
 // };
 
+let appEnterLinkUnsubscribe: (() => void) | null = null;
+
+/**
+ * Attribute `app_enter` for deep/universal links (Linking only).
+ * Notification opens with the same URL are deduped against PUSH via appEnterReferrer.
+ */
+function setupAppEnterLinkAttribution(): () => void {
+  if (appEnterLinkUnsubscribe) return appEnterLinkUnsubscribe;
+
+  const onUrl = ({ url }: { url: string }) => {
+    const trimmed = typeof url === 'string' ? url.trim() : '';
+    if (!trimmed) return;
+    void trackAppEnter({ sourceType: 'LINK', url: trimmed }).catch(
+      () => undefined
+    );
+  };
+
+  const subscription = Linking.addEventListener('url', onUrl);
+
+  Linking.getInitialURL()
+    .then((url) => {
+      if (url) onUrl({ url });
+    })
+    .catch(() => undefined);
+
+  appEnterLinkUnsubscribe = () => {
+    subscription.remove();
+    appEnterLinkUnsubscribe = null;
+  };
+
+  return appEnterLinkUnsubscribe;
+}
+
 export const initSdk = async (
   context: any,
   identifier: string,
@@ -401,6 +444,8 @@ export const initSdk = async (
 
     // ✅ Fetch or create device ID (await so early custom events have x-device-id)
     await fetchDeviceId();
+
+    setupAppEnterLinkAttribution();
 
     // ✅ iOS specific setup
     if (Platform.OS === 'ios') {

@@ -20,6 +20,7 @@ import {
 import { getProfileName } from '../utils/cartStorage';
 import { loadPushTokens } from '../utils/pushTokens';
 import { closeExamplePage, openExamplePage } from '../utils/pageLifecycle';
+import { DEEP_LINK_URLS } from '../utils/deepLinks';
 import { appStyles } from '../styles/appStyles';
 
 type Page3ScreenProps = {
@@ -135,6 +136,17 @@ export function Page3Screen({
         {profileStatus ? (
           <Text style={appStyles.profileStatus}>{profileStatus}</Text>
         ) : null}
+      </View>
+
+      <View style={appStyles.profileSection}>
+        <Text style={appStyles.label}>Deep links</Text>
+        <Text style={appStyles.profileHint}>{DEEP_LINK_URLS.home}</Text>
+        <Text style={appStyles.profileHint}>{DEEP_LINK_URLS.explore}</Text>
+        <Text style={appStyles.profileHint}>{DEEP_LINK_URLS.account}</Text>
+        <Text style={appStyles.profileHint}>
+          Open while logged in to switch tabs. Cold start from a link opens that
+          tab after sign-in.
+        </Text>
       </View>
 
       <View style={appStyles.tokenSection}>

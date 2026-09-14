@@ -3,4 +3,5 @@ export const SDK_EVENT_NAMES = {
   APP_LAUNCH: 'app_launch',
   APP_OPEN: 'app_open',
   APP_CLOSE: 'app_close',
+  APP_ENTER: 'app_enter',
 } as const;

@@ -4,11 +4,26 @@ import { sendCustomEvent, schedulePollCheck } from '../custom/CustomEvents';
 import { SDK_EVENT_NAMES } from './eventNames';
 import { ensureDeviceRegistered } from '../../utils/ensureDeviceRegistered';
 import { sdkLog } from '../../helpers/sdkLogger';
+import {
+  buildEventReferrer,
+  extractPIdFromPayload,
+  rememberAppEnterForDedupe,
+  shouldDedupeAppEnter,
+  type AppEnterSourceType,
+} from '../../utils/appEnterReferrer';
 
 export { SDK_EVENT_NAMES };
 
 const APP_INSTALL_SENT_KEY = 'mehery_app_install_sent';
 const APP_INSTALL_VERSION_KEY = 'mehery_app_install_version';
+
+export type TrackAppEnterOptions = {
+  sourceType: AppEnterSourceType;
+  /** Merged push / FCM data (optional for LINK-only). */
+  payload?: Record<string, unknown> | null;
+  /** Deep link or notification_url. */
+  url?: string | null;
+};
 
 export async function trackAppInstallIfNeeded(): Promise<void> {
   const currentVersion = DeviceInfo.getVersion() || 'unknown';
@@ -50,6 +65,55 @@ export async function trackAppInstallIfNeeded(): Promise<void> {
 
 export async function OnAppLaunch(): Promise<void> {
   await sendCustomEvent(SDK_EVENT_NAMES.APP_LAUNCH, {}, { eventType: 'LOG' });
+}
+
+/**
+ * Attributed app open from push or deep/universal link only.
+ * Does not fire on organic icon taps / OnAppOpen.
+ */
+export async function trackAppEnter(
+  options: TrackAppEnterOptions
+): Promise<boolean> {
+  const channelId =
+    (await AsyncStorage.getItem('mehery_channel_id'))?.trim() ?? '';
+  const url = typeof options.url === 'string' ? options.url.trim() : '';
+  const referrer = buildEventReferrer({
+    sourceType: options.sourceType,
+    channelId,
+    payload: options.payload,
+    url: url || null,
+  });
+
+  if (
+    shouldDedupeAppEnter({
+      messageId: referrer.messageId,
+      url: url || null,
+      sourceType: options.sourceType,
+    })
+  ) {
+    sdkLog.log('⏭️ [SDK] Skipping duplicate app_enter');
+    return false;
+  }
+
+  rememberAppEnterForDedupe({
+    messageId: referrer.messageId,
+    url: url || null,
+  });
+
+  const payloadPId = extractPIdFromPayload(options.payload);
+  const success = await sendCustomEvent(
+    SDK_EVENT_NAMES.APP_ENTER,
+    { event_referrer: referrer },
+    {
+      eventType: 'LOG',
+      ...(payloadPId ? { p_id: payloadPId } : {}),
+    }
+  );
+
+  if (success) {
+    sdkLog.log('✅ [SDK] app_enter sent', JSON.stringify(referrer));
+  }
+  return success;
 }
 
 export async function trackDefaultLifecycleEvents(): Promise<void> {

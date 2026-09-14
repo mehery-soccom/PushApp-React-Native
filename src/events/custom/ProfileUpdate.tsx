@@ -12,6 +12,8 @@ import {
   stableStringify,
 } from '../../utils/profileSnapshot';
 import type { ProfileApiPayload } from '../../utils/profileSnapshot';
+import { PROFILE_ID_STORAGE_KEY } from '../../utils/user';
+import { withOptionalProfileId } from '../../utils/withOptionalProfileId';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -261,6 +263,13 @@ export async function updateUserProfile(
       return { skipped: true, message };
     }
     sdkLog.log('✅ [SDK][Profile] User is logged in, proceeding');
+
+    const storedPId =
+      (await AsyncStorage.getItem(PROFILE_ID_STORAGE_KEY))?.trim() ?? '';
+    requestPayload = withOptionalProfileId(
+      requestPayload,
+      storedPId
+    ) as ProfileApiPayload;
 
     sdkLog.log(
       '📡 [SDK][Profile] PUT /customer/profile payload:',

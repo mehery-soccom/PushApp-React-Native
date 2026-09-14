@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { Linking, View, StyleSheet } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -18,6 +18,8 @@ import {
   setProfileName,
   setRegistrationCompleted,
 } from './utils/cartStorage';
+import { parsePageIdFromDeepLink } from './utils/deepLinks';
+import type { PageId } from './constants/pages';
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -26,6 +28,7 @@ export default function App() {
   const [pendingAuthEvent, setPendingAuthEvent] = useState<
     'signIn' | 'signUp' | null
   >(null);
+  const [deepLinkPageId, setDeepLinkPageId] = useState<PageId | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -79,6 +82,29 @@ export default function App() {
     checkStoredUser();
   }, [sdkReady]);
 
+  useEffect(() => {
+    const applyUrl = (url: string | null) => {
+      if (!url) return;
+      const pageId = parsePageIdFromDeepLink(url);
+      if (pageId) {
+        console.log('[Example] Deep link →', pageId, url);
+        setDeepLinkPageId(pageId);
+      }
+    };
+
+    Linking.getInitialURL()
+      .then(applyUrl)
+      .catch(() => undefined);
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      applyUrl(url);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   const enterPostLogin = (id: string) => {
     setUserId(id);
     setIsLoggedIn(true);
@@ -101,8 +127,12 @@ export default function App() {
     await OnUserLogOut(userId);
     await AsyncStorage.removeItem('user_id');
     await clearCommerceStorage();
-    setUserId('');
+    // Unmount PostLoginShell before clearing userId so its effect
+    // does not re-run OnUserLogin('').
     setIsLoggedIn(false);
+    setUserId('');
+    setPendingAuthEvent(null);
+    setDeepLinkPageId(null);
   };
 
   return (
@@ -113,6 +143,8 @@ export default function App() {
         <PostLoginShell
           userId={userId}
           pendingAuthEvent={pendingAuthEvent}
+          deepLinkPageId={deepLinkPageId}
+          onDeepLinkConsumed={() => setDeepLinkPageId(null)}
           onAuthEventSent={() => setPendingAuthEvent(null)}
           onLogout={handleLogout}
         />

@@ -20,6 +20,7 @@ import { waitForGeoIp } from './geoIpContext';
 import { clearStoredProfileSnapshot } from './profileSnapshot';
 import {
   extractContactIdFromRegisterResponse,
+  extractProfileIdFromRegisterResponse,
   extractSessionIdFromRegisterResponse,
   extractUserIdFromRegisterResponse,
   isAcceptableEventUserId,
@@ -30,6 +31,7 @@ import { reauthenticateWebSocket } from '../socket/WebSock';
 
 export {
   extractContactIdFromRegisterResponse,
+  extractProfileIdFromRegisterResponse,
   extractSessionIdFromRegisterResponse,
   extractUserIdFromRegisterResponse,
   isAcceptableEventUserId,
@@ -38,6 +40,9 @@ export {
 
 /** AsyncStorage key; also written by device/register on some platforms. */
 export const SESSION_ID_STORAGE_KEY = 'sessionId';
+
+/** Profile document id from register/link (`device.p_id`). */
+export const PROFILE_ID_STORAGE_KEY = 'p_id';
 
 /** Server-assigned guest id from `/device/register` (`device.user_id`). */
 export const REGISTERED_USER_ID_STORAGE_KEY = 'registered_user_id';
@@ -101,6 +106,7 @@ export async function persistRegisterIdentity(data: unknown): Promise<void> {
   const registeredUserId = extractUserIdFromRegisterResponse(data);
   const contactId = extractContactIdFromRegisterResponse(data);
   const sessionId = extractSessionIdFromRegisterResponse(data);
+  const profileId = extractProfileIdFromRegisterResponse(data);
   const valuesToStore: [string, string][] = [];
 
   if (registeredUserId) {
@@ -112,11 +118,17 @@ export async function persistRegisterIdentity(data: unknown): Promise<void> {
   if (sessionId) {
     valuesToStore.push([SESSION_ID_STORAGE_KEY, sessionId]);
   }
+  if (profileId) {
+    valuesToStore.push([PROFILE_ID_STORAGE_KEY, profileId]);
+  }
 
   if (valuesToStore.length > 0) {
     await AsyncStorage.multiSet(valuesToStore);
     if (registeredUserId) {
       sdkLog.log('✅ registered_user_id stored:', registeredUserId);
+    }
+    if (profileId) {
+      sdkLog.log('✅ p_id stored:', profileId);
     }
   }
 }
@@ -559,6 +571,7 @@ export async function OnUserLogin(user_id: string): Promise<OnUserLoginResult> {
       sdkLog.log('✅ Log in successfully:', data);
 
       const sessionFromLink = extractSessionIdFromLinkResponse(data);
+      const profileFromLink = extractProfileIdFromRegisterResponse(data);
       const responseContactId =
         typeof data?.device?.contact_id === 'string'
           ? data.device.contact_id.trim()
@@ -576,12 +589,18 @@ export async function OnUserLogin(user_id: string): Promise<OnUserLoginResult> {
       } else {
         sdkLog.warn('⚠️ /device/link response had no device.session_id');
       }
+      if (profileFromLink) {
+        valuesToStore.push([PROFILE_ID_STORAGE_KEY, profileFromLink]);
+      }
 
       await AsyncStorage.multiSet(valuesToStore);
       sdkLog.log('🟢 UserLoggedIn set to true');
       sdkLog.log('✅ contact_id stored:', finalContactId);
       if (sessionFromLink) {
         sdkLog.log('✅ session_id stored from /device/link');
+      }
+      if (profileFromLink) {
+        sdkLog.log('✅ p_id stored from /device/link');
       }
 
       await reauthenticateWebSocket();
@@ -605,16 +624,16 @@ export async function OnUserLogin(user_id: string): Promise<OnUserLoginResult> {
 
 export async function OnUserLogOut(user_id: string) {
   sdkLog.log('userid from fornt end:', user_id);
-  // if (!user_id) {
-  //   console.warn('❌ user_id is missing. Skipping device registration.');
-  //   return;
-  // }
   const userID = await AsyncStorage.getItem('user_id');
 
   const device_id = await AsyncStorage.getItem('device_id');
 
-  const channel_id = await AsyncStorage.getItem('mehery_channel_id');
-  sdkLog.log('channel id at custom:', channel_id);
+  const channel_id =
+    (await getEffectiveLinkChannelId()) ||
+    (await AsyncStorage.getItem('mehery_channel_id')) ||
+    '';
+  const session_id = (await AsyncStorage.getItem(SESSION_ID_STORAGE_KEY)) ?? '';
+  sdkLog.log('channel id at logout:', channel_id);
 
   if (!device_id) {
     sdkLog.warn('❌ Device ID not available.');
@@ -623,53 +642,67 @@ export async function OnUserLogOut(user_id: string) {
 
   await clearStoredProfileSnapshot(userID);
 
-  await AsyncStorage.multiRemove([
-    SESSION_ID_STORAGE_KEY,
-    'UserLoggedIn',
-    'contact_id',
-    LAST_LINKED_CHANNEL_KEY,
-    LAST_LINKED_HOST_KEY,
-  ]);
-
-  sdkLog.log('✅ Device is being registered with ID:', device_id);
-
   const payload = {
     device_id,
     user_id: userID,
     channel_id: channel_id,
+    session_id,
   };
 
-  // fetch('https://demo.pushapp.co.in/pushapp/api/register/logout', {
-  //   method: 'POST',
-  //   headers: {
-  //     'Content-Type': 'application/json',
-  //   },
-  //   body: JSON.stringify(payload),
-  // })
+  // Clear login + registration identity so the next register runs as guest.
+  // Keep device_id, channel, and push tokens.
+  await AsyncStorage.multiRemove([
+    SESSION_ID_STORAGE_KEY,
+    PROFILE_ID_STORAGE_KEY,
+    'UserLoggedIn',
+    'contact_id',
+    'user_id',
+    REGISTERED_USER_ID_STORAGE_KEY,
+    LAST_LINKED_CHANNEL_KEY,
+    LAST_LINKED_HOST_KEY,
+    'isRegistered',
+    'lastRegisteredState',
+    'UserRegistered',
+  ]);
+
+  sdkLog.log('✅ Device is being delinked with ID:', device_id);
 
   const commonHeaders = await buildCommonHeaders();
   const apiBaseUrl = await getApiBaseUrl();
 
-  fetch(`${apiBaseUrl}/device/delink`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...commonHeaders,
-    },
-    body: JSON.stringify(payload),
-  })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-      return response.json();
-    })
-    .then((data) => {
-      sdkLog.log('Logged out successfully:', data);
-    })
-    .catch((error) => {
-      sdkLog.warn('❌ Error registering device:', error);
+  try {
+    const response = await fetch(`${apiBaseUrl}/device/delink`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...commonHeaders,
+      },
+      body: JSON.stringify(payload),
     });
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+    const data = await response.json();
+    sdkLog.log('Logged out successfully:', data);
+  } catch (error) {
+    sdkLog.warn('❌ Error delinking device:', error);
+  }
+
+  sdkLog.log('🔄 Re-registering device as guest after delink...');
+  const recovered = await recoverDeviceRegistration(
+    apiBaseUrl,
+    commonHeaders,
+    device_id,
+    channel_id
+  );
+  if (recovered) {
+    sdkLog.log('✅ Guest re-register after delink completed');
+  } else {
+    sdkLog.warn(
+      '⚠️ Guest re-register after delink did not complete; ensureDeviceRegistered may retry later'
+    );
+    await ensureDeviceRegistered();
+  }
 }
 export function getLoggedUserDetails(): UserDetails | null {
   return storedUserDetails;
