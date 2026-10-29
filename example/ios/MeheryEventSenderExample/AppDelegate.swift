@@ -50,7 +50,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     // Register categories
     registerNotificationCategories()
 
-    // React Native setup
+    // React Native setup — SceneDelegate attaches this window to the UIScene (required on iOS 27+).
     let bridge = RCTBridge(delegate: self, launchOptions: launchOptions)
     let rootView = RCTRootView(bridge: bridge!, moduleName: "MeheryEventSenderExample", initialProperties: nil)
 
@@ -58,9 +58,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     let rootVC = UIViewController()
     rootVC.view = rootView
     window?.rootViewController = rootVC
-    window?.makeKeyAndVisible()
 
     return true
+  }
+
+  func application(
+    _ application: UIApplication,
+    configurationForConnecting connectingSceneSession: UISceneSession,
+    options: UIScene.ConnectionOptions
+  ) -> UISceneConfiguration {
+    let configuration = UISceneConfiguration(
+      name: "Default Configuration",
+      sessionRole: connectingSceneSession.role
+    )
+    configuration.delegateClass = SceneDelegate.self
+    return configuration
   }
 
   // MARK: - Silent Push / Background Data Message
@@ -911,6 +923,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
 extension AppDelegate: RCTBridgeDelegate {
   func sourceURL(for bridge: RCTBridge!) -> URL! {
 #if DEBUG
+#if !targetEnvironment(simulator)
+    // Physical devices can't use localhost Metro; prefer the Mac LAN IP baked into ip.txt.
+    // Also clears a stale RCT_jsLocation of "localhost" from a previous debug session.
+    if let ipPath = Bundle.main.path(forResource: "ip", ofType: "txt"),
+       let ip = try? String(contentsOfFile: ipPath).trimmingCharacters(in: .whitespacesAndNewlines),
+       !ip.isEmpty {
+      RCTBundleURLProvider.sharedSettings().jsLocation = "\(ip):8081"
+    }
+#endif
     return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
 #else
     return Bundle.main.url(forResource: "main", withExtension: "jsbundle")

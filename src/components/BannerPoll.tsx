@@ -17,7 +17,10 @@ import {
   getPollWebViewProps,
   getTransparentContainerStyle,
 } from '../helpers/pollTransparency';
-import { buildInAppTrackData } from '../utils/inAppTrack';
+import {
+  buildInAppTrackData,
+  buildInAppTrackPayload,
+} from '../utils/inAppTrack';
 import {
   buildCtaData,
   buildSyntheticCtaData,
@@ -74,13 +77,13 @@ export default function BannerPoll({
       data = { ctaId: value };
     }
 
-    const payload = {
+    const payload = await buildInAppTrackPayload({
       messageId,
       filterId,
-      ...(journiId ? { journiId } : {}),
+      journiId,
       event: eventType,
       data,
-    };
+    });
 
     sdkLog.log('📤 Sending track event:', payload);
     const commonHeaders = await buildCommonHeaders();

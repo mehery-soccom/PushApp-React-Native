@@ -264,11 +264,21 @@ export async function updateUserProfile(
     }
     sdkLog.log('✅ [SDK][Profile] User is logged in, proceeding');
 
-    const storedPId =
+    const p_id =
       (await AsyncStorage.getItem(PROFILE_ID_STORAGE_KEY))?.trim() ?? '';
+    const profileCodeLabel = p_id
+      ? `p_id "${p_id}" (user_id "${user_id}")`
+      : `user_id "${user_id}"`;
+    if (!p_id) {
+      sdkLog.log(
+        'ℹ️ [SDK][Profile] p_id missing, using user_id as profile code',
+        JSON.stringify({ user_id })
+      );
+    }
+
     requestPayload = withOptionalProfileId(
       requestPayload,
-      storedPId
+      p_id
     ) as ProfileApiPayload;
 
     sdkLog.log(
@@ -277,7 +287,12 @@ export async function updateUserProfile(
     );
 
     const baseUrl = await getApiBaseUrl();
-    const url = `${baseUrl}/v1/customer/profile?code=${encodeURIComponent(user_id)}`;
+    // The handler reads query code as the customer code (the SDK user_id).
+    // It does not read ?user_id= or ?p_id=. Path :id is the mongo id, used
+    // only when user_id is missing.
+    const url = user_id
+      ? `${baseUrl}/v1/customer/profile?code=${encodeURIComponent(user_id)}`
+      : `${baseUrl}/v1/customer/profile/${encodeURIComponent(p_id)}`;
     sdkLog.log('🌐 [SDK][Profile] Request URL:', url);
 
     const commonHeaders = await buildCommonHeaders();
@@ -305,19 +320,36 @@ export async function updateUserProfile(
       sdkLog.log('📥 [SDK][Profile] Response body:', data);
 
       if (ok) {
-        sdkLog.log('✅ [SDK][Profile] Profile updated successfully:', data);
+        const savedName = data?.data?.name ?? null;
+        const savedLabel =
+          typeof savedName === 'string'
+            ? savedName
+            : savedName?.formattedName || savedName?.firstName || savedName?.name || '';
+        if (savedLabel) {
+          sdkLog.log(
+            '✅ [SDK][Profile] Name saved on server',
+            JSON.stringify({ url, name: savedName })
+          );
+        } else {
+          sdkLog.warn(
+            '⚠️ [SDK][Profile] Server returned success but did not include the saved profile. The name was not confirmed.',
+            JSON.stringify({ url, status, sentName: requestPayload.name ?? null })
+          );
+        }
         await saveLastProfileSnapshot(user_id, payload);
         sdkLog.log('🔒 [SDK][Profile] Profile snapshot saved locally');
         markSessionProfileHandled(user_id, payload);
         return {
           skipped: false,
-          message: 'Profile updated (API call sent).',
+          message: savedLabel
+            ? `Name saved on server: ${savedLabel}`
+            : 'Server accepted the request but did not confirm the saved name.',
         };
       }
 
       if (isProfileNotFoundError(serverMessage)) {
         throw new Error(
-          `[SDK][Profile] profile not found for user_id "${user_id}". OnUserLogin must complete /device/link for the current channel and environment before updateUserProfile. Log out and log in again if you changed initSdk settings.`
+          `[SDK][Profile] profile not found for ${profileCodeLabel}. OnUserLogin must complete /device/link for the current channel and environment before updateUserProfile. Log out and log in again if you changed initSdk settings.`
         );
       }
 

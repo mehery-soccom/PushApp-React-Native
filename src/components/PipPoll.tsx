@@ -14,7 +14,10 @@ import {
 import { WebView } from 'react-native-webview';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
-import { buildInAppTrackData } from '../utils/inAppTrack';
+import {
+  buildInAppTrackData,
+  buildInAppTrackPayload,
+} from '../utils/inAppTrack';
 import {
   buildCtaData,
   normalizeInAppCtaFields,
@@ -128,13 +131,13 @@ export default function PipPoll({
       data = { ctaId: value };
     }
 
-    const payload = {
+    const payload = await buildInAppTrackPayload({
       messageId,
       filterId,
-      ...(journiId ? { journiId } : {}),
+      journiId,
       event: eventType,
       data,
-    };
+    });
     const commonHeaders = await buildCommonHeaders();
     const apiBaseUrl = await getApiBaseUrl();
 

@@ -35,9 +35,12 @@ class NotificationCtaUrlActivity : Activity() {
         val buttonId = intent.getStringExtra(NotificationActionReceiver.EXTRA_CTA_ID).orEmpty()
         val trackToken =
             intent.getStringExtra(NotificationActionReceiver.EXTRA_TRACK_TOKEN).orEmpty()
+        val contactId =
+            intent.getStringExtra(NotificationActionReceiver.EXTRA_CONTACT_ID).orEmpty()
 
         if (trackBaseUrl.isNotBlank()) {
             NotificationPushTrack.sendPushTrackEvent(
+                this,
                 trackBaseUrl,
                 actionType,
                 messageId,
@@ -45,7 +48,8 @@ class NotificationCtaUrlActivity : Activity() {
                 notificationId,
                 ctaLabel,
                 trackToken,
-                buttonId
+                buttonId,
+                contactId
             )
         } else {
             Log.w(

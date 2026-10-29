@@ -98,23 +98,27 @@ export const CHANNEL_REQUIRED_FIELDS = {
 };
 
 export async function buildProfilePayload(): Promise<Record<string, unknown>> {
-  const [name, registrationCompleted, totalOrders, latestCartValue] =
+  const [nameRaw, registrationCompleted, totalOrders, cartItems] =
     await Promise.all([
-      getProfileName(),
+      AsyncStorage.getItem(STORAGE_KEYS.profileName),
       getRegistrationCompleted(),
       getTotalOrders(),
-      getLatestCartValue(),
+      getCartItems(),
     ]);
 
+  // Field master code is latest_cart_value. The dashboard label is
+  // latest-cart-value, and sending the label leaves that input empty.
   const payload: Record<string, unknown> = {
     ...CHANNEL_REQUIRED_FIELDS,
     registration_completed: registrationCompleted,
     total_orders: totalOrders,
-    'latest-cart-value': latestCartValue,
+    latest_cart_value: computeCartTotal(cartItems),
   };
 
-  if (name.trim()) {
-    payload.name = name.trim();
+  // Absent key means the user never set a name (sign-in). An empty string
+  // means they cleared it on the account page and the profile should update.
+  if (nameRaw !== null) {
+    payload.name = nameRaw.trim();
   }
 
   return payload;

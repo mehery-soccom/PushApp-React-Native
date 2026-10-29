@@ -17,11 +17,11 @@ export function ProductCard({
   return (
     <View style={styles.card}>
       <Text style={styles.name}>{product['item-name']}</Text>
+      <Text style={styles.meta}>Brand: {product.itemBrand}</Text>
       <Text style={styles.meta}>Category: {product.productCategory}</Text>
-      <Text style={styles.meta}>ID: {product.productId}</Text>
+      <Text style={styles.meta}>item_id: {product.productId}</Text>
       <Text style={styles.price}>Price: ₹{product.price}</Text>
       <Text style={styles.mrp}>MRP: ₹{product.mrp}</Text>
-      <Text style={styles.meta}>Value: ₹{product['product-value']}</Text>
       <View style={styles.qtyRow}>
         <Button title="−" onPress={onRemove} disabled={quantity === 0} />
         <Text style={styles.qty}>{quantity}</Text>

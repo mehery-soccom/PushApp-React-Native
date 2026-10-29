@@ -9,7 +9,10 @@ import {
 import { sdkLog } from '../helpers/sdkLogger';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
-import { buildInAppTrackData } from '../utils/inAppTrack';
+import {
+  buildInAppTrackData,
+  buildInAppTrackPayload,
+} from '../utils/inAppTrack';
 import {
   buildSyntheticCtaData,
   type CtaTrackFields,
@@ -56,13 +59,13 @@ export function TooltipPollContainer({
         data = { ctaId: value };
       }
 
-      const payload = {
+      const payload = await buildInAppTrackPayload({
         messageId: tooltipData.messageId,
         filterId: tooltipData.filterId,
-        ...(tooltipData.journiId ? { journiId: tooltipData.journiId } : {}),
+        journiId: tooltipData.journiId,
         event: eventType,
         data,
-      };
+      });
 
       sdkLog.log('📤 Sending track event:', payload);
       const commonHeaders = await buildCommonHeaders();

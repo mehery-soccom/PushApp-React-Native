@@ -1,0 +1,47 @@
+diff --git a/node_modules/@react-native-community/cli-platform-apple/build/commands/runCommand/runOnSimulator.js b/node_modules/@react-native-community/cli-platform-apple/build/commands/runCommand/runOnSimulator.js
+index 6df6d1c..51dd5cb 100644
+--- a/node_modules/@react-native-community/cli-platform-apple/build/commands/runCommand/runOnSimulator.js
++++ b/node_modules/@react-native-community/cli-platform-apple/build/commands/runCommand/runOnSimulator.js
+@@ -11,6 +11,20 @@ function _child_process() {
+   };
+   return data;
+ }
++function _fs() {
++  const data = _interopRequireDefault(require("fs"));
++  _fs = function () {
++    return data;
++  };
++  return data;
++}
++function _path() {
++  const data = _interopRequireDefault(require("path"));
++  _path = function () {
++    return data;
++  };
++  return data;
++}
+ function _cliTools() {
+   const data = require("@react-native-community/cli-tools");
+   _cliTools = function () {
+@@ -38,11 +52,20 @@ async function runOnSimulator(xcodeProject, platform, mode, scheme, args, simula
+    * We also pass it `-CurrentDeviceUDID` so that when we launch it for the first time,
+    * it will not boot the "default" device, but the one we set. If the app is already running,
+    * this flag has no effect.
++   *
++   * Xcode 27 replaces Simulator.app with DeviceHub.app and relocates it from
++   * /Contents/Developer/Applications to /Contents/Applications.
+    */
+   const activeDeveloperDir = _child_process().default.execFileSync('xcode-select', ['-p'], {
+     encoding: 'utf8'
+   }).trim();
+-  _child_process().default.execFileSync('open', [`${activeDeveloperDir}/Applications/Simulator.app`, '--args', '-CurrentDeviceUDID', simulator.udid]);
++  const simulatorApp = _path().default.join(activeDeveloperDir, 'Applications', 'Simulator.app');
++  const deviceHubApp = _path().default.join(activeDeveloperDir, '..', 'Applications', 'DeviceHub.app');
++  if (_fs().default.existsSync(simulatorApp)) {
++    _child_process().default.execFileSync('open', [simulatorApp, '--args', '-CurrentDeviceUDID', simulator.udid]);
++  } else if (_fs().default.existsSync(deviceHubApp)) {
++    _child_process().default.execFileSync('open', [`devices://device/open?id=${simulator.udid}`]);
++  }
+   if (simulator.state !== 'Booted') {
+     bootSimulator(simulator);
+   }

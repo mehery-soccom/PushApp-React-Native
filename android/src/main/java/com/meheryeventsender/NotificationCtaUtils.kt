@@ -47,6 +47,11 @@ object NotificationCtaUtils {
         return ""
     }
 
+    /** Snapshot contact_id into PendingIntent (FCM data or JS-synced prefs). */
+    private fun trackContactId(context: Context, data: Map<String, String>): String {
+        return MeheryPushTrackPrefs.resolveContactId(context, data)
+    }
+
     /** Body-tap destination when FCM data includes `notification_url` / `notificationUrl`. */
     fun resolveNotificationUrl(data: Map<String, String>): String {
         notificationUrlFromFlatMap(data)?.let { return it }
@@ -230,6 +235,7 @@ object NotificationCtaUtils {
             putExtra(NotificationActionReceiver.EXTRA_CTA_LABEL, ctaLabel.orEmpty())
             putExtra(NotificationActionReceiver.EXTRA_CTA_ID, buttonId.orEmpty())
             putExtra(NotificationActionReceiver.EXTRA_TRACK_TOKEN, trackClickToken(data))
+            putExtra(NotificationActionReceiver.EXTRA_CONTACT_ID, trackContactId(context, data))
         }
     }
 
@@ -254,6 +260,7 @@ object NotificationCtaUtils {
             putExtra(NotificationActionReceiver.EXTRA_CTA_LABEL, spec.label)
             putExtra(NotificationActionReceiver.EXTRA_CTA_ID, spec.trackId)
             putExtra(NotificationActionReceiver.EXTRA_TRACK_TOKEN, trackClickToken(data))
+            putExtra(NotificationActionReceiver.EXTRA_CONTACT_ID, trackContactId(context, data))
         }
         val stableNotifId = data["notification_id"].orEmpty().ifBlank { data["notificationId"].orEmpty() }
         return PendingIntent.getActivity(
@@ -293,6 +300,10 @@ object NotificationCtaUtils {
                 putExtra(
                     NotificationActionReceiver.EXTRA_TRACK_TOKEN,
                     trackClickToken(data)
+                )
+                putExtra(
+                    NotificationActionReceiver.EXTRA_CONTACT_ID,
+                    trackContactId(context, data)
                 )
             }
             return PendingIntent.getActivity(

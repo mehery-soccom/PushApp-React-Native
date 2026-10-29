@@ -33,6 +33,17 @@ describe('register identity extraction', () => {
     );
   });
 
+  it('extracts contact_id from device.contactId or top-level keys', () => {
+    expect(
+      extractContactIdFromRegisterResponse({
+        device: { contactId: 'camel_contact' },
+      })
+    ).toBe('camel_contact');
+    expect(
+      extractContactIdFromRegisterResponse({ contact_id: 'top_contact' })
+    ).toBe('top_contact');
+  });
+
   it('extracts session id from device.session_id', () => {
     expect(extractSessionIdFromRegisterResponse(sampleRegisterResponse)).toBe(
       '6a3a8f2eeb16f028bb4ea7a1'

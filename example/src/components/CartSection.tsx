@@ -4,7 +4,7 @@ import {
   sendCustomEvent,
   updateUserProfile,
 } from 'react-native-mehery-event-sender';
-import { PRODUCTS, productEventPayload } from '../data/products';
+import { PRODUCTS } from '../data/products';
 import {
   type CartItems,
   buildProfilePayload,
@@ -13,6 +13,13 @@ import {
   incrementTotalOrders,
   persistCart,
 } from '../utils/cartStorage';
+import {
+  addToCartManagedPayload,
+  placeOrderManagedPayload,
+  removeFromCartManagedPayload,
+  toManagedItemData,
+  viewCartManagedPayload,
+} from '../utils/managedEvents';
 import { EVENT_NAMES } from '../constants/events';
 import { ProductCard } from './ProductCard';
 
@@ -36,21 +43,38 @@ export function CartSection({ onProfileSync }: CartSectionProps) {
     loadCart();
   }, [loadCart]);
 
+  const syncProfile = async (label: string) => {
+    onProfileSync?.(`${label} — updating profile…`);
+    try {
+      const result = await updateUserProfile(await buildProfilePayload());
+      onProfileSync?.(
+        result.skipped
+          ? `${label} — profile sync skipped. ${result.message}`
+          : `${label} — profile sync sent. ${result.message}`
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      onProfileSync?.(`${label} — profile sync failed: ${message}`);
+    }
+  };
+
   const handleAdd = async (productId: string) => {
     const product = PRODUCTS.find((p) => p.productId === productId);
     if (!product) return;
 
+    const nextQty = (cartItems[productId] ?? 0) + 1;
     const next: CartItems = {
       ...cartItems,
-      [productId]: (cartItems[productId] ?? 0) + 1,
+      [productId]: nextQty,
     };
     const total = await persistCart(next);
     setCartItems(next);
     setCartTotal(total);
     sendCustomEvent(
       EVENT_NAMES.addToCart,
-      productEventPayload(product, total)
+      addToCartManagedPayload(product, nextQty, total)
     );
+    await syncProfile('Cart updated');
   };
 
   const handleRemove = async (productId: string) => {
@@ -60,19 +84,21 @@ export function CartSection({ onProfileSync }: CartSectionProps) {
     const product = PRODUCTS.find((p) => p.productId === productId);
     if (!product) return;
 
+    const remainingQty = currentQty - 1;
     const next: CartItems = { ...cartItems };
-    if (currentQty === 1) {
+    if (remainingQty <= 0) {
       delete next[productId];
     } else {
-      next[productId] = currentQty - 1;
+      next[productId] = remainingQty;
     }
     const total = await persistCart(next);
     setCartItems(next);
     setCartTotal(total);
     sendCustomEvent(
       EVENT_NAMES.removeFromCart,
-      productEventPayload(product, total)
+      removeFromCartManagedPayload(product, remainingQty, total)
     );
+    await syncProfile('Cart updated');
   };
 
   const handleViewCart = () => {
@@ -83,12 +109,12 @@ export function CartSection({ onProfileSync }: CartSectionProps) {
     }
 
     setCartVisible(true);
-    for (const [productId] of lineItems) {
+    for (const [productId, qty] of lineItems) {
       const product = PRODUCTS.find((p) => p.productId === productId);
       if (!product) continue;
       sendCustomEvent(
         EVENT_NAMES.viewCart,
-        productEventPayload(product, cartTotal)
+        viewCartManagedPayload(product, qty, cartTotal)
       );
     }
   };
@@ -101,10 +127,17 @@ export function CartSection({ onProfileSync }: CartSectionProps) {
     }
 
     const orderId = `ORD-${Date.now()}`;
-    sendCustomEvent(EVENT_NAMES.orderPlaced, {
-      orderId,
-      'latest-cart-value': cartTotal,
+    const items = lineItems.flatMap(([productId, qty]) => {
+      const product = PRODUCTS.find((p) => p.productId === productId);
+      if (!product) return [];
+      return [toManagedItemData(product, qty)];
     });
+
+    // ORDER PUT with items[] — server creates one line per item and clears cart.
+    sendCustomEvent(
+      EVENT_NAMES.orderPlaced,
+      placeOrderManagedPayload(orderId, items, cartTotal)
+    );
 
     await incrementTotalOrders();
     await clearCart();
@@ -112,18 +145,7 @@ export function CartSection({ onProfileSync }: CartSectionProps) {
     setCartTotal(0);
     setCartVisible(false);
 
-    onProfileSync?.('Updating profile after order…');
-    try {
-      const result = await updateUserProfile(await buildProfilePayload());
-      onProfileSync?.(
-        result.skipped
-          ? `Order placed — profile sync skipped. ${result.message}`
-          : `Order placed — profile sync sent. ${result.message}`
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      onProfileSync?.(`Order placed — profile sync failed: ${message}`);
-    }
+    await syncProfile('Order placed');
   };
 
   return (

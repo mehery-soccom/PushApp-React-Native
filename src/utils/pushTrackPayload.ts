@@ -113,6 +113,9 @@ export function buildPushTrackBody(
   options?: {
     cta?: { ctaId: string; button_id: string };
     ctaId?: string;
+    contact_id?: string;
+    p_id?: string;
+    session_id?: string;
   }
 ): Record<string, unknown> {
   const body: Record<string, unknown> = { event };
@@ -126,6 +129,18 @@ export function buildPushTrackBody(
   if (messageId) body.messageId = messageId;
   if (filterId) body.filterId = filterId;
   if (notificationId) body.notificationId = notificationId;
+
+  const contactId =
+    normalizedString(options?.contact_id) ||
+    normalizedString(merged.contact_id) ||
+    normalizedString(merged.contactId);
+  if (contactId) body.contact_id = contactId;
+
+  const profileId = normalizedString(options?.p_id);
+  if (profileId) body.p_id = profileId;
+
+  const sessionId = normalizedString(options?.session_id);
+  if (sessionId) body.session_id = sessionId;
 
   if (options?.cta) {
     body.data = {

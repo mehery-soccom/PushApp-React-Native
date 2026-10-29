@@ -18,7 +18,10 @@ import {
   isTransparentPollBackground,
 } from '../helpers/pollTransparency';
 import { getApiBaseUrl } from '../helpers/tenantContext';
-import { buildInAppTrackData } from '../utils/inAppTrack';
+import {
+  buildInAppTrackData,
+  buildInAppTrackPayload,
+} from '../utils/inAppTrack';
 import {
   buildCtaData,
   buildSyntheticCtaData,
@@ -86,13 +89,13 @@ export default function BottomSheetPoll({
       data = { ctaId: value };
     }
 
-    const payload = {
+    const payload = await buildInAppTrackPayload({
       messageId,
       filterId,
-      ...(journiId ? { journiId } : {}),
+      journiId,
       event: eventType,
       data,
-    };
+    });
 
     sdkLog.log('📤 Sending track event:', payload);
     const commonHeaders = await buildCommonHeaders();

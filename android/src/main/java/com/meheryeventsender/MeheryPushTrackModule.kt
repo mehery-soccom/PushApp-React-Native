@@ -4,7 +4,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 
-/** RN bridge: cache API base URL for [NotificationCtaUtils.trackBaseUrl] when FCM has no host. */
+/** RN bridge: cache API base URL / contact_id for background push track when FCM has no host. */
 class MeheryPushTrackModule(
     private val reactContext: ReactApplicationContext
 ) : ReactContextBaseJavaModule(reactContext) {
@@ -14,6 +14,31 @@ class MeheryPushTrackModule(
     @ReactMethod
     fun setApiBaseUrl(url: String) {
         MeheryPushTrackPrefs.setApiBaseUrl(reactContext, url)
+    }
+
+    @ReactMethod
+    fun setContactId(contactId: String) {
+        MeheryPushTrackPrefs.setContactId(reactContext, contactId)
+    }
+
+    @ReactMethod
+    fun setUserId(userId: String) {
+        MeheryPushTrackPrefs.setUserId(reactContext, userId)
+    }
+
+    @ReactMethod
+    fun setDeviceId(deviceId: String) {
+        MeheryPushTrackPrefs.setDeviceId(reactContext, deviceId)
+    }
+
+    @ReactMethod
+    fun setProfileId(profileId: String) {
+        MeheryPushTrackPrefs.setProfileId(reactContext, profileId)
+    }
+
+    @ReactMethod
+    fun setSessionId(sessionId: String) {
+        MeheryPushTrackPrefs.setSessionId(reactContext, sessionId)
     }
 
     @ReactMethod

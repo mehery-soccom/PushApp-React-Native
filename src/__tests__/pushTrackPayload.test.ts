@@ -144,6 +144,7 @@ describe('pushTrackPayload', () => {
       notificationId: 'notif-1',
     });
     expect(opened).not.toHaveProperty('receivedAt');
+    expect(opened).not.toHaveProperty('contact_id');
 
     const cta = buildPushTrackBody('cta', merged, {
       cta: { ctaId: 'buy_now', button_id: 'PUSHAPP_BUY' },
@@ -157,6 +158,52 @@ describe('pushTrackPayload', () => {
       data: { ctaId: 'buy_now', button_id: 'PUSHAPP_BUY' },
     });
     expect(cta).not.toHaveProperty('receivedAt');
+    expect(cta).not.toHaveProperty('contact_id');
+  });
+
+  it('buildPushTrackBody includes contact_id when provided', () => {
+    const merged = {
+      message_id: 'msg-1',
+      t: 'jwt',
+    };
+    const opened = buildPushTrackBody('opened', merged, {
+      contact_id: '  user_device_1  ',
+    });
+    expect(opened.contact_id).toBe('user_device_1');
+
+    const blank = buildPushTrackBody('opened', merged, { contact_id: '  ' });
+    expect(blank).not.toHaveProperty('contact_id');
+  });
+
+  it('buildPushTrackBody includes p_id and session_id when provided', () => {
+    const merged = {
+      message_id: 'msg-1',
+      t: 'jwt',
+    };
+    const body = buildPushTrackBody('cta', merged, {
+      contact_id: 'user_device_1',
+      p_id: '  profile-doc-1  ',
+      session_id: '  sess-abc  ',
+      cta: { ctaId: 'Buy now', button_id: 'PUSHAPP_ACTION_1' },
+    });
+    expect(body.p_id).toBe('profile-doc-1');
+    expect(body.session_id).toBe('sess-abc');
+
+    const blank = buildPushTrackBody('opened', merged, {
+      p_id: '  ',
+      session_id: '',
+    });
+    expect(blank).not.toHaveProperty('p_id');
+    expect(blank).not.toHaveProperty('session_id');
+  });
+
+  it('buildPushTrackBody falls back to merged.contact_id', () => {
+    const body = buildPushTrackBody(
+      'cta',
+      { t: 'jwt', contact_id: 'from_payload' },
+      { cta: { ctaId: 'Sell', button_id: 'PUSHAPP_SELL' } }
+    );
+    expect(body.contact_id).toBe('from_payload');
   });
 
   it('resolvePushCtaFields maps PUSHAPP_SAVE to Save via title1/action1', () => {

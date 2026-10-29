@@ -24,6 +24,29 @@ const RESERVED_INFO_KEYS = new Set([
   'devices',
 ]);
 
+/**
+ * Pushapp stores a string name as `name.firstname`, but search and templates
+ * read `name.firstName`. An object is saved unchanged, and the update rejects
+ * an object that has no non-empty `name.name`.
+ */
+function toProfileNameField(
+  name: unknown
+): Record<string, unknown> | undefined {
+  if (typeof name === 'string') {
+    const trimmed = name.trim();
+    if (!trimmed) return undefined;
+    return {
+      name: trimmed,
+      firstName: trimmed,
+      formattedName: trimmed,
+    };
+  }
+  if (name && typeof name === 'object' && !Array.isArray(name)) {
+    return name as Record<string, unknown>;
+  }
+  return undefined;
+}
+
 function normalizePhones(value: unknown): ProfilePhone[] | undefined {
   if (value == null) return undefined;
 
@@ -246,14 +269,9 @@ export function buildProfileApiPayload(
   const additionalInfo: Record<string, unknown> = {};
   const payload: ProfileApiPayload = {};
 
-  if (info.name !== undefined && info.name !== null) {
-    const name = info.name;
-    if (
-      typeof name === 'string' ||
-      (typeof name === 'object' && !Array.isArray(name))
-    ) {
-      payload.name = name as string | Record<string, unknown>;
-    }
+  const name = toProfileNameField(info.name);
+  if (name) {
+    payload.name = name;
   }
 
   const phones = normalizePhones(info.phones ?? info.mobile ?? info.phone);

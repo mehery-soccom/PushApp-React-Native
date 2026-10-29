@@ -3,10 +3,10 @@ export const EVENT_NAMES = {
   signUp: 'jr_Sign_Up',
   preLoginButton1: 'jr_pre_login_button_1',
   preLoginButton2: 'jr_pre_login_button_2',
-  addToCart: 'jr_Add_To_Cart',
-  removeFromCart: 'jr_Remove_from_Cart',
+  addToCart: 'Managed_add_to_cart',
+  removeFromCart: 'Managed_remove_from_cart',
   orderPlaced: 'jr_order_placed',
-  viewCart: 'jr_view_cart',
+  viewCart: 'Managed_view_cart',
 } as const;
 
 /** SDK automatic lifecycle events — fired by initSdk / OnUserLogin, not manually. */
@@ -35,37 +35,42 @@ export type EventPropertyDef = {
   keyboardType?: 'default' | 'numeric';
 };
 
+/** Form fields use managed-events allowed keys (managed-events-sdk.md). */
 export const EVENT_PROPERTY_SCHEMAS: Record<
   CommerceEventName,
   EventPropertyDef[]
 > = {
   [EVENT_NAMES.addToCart]: [
-    { key: 'latest-cart-value', label: 'latest-cart-value', keyboardType: 'numeric' },
-    { key: 'productCategory', label: 'productCategory' },
-    { key: 'productId', label: 'productId' },
-    { key: 'product-value', label: 'product-value', keyboardType: 'numeric' },
-    { key: 'item-name', label: 'item-name' },
+    { key: 'item_id', label: 'item_id' },
+    { key: 'item_name', label: 'item_name' },
+    { key: 'item_brand', label: 'item_brand' },
+    { key: 'item_category', label: 'item_category' },
     { key: 'price', label: 'price', keyboardType: 'numeric' },
-    { key: 'mrp', label: 'mrp', keyboardType: 'numeric' },
+    { key: 'original_price', label: 'original_price', keyboardType: 'numeric' },
+    { key: 'quantity', label: 'quantity', keyboardType: 'numeric' },
+    { key: 'value', label: 'value (cart total)', keyboardType: 'numeric' },
   ],
   [EVENT_NAMES.removeFromCart]: [
-    { key: 'latest-cart-value', label: 'latest-cart-value', keyboardType: 'numeric' },
-    { key: 'productCategory', label: 'productCategory' },
-    { key: 'productId', label: 'productId' },
-    { key: 'product-value', label: 'product-value', keyboardType: 'numeric' },
-    { key: 'item-name', label: 'item-name' },
-    { key: 'price', label: 'price', keyboardType: 'numeric' },
-    { key: 'mrp', label: 'mrp', keyboardType: 'numeric' },
+    { key: 'item_id', label: 'item_id' },
+    { key: 'quantity', label: 'quantity (0 = DELETE line)', keyboardType: 'numeric' },
+    { key: 'value', label: 'value (cart total)', keyboardType: 'numeric' },
   ],
   [EVENT_NAMES.orderPlaced]: [
-    { key: 'orderId', label: 'orderId' },
-    { key: 'latest-cart-value', label: 'latest-cart-value', keyboardType: 'numeric' },
+    { key: 'order_id', label: 'order_id' },
+    { key: 'value', label: 'value', keyboardType: 'numeric' },
+    { key: 'item_id', label: 'item_id (line)' },
+    { key: 'item_name', label: 'item_name (line)' },
+    { key: 'item_brand', label: 'item_brand (line)' },
+    { key: 'price', label: 'price (line)', keyboardType: 'numeric' },
+    { key: 'quantity', label: 'quantity (line)', keyboardType: 'numeric' },
   ],
   [EVENT_NAMES.viewCart]: [
-    { key: 'latest-cart-value', label: 'latest-cart-value', keyboardType: 'numeric' },
-    { key: 'productCategory', label: 'productCategory' },
-    { key: 'productId', label: 'productId' },
-    { key: 'product-value', label: 'product-value', keyboardType: 'numeric' },
-    { key: 'item-name', label: 'item-name' },
+    { key: 'item_id', label: 'item_id' },
+    { key: 'item_name', label: 'item_name' },
+    { key: 'item_brand', label: 'item_brand' },
+    { key: 'item_category', label: 'item_category' },
+    { key: 'price', label: 'price', keyboardType: 'numeric' },
+    { key: 'quantity', label: 'quantity', keyboardType: 'numeric' },
+    { key: 'value', label: 'value (cart total)', keyboardType: 'numeric' },
   ],
 };

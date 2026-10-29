@@ -5,7 +5,10 @@ import { hidePollOverlay } from './PollOverlay';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
 import { sdkLog } from '../helpers/sdkLogger';
-import { buildInAppTrackData } from '../utils/inAppTrack';
+import {
+  buildInAppTrackData,
+  buildInAppTrackPayload,
+} from '../utils/inAppTrack';
 import {
   buildCtaData,
   buildSyntheticCtaData,
@@ -77,13 +80,13 @@ export default function RoadblockPoll({
       data = { ctaId: value };
     }
 
-    const payload = {
+    const payload = await buildInAppTrackPayload({
       messageId,
       filterId,
-      ...(journiId ? { journiId } : {}),
+      journiId,
       event: eventType,
       data,
-    };
+    });
 
     sdkLog.log('📤 Sending track event:', payload);
     const commonHeaders = await buildCommonHeaders();

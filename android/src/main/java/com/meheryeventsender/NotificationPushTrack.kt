@@ -1,5 +1,6 @@
 package com.meheryeventsender
 
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import java.net.HttpURLConnection
@@ -18,6 +19,7 @@ object NotificationPushTrack {
     }
 
     fun sendPushTrackEvent(
+        context: Context,
         baseUrl: String,
         actionType: String,
         messageId: String,
@@ -25,7 +27,8 @@ object NotificationPushTrack {
         notificationId: String,
         ctaLabel: String,
         trackToken: String = "",
-        buttonId: String = ""
+        buttonId: String = "",
+        contactIdOverride: String = ""
     ) {
         if (trackToken.isBlank()) {
             Log.w(
@@ -34,6 +37,20 @@ object NotificationPushTrack {
                     "actionType=${actionType.ifBlank { "opened" }}"
             )
             return
+        }
+
+        val contactId = MeheryPushTrackPrefs.resolveContactId(
+            context,
+            intentContactId = contactIdOverride
+        )
+        val profileId = MeheryPushTrackPrefs.getProfileId(context)
+        val sessionId = MeheryPushTrackPrefs.getSessionId(context)
+        if (contactId.isBlank()) {
+            Log.w(
+                TAG,
+                "Push track contact_id missing (prefs empty / not synced from JS). " +
+                    "actionType=${actionType.ifBlank { "opened" }}"
+            )
         }
 
         Thread {
@@ -54,6 +71,9 @@ object NotificationPushTrack {
                 if (messageId.isNotBlank()) payload.put("messageId", messageId)
                 if (filterId.isNotBlank()) payload.put("filterId", filterId)
                 if (notificationId.isNotBlank()) payload.put("notificationId", notificationId)
+                if (contactId.isNotBlank()) payload.put("contact_id", contactId)
+                if (profileId.isNotBlank()) payload.put("p_id", profileId)
+                if (sessionId.isNotBlank()) payload.put("session_id", sessionId)
                 if (event == "cta" && (ctaLabel.isNotBlank() || buttonId.isNotBlank())) {
                     val data = JSONObject()
                     data.put("ctaId", ctaLabel)
@@ -64,6 +84,8 @@ object NotificationPushTrack {
                     }
                 }
 
+                Log.i(TAG, "Push track click POST body: $payload")
+
                 conn.outputStream.use { os ->
                     os.write(payload.toString().toByteArray(Charsets.UTF_8))
                 }
@@ -71,7 +93,7 @@ object NotificationPushTrack {
                 if (code in 200..299) {
                     Log.i(
                         TAG,
-                        "Push track OK HTTP $code event=$event endpoint=$endpoint"
+                        "Push track OK HTTP $code event=$event hasContactId=${contactId.isNotBlank()} endpoint=$endpoint"
                     )
                 } else {
                     val errBody = try {

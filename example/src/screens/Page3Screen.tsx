@@ -10,14 +10,21 @@ import {
   NativeModules,
   NativeEventEmitter,
 } from 'react-native';
-import { updatePushToken } from 'react-native-mehery-event-sender';
+import {
+  updatePushToken,
+  updateUserProfile,
+} from 'react-native-mehery-event-sender';
 import { PAGE_CONFIGS } from '../constants/pages';
 import { PageCtaButtons } from '../components/PageCtaButtons';
 import {
   PageInlinePollPlaceholder,
   PageTooltipPollPlaceholder,
 } from '../components/PagePollPlaceholders';
-import { getProfileName } from '../utils/cartStorage';
+import {
+  buildProfilePayload,
+  getProfileName,
+  setProfileName,
+} from '../utils/cartStorage';
 import { loadPushTokens } from '../utils/pushTokens';
 import { closeExamplePage, openExamplePage } from '../utils/pageLifecycle';
 import { DEEP_LINK_URLS } from '../utils/deepLinks';
@@ -26,6 +33,7 @@ import { appStyles } from '../styles/appStyles';
 type Page3ScreenProps = {
   userId: string;
   profileStatus: string | null;
+  onProfileSync: (status: string) => void;
   onLogout: () => void;
 };
 
@@ -34,9 +42,12 @@ const config = PAGE_CONFIGS.account;
 export function Page3Screen({
   userId,
   profileStatus,
+  onProfileSync,
   onLogout,
 }: Page3ScreenProps) {
-  const [storedName, setStoredName] = useState('');
+  const [nameDraft, setNameDraft] = useState('');
+  const [savedName, setSavedName] = useState('');
+  const [savingName, setSavingName] = useState(false);
   const [apnsToken, setApnsToken] = useState('');
   const [fcmToken, setFcmToken] = useState('');
   const [tokensLoading, setTokensLoading] = useState(true);
@@ -93,12 +104,40 @@ export function Page3Screen({
   useEffect(() => {
     let cancelled = false;
     getProfileName().then((name) => {
-      if (!cancelled) setStoredName(name);
+      if (cancelled) return;
+      setSavedName(name);
+      setNameDraft(name);
     });
     return () => {
       cancelled = true;
     };
   }, [userId]);
+
+  const nameChanged = nameDraft.trim() !== savedName.trim();
+
+  const handleSaveName = async () => {
+    const trimmed = nameDraft.trim();
+    if (savingName || trimmed === savedName.trim()) return;
+
+    setSavingName(true);
+    onProfileSync('Saving name and updating profile…');
+    try {
+      await setProfileName(trimmed);
+      setSavedName(trimmed);
+      setNameDraft(trimmed);
+      const result = await updateUserProfile(await buildProfilePayload());
+      onProfileSync(
+        result.skipped
+          ? `Name saved — profile sync skipped. ${result.message}`
+          : `Name saved — profile sync sent. ${result.message}`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      onProfileSync(`Name saved locally — profile sync failed: ${message}`);
+    } finally {
+      setSavingName(false);
+    }
+  };
 
   const handleUpdateToken = async () => {
     try {
@@ -127,11 +166,28 @@ export function Page3Screen({
       <View style={appStyles.profileSection}>
         <Text style={appStyles.label}>Profile</Text>
         <Text style={appStyles.profileHint}>
-          Name: {storedName.trim() ? storedName : 'No name set'}
+          Name is stored on this device. Saving a different name updates the
+          profile.
         </Text>
+        <TextInput
+          style={appStyles.input}
+          placeholder="Your name"
+          value={nameDraft}
+          onChangeText={setNameDraft}
+          autoCapitalize="words"
+          autoCorrect={false}
+          editable={!savingName}
+          returnKeyType="done"
+          onSubmitEditing={handleSaveName}
+        />
+        <Button
+          title={savingName ? 'Saving name…' : 'Save name'}
+          onPress={handleSaveName}
+          disabled={savingName || !nameChanged}
+        />
         <Text style={appStyles.profileHint}>
-          Profile syncs automatically on home load and after Place Order with
-          registration_completed, total_orders, and latest-cart-value.
+          Profile also syncs on home load, cart changes, and Place Order with
+          registration_completed, total_orders, and latest_cart_value.
         </Text>
         {profileStatus ? (
           <Text style={appStyles.profileStatus}>{profileStatus}</Text>

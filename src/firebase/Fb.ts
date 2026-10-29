@@ -9,11 +9,13 @@ import { getApiBaseUrl, extractChannelSegment } from '../helpers/tenantContext';
 import { waitForGeoIp } from '../utils/geoIpContext';
 import { sdkLog } from '../helpers/sdkLogger';
 import {
+  getEffectiveContactId,
   hasStoredGuestUserId,
   isAcceptableEventUserId,
   persistRegisterIdentity,
   persistRegisteredChannelId,
 } from '../utils/user';
+import { syncAndroidPushTrackIdentity } from '../utils/androidPushTrackSync';
 import {
   guestUserIdFromRegisterResponse,
   tryParseRegisterResponse,
@@ -35,6 +37,7 @@ import {
   replySilentKeepAlive,
 } from '../utils/silentKeepAlive';
 import { trackAppEnter } from '../events/default/LifecycleEvents';
+import { trackNotificationReceived } from '../events/default/notificationReceived';
 
 import { NativeModules, Platform } from 'react-native';
 import { ensureAndroidNotificationPermission } from '../native/LiveActivity';
@@ -773,10 +776,40 @@ async function trackPushEvent(
     return;
   }
 
-  const payload = buildPushTrackBody(
-    eventType,
-    merged,
-    cta ? { cta } : undefined
+  const deviceId = (await AsyncStorage.getItem('device_id'))?.trim() ?? '';
+  const userId =
+    (await AsyncStorage.getItem('user_id'))?.trim() ||
+    (await AsyncStorage.getItem('registered_user_id'))?.trim() ||
+    '';
+  const contactId = deviceId
+    ? await getEffectiveContactId(deviceId)
+    : ((await AsyncStorage.getItem('contact_id'))?.trim() ?? '');
+  const identityPairs = await AsyncStorage.multiGet(['p_id', 'sessionId']);
+  const profileId = (identityPairs[0]?.[1] || '').trim();
+  const sessionId = (identityPairs[1]?.[1] || '').trim();
+  syncAndroidPushTrackIdentity({
+    contactId: contactId || undefined,
+    userId: userId || undefined,
+    deviceId: deviceId || undefined,
+    p_id: profileId || undefined,
+    session_id: sessionId || undefined,
+  });
+  if (!contactId) {
+    sdkLog.warn(
+      '[PushTrack] contact_id missing for',
+      eventType,
+      '(register/login may not have completed)'
+    );
+  }
+  const payload = buildPushTrackBody(eventType, merged, {
+    ...(cta ? { cta } : {}),
+    ...(contactId ? { contact_id: contactId } : {}),
+    ...(profileId ? { p_id: profileId } : {}),
+    ...(sessionId ? { session_id: sessionId } : {}),
+  });
+  sdkLog.log(
+    '[PushTrack] click POST body:',
+    JSON.stringify(payload)
   );
 
   try {
@@ -872,6 +905,12 @@ function ensureBackgroundMessageHandlerRegistered(): void {
       null;
 
     if (Platform.OS === 'android') {
+      void trackNotificationReceived({
+        ...(data as Record<string, unknown>),
+        messageId: remoteMessage?.messageId,
+        title,
+        body: message,
+      });
       sdkLog.log(
         '📲 Android background: native MyFirebaseMessagingService builds the tray notification; this log matches foreground field resolution (JS runs for data/headless messages).'
       );
@@ -1225,6 +1264,15 @@ export function setupForegroundNotificationListener(): () => void {
     }
     const { title, message } = resolvePushNotificationText(remoteMessage, data);
 
+    if (Platform.OS === 'android') {
+      void trackNotificationReceived({
+        ...(data as Record<string, unknown>),
+        messageId: remoteMessage.messageId,
+        title,
+        body: message,
+      });
+    }
+
     const image =
       remoteMessage.notification?.android?.imageUrl ||
       remoteMessage.notification?.image ||
@@ -1269,6 +1317,7 @@ export function setupForegroundNotificationListener(): () => void {
           category: category || 'CAROUSEL_CATEGORY',
           data: {
             ...data,
+            messageId: remoteMessage.messageId || data.messageId,
             image_urls: carouselImages,
             imageUrls: carouselImages,
             images: carouselImages,
@@ -1361,7 +1410,10 @@ export function setupForegroundNotificationListener(): () => void {
       );
       const imageList =
         carouselImages.length > 0 ? carouselImages : image ? [image] : [];
-      const iosData: Record<string, unknown> = { ...data };
+      const iosData: Record<string, unknown> = {
+        ...data,
+        messageId: remoteMessage.messageId || data.messageId,
+      };
       if (image) {
         iosData.image = image;
         iosData.image_url = image;

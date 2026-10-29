@@ -27,6 +27,10 @@ import {
   tryParseRegisterResponse,
 } from './registerResponse';
 import { waitForSdkReady } from './sdkReadiness';
+import {
+  syncAndroidPushTrackContactId,
+  syncAndroidPushTrackIdentity,
+} from './androidPushTrackSync';
 import { reauthenticateWebSocket } from '../socket/WebSock';
 
 export {
@@ -104,7 +108,7 @@ async function rollbackPreLinkUserIdIfNeeded(): Promise<void> {
 
 export async function persistRegisterIdentity(data: unknown): Promise<void> {
   const registeredUserId = extractUserIdFromRegisterResponse(data);
-  const contactId = extractContactIdFromRegisterResponse(data);
+  let contactId = extractContactIdFromRegisterResponse(data);
   const sessionId = extractSessionIdFromRegisterResponse(data);
   const profileId = extractProfileIdFromRegisterResponse(data);
   const valuesToStore: [string, string][] = [];
@@ -112,6 +116,16 @@ export async function persistRegisterIdentity(data: unknown): Promise<void> {
   if (registeredUserId) {
     valuesToStore.push([REGISTERED_USER_ID_STORAGE_KEY, registeredUserId]);
   }
+
+  // Register may omit contact_id; synthesize userId_deviceId (same as getEffectiveContactId).
+  if (!contactId && registeredUserId) {
+    const deviceId = (await AsyncStorage.getItem('device_id'))?.trim() ?? '';
+    if (deviceId) {
+      contactId = `${registeredUserId}_${deviceId}`;
+      sdkLog.log('✅ contact_id synthesized from register user+device:', contactId);
+    }
+  }
+
   if (contactId) {
     valuesToStore.push(['contact_id', contactId]);
   }
@@ -127,9 +141,22 @@ export async function persistRegisterIdentity(data: unknown): Promise<void> {
     if (registeredUserId) {
       sdkLog.log('✅ registered_user_id stored:', registeredUserId);
     }
+    if (contactId) {
+      sdkLog.log('✅ contact_id stored:', contactId);
+    }
     if (profileId) {
       sdkLog.log('✅ p_id stored:', profileId);
     }
+  }
+  if (contactId || sessionId || profileId) {
+    const deviceId = (await AsyncStorage.getItem('device_id'))?.trim() ?? '';
+    syncAndroidPushTrackIdentity({
+      contactId: contactId || undefined,
+      userId: registeredUserId || undefined,
+      deviceId: deviceId || undefined,
+      p_id: profileId || undefined,
+      session_id: sessionId || undefined,
+    });
   }
 }
 
@@ -178,7 +205,11 @@ export async function getEffectiveContactId(deviceId: string): Promise<string> {
   const effectiveUserId = await getEffectiveUserId();
   if (!effectiveUserId) return '';
 
-  return `${effectiveUserId}_${trimmedDeviceId}`;
+  const synthesized = `${effectiveUserId}_${trimmedDeviceId}`;
+  // Persist so JS + native push/track include contact_id (same shape polls already used).
+  await AsyncStorage.setItem('contact_id', synthesized);
+  syncAndroidPushTrackContactId(synthesized);
+  return synthesized;
 }
 
 function extractSessionIdFromLinkResponse(data: unknown): string {
@@ -440,6 +471,16 @@ export async function OnUserLogin(user_id: string): Promise<OnUserLoginResult> {
           host: currentHostRoot,
         })
       );
+      // Re-sync prefs even on skip — upgrades / cleared native cache can drop it.
+      const storedProfileId =
+        (await AsyncStorage.getItem(PROFILE_ID_STORAGE_KEY))?.trim() ?? '';
+      syncAndroidPushTrackIdentity({
+        contactId: storedContactId || undefined,
+        userId: loginUserId || undefined,
+        deviceId: device_id || undefined,
+        p_id: storedProfileId || undefined,
+        session_id: storedSessionId || undefined,
+      });
       await flushPendingCustomEvents();
       return {
         success: true,
@@ -596,6 +637,13 @@ export async function OnUserLogin(user_id: string): Promise<OnUserLoginResult> {
       await AsyncStorage.multiSet(valuesToStore);
       sdkLog.log('🟢 UserLoggedIn set to true');
       sdkLog.log('✅ contact_id stored:', finalContactId);
+      syncAndroidPushTrackIdentity({
+        contactId: finalContactId || undefined,
+        userId: loginUserId || undefined,
+        deviceId: device_id || undefined,
+        p_id: profileFromLink || undefined,
+        session_id: sessionFromLink || undefined,
+      });
       if (sessionFromLink) {
         sdkLog.log('✅ session_id stored from /device/link');
       }
@@ -664,6 +712,12 @@ export async function OnUserLogOut(user_id: string) {
     'lastRegisteredState',
     'UserRegistered',
   ]);
+  syncAndroidPushTrackIdentity({
+    contactId: '',
+    p_id: '',
+    session_id: '',
+  });
+  syncAndroidPushTrackContactId('');
 
   sdkLog.log('✅ Device is being delinked with ID:', device_id);
 

@@ -27,9 +27,19 @@ export function extractUserIdFromRegisterResponse(data: unknown): string {
 
 export function extractContactIdFromRegisterResponse(data: unknown): string {
   if (!data || typeof data !== 'object') return '';
-  const device = (data as Record<string, unknown>).device;
+  const root = data as Record<string, unknown>;
+  const device = root.device;
   if (device && typeof device === 'object') {
-    const contactId = (device as Record<string, unknown>).contact_id;
+    const d = device as Record<string, unknown>;
+    for (const key of ['contact_id', 'contactId'] as const) {
+      const contactId = d[key];
+      if (typeof contactId === 'string' && contactId.trim()) {
+        return contactId.trim();
+      }
+    }
+  }
+  for (const key of ['contact_id', 'contactId'] as const) {
+    const contactId = root[key];
     if (typeof contactId === 'string' && contactId.trim()) {
       return contactId.trim();
     }

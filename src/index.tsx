@@ -39,6 +39,7 @@ export {
   trackAppEnter,
   trackDefaultLifecycleEvents,
 } from './events/default/LifecycleEvents';
+export { trackNotificationReceived } from './events/default/notificationReceived';
 export type { TrackAppEnterOptions } from './events/default/LifecycleEvents';
 
 export {
@@ -90,6 +91,7 @@ import {
   trackAppEnter,
   trackDefaultLifecycleEvents,
 } from './events/default/LifecycleEvents';
+import { trackNotificationReceived } from './events/default/notificationReceived';
 import { markSdkReady, resetSdkReady } from './utils/sdkReadiness';
 
 export { TooltipPollContainer } from './components/TooltipPollContainer';
@@ -125,6 +127,10 @@ import {
   type PushTrackEvent,
 } from './utils/pushTrackPayload';
 import {
+  syncAndroidPushTrackContactId,
+  syncAndroidPushTrackIdentity,
+} from './utils/androidPushTrackSync';
+import {
   resolvePushCtaFields,
   type CtaTrackFields,
 } from './utils/ctaTrackPayload';
@@ -133,6 +139,7 @@ import {
   isSilentKeepAlive,
   replySilentKeepAlive,
 } from './utils/silentKeepAlive';
+import { getEffectiveContactId, getEffectiveUserId } from './utils/user';
 
 const { PushTokenManager } = NativeModules;
 // const pushEmitter = PushTokenManager
@@ -221,7 +228,30 @@ const trackIosPushEvent = async (
     return;
   }
 
-  const body = buildPushTrackBody(event, merged, cta ? { cta } : undefined);
+  const deviceId = (await AsyncStorage.getItem('device_id'))?.trim() ?? '';
+  const contactId = deviceId
+    ? await getEffectiveContactId(deviceId)
+    : ((await AsyncStorage.getItem('contact_id'))?.trim() ?? '');
+  const identityPairs = await AsyncStorage.multiGet(['p_id', 'sessionId']);
+  const profileId = (identityPairs[0]?.[1] || '').trim();
+  const sessionId = (identityPairs[1]?.[1] || '').trim();
+  const body = buildPushTrackBody(event, merged, {
+    ...(cta ? { cta } : {}),
+    ...(contactId ? { contact_id: contactId } : {}),
+    ...(profileId ? { p_id: profileId } : {}),
+    ...(sessionId ? { session_id: sessionId } : {}),
+  });
+  sdkLog.log(
+    '[PushTrack] iOS click POST body:',
+    JSON.stringify(body)
+  );
+  if (!contactId) {
+    sdkLog.warn(
+      '[PushTrack] iOS contact_id missing for',
+      event,
+      '(register/login may not have completed)'
+    );
+  }
 
   try {
     const commonHeaders = await buildCommonHeaders();
@@ -277,7 +307,9 @@ export const addNotificationDebugListener = () => {
     const isDismiss =
       actionId === 'com.apple.UNNotificationDismissActionIdentifier';
 
-    if (actionId && !isDefaultTap && !isDismiss) {
+    if (!actionId) {
+      void trackNotificationReceived(merged);
+    } else if (!isDefaultTap && !isDismiss) {
       const cta = resolvePushCtaFields(actionId, merged);
       await trackIosPushEvent('cta', merged, cta);
     } else if (isDefaultTap) {
@@ -436,6 +468,7 @@ export const initSdk = async (
         'UserLoggedIn',
         'mehery_registered_channel_id',
       ]);
+      syncAndroidPushTrackContactId('');
     }
 
     // Keep raw identifier as channel_id for API compatibility.
@@ -479,6 +512,26 @@ export const initSdk = async (
         } catch (e) {
           sdkLog.warn('MeheryPushTrack.setApiBaseUrl failed', e);
         }
+      }
+      // Warm native prefs for background CTA track (contact_id + user/device fallback).
+      const deviceIdForContact =
+        (await AsyncStorage.getItem('device_id'))?.trim() ?? '';
+      const storedContactId = deviceIdForContact
+        ? await getEffectiveContactId(deviceIdForContact)
+        : ((await AsyncStorage.getItem('contact_id'))?.trim() ?? '');
+      const userIdForContact = (await getEffectiveUserId())?.trim() ?? '';
+      const identityPairs = await AsyncStorage.multiGet(['p_id', 'sessionId']);
+      const profileIdForContact = (identityPairs[0]?.[1] || '').trim();
+      const sessionIdForContact = (identityPairs[1]?.[1] || '').trim();
+      syncAndroidPushTrackIdentity({
+        contactId: storedContactId || undefined,
+        userId: userIdForContact || undefined,
+        deviceId: deviceIdForContact || undefined,
+        p_id: profileIdForContact || undefined,
+        session_id: sessionIdForContact || undefined,
+      });
+      if (storedContactId) {
+        syncAndroidPushTrackContactId(storedContactId);
       }
 
       await requestUserPermission();

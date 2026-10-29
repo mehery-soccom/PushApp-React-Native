@@ -488,6 +488,54 @@ Example payload after correct server mapping:
 
 **iOS host apps:** The npm package does not ship `AppDelegate`. Merge `urlForNotificationBody` and the default-action URL open from the example app into your target’s `AppDelegate` (see [Example app and iOS extensions](#example-app-and-ios-extensions)).
 
+### Push open / CTA track
+
+When the user taps the notification body or a CTA button, the SDK sends:
+
+`POST {apiBase}/v1/notification/push/track`
+
+| Field | When | Notes |
+| --- | --- | --- |
+| `event` | always | `"opened"` (body tap) or `"cta"` (action button) |
+| `t` | always (required) | Click JWT from FCM/APNs (`t` / `click_token`) |
+| `messageId` | if present | From `messageId` / `message_id` |
+| `filterId` | if present | From `filterId` / `filter_id` |
+| `notificationId` | if present | From `notification_id` |
+| `contact_id` | when available | From register/link (`device.contact_id`), or synthesized `userId_deviceId` (same as polls). Omitted only if neither is available yet. |
+| `data.ctaId` | `cta` only | Button label / semantic id |
+| `data.button_id` | `cta` only | Machine action id (e.g. `PUSHAPP_ACTION_1`) |
+
+**iOS:** Track runs in JavaScript (`trackIosPushEvent` / `trackPushEvent`) after the host forwards the tap via `PushNotificationEvent`.
+
+**Android:** Foreground taps use the same JS path. Background / killed-state taps use native `NotificationPushTrack`, which includes `contact_id` from SharedPreferences (synced at `initSdk`, register, login, and whenever `getEffectiveContactId` resolves) and/or a snapshot baked into the notification PendingIntent.
+
+Example opened body:
+
+```json
+{
+  "event": "opened",
+  "t": "<click-jwt>",
+  "messageId": "msg-1",
+  "filterId": "flt-1",
+  "notificationId": "notif-1",
+  "contact_id": "user_device_abc"
+}
+```
+
+Example CTA body:
+
+```json
+{
+  "event": "cta",
+  "t": "<click-jwt>",
+  "messageId": "msg-1",
+  "filterId": "flt-1",
+  "notificationId": "notif-1",
+  "contact_id": "user_device_abc",
+  "data": { "ctaId": "Buy now", "button_id": "PUSHAPP_ACTION_1" }
+}
+```
+
 **Silent keep-alive (no blank banner):** The server may send a data-only push with `type` / `data.type` = `silent_keepalive` (no title/body). The SDK replies with `POST /pushapp/silent/ping` and must **not** show a notification. Host `AppDelegate` must treat that type as silent:
 
 1. Forward the payload to JS (`PushNotificationEvent` / `PushTokenManager.sendNotificationEventOrQueue`).

@@ -130,6 +130,7 @@ export function PostLoginShell({
           <Page3Screen
             userId={userId}
             profileStatus={profileStatus}
+            onProfileSync={setProfileStatus}
             onLogout={handleLogout}
           />
         );

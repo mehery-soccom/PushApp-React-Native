@@ -127,7 +127,7 @@ PODS:
   - hermes-engine (0.80.0):
     - hermes-engine/Pre-built (= 0.80.0)
   - hermes-engine/Pre-built (0.80.0)
-  - MeheryEventSender (0.0.49):
+  - MeheryEventSender (0.0.51):
     - boost
     - DoubleConversion
     - fast_float
@@ -2726,7 +2726,7 @@ SPEC CHECKSUMS:
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
   hermes-engine: 7068e976238b29e97b3bafd09a994542af7d5c0b
-  MeheryEventSender: decdf4f3e08cdf3e6269c251295749098792f20b
+  MeheryEventSender: 78b7f1ee725624e7341ea115d9d9638a7945e3bc
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   RCT-Folly: 846fda9475e61ec7bcbf8a3fe81edfcaeb090669
@@ -2803,6 +2803,6 @@ SPEC CHECKSUMS:
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   Yoga: 0c4b7d2aacc910a1f702694fa86be830386f4ceb
 
-PODFILE CHECKSUM: bad3c596a880babc64a81622804369d118b388f5
+PODFILE CHECKSUM: 95722cd78f191f1b354ed6379c8748ea94e49172
 
 COCOAPODS: 1.16.2

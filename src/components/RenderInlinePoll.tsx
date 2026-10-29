@@ -11,7 +11,10 @@ import { sendCustomEvent } from '../events/custom/CustomEvents';
 import { buildCommonHeaders } from '../helpers/buildCommonHeaders';
 import { getApiBaseUrl } from '../helpers/tenantContext';
 import { sdkLog } from '../helpers/sdkLogger';
-import { buildInAppTrackData } from '../utils/inAppTrack';
+import {
+  buildInAppTrackData,
+  buildInAppTrackPayload,
+} from '../utils/inAppTrack';
 import {
   buildCtaData,
   buildSyntheticCtaData,
@@ -131,13 +134,13 @@ export function InlinePollContainer({
       data = { ctaId: value };
     }
 
-    const payload = {
+    const payload = await buildInAppTrackPayload({
       messageId: poll.messageId,
       filterId: poll.filterId,
-      ...(poll.journiId ? { journiId: poll.journiId } : {}),
+      journiId: poll.journiId,
       event: eventType,
       data,
-    };
+    });
 
     sdkLog.log('📤 Sending track event:', payload);
     const commonHeaders = await buildCommonHeaders();

@@ -43,6 +43,7 @@ export default function App() {
 
       // const environment: SdkInitEnvironmentParam = false;
       const environment: SdkInitEnvironmentParam = 'development';
+
       const { xApiId, xApiKey } =
         await readCredentialsForEnvironment(environment);
       await pushappAuth(xApiId, xApiKey);

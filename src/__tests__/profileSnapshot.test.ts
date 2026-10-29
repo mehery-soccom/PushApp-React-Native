@@ -8,6 +8,12 @@ import {
   stableStringify,
 } from '../utils/profileSnapshotCompare';
 
+const profileName = (value: string) => ({
+  name: value,
+  firstName: value,
+  formattedName: value,
+});
+
 describe('profileSnapshot', () => {
   it('profileSnapshotStorageKey scopes by user id', () => {
     expect(profileSnapshotStorageKey('user_123')).toBe(
@@ -33,7 +39,7 @@ describe('profileSnapshot', () => {
         {}
       )
     ).toEqual({
-      name: 'Jane Doe',
+      name: profileName('Jane Doe'),
       phones: [{ phone: '+919876543210' }],
       additionalInfo: {
         email: 'jane@example.com',
@@ -63,7 +69,7 @@ describe('profileSnapshot', () => {
   it('buildProfileApiPayload omits empty cohorts consistently', () => {
     const withEmpty = buildProfileApiPayload({ name: 'Jane' }, {});
     const withoutCohorts = buildProfileApiPayload({ name: 'Jane' }, {});
-    expect(withEmpty).toEqual({ name: 'Jane' });
+    expect(withEmpty).toEqual({ name: profileName('Jane') });
     expect(profilePayloadsEqual(withEmpty, withoutCohorts)).toBe(true);
     expect(stableStringify(withEmpty)).not.toContain('cohorts');
   });
@@ -87,7 +93,7 @@ describe('profileSnapshot', () => {
     );
 
     expect(prepareProfileUpdatePayload(desired, last)).toEqual({
-      name: 'Jane Smith',
+      name: profileName('Jane Smith'),
       additionalInfo: { _h1_ajejik_h2_: 'static' },
     });
   });
@@ -110,9 +116,18 @@ describe('profileSnapshot', () => {
     );
 
     expect(prepareProfileUpdatePayload(desired, last)).toEqual({
-      name: 'Jane Smith',
+      name: profileName('Jane Smith'),
       additionalInfo: { _h1_ajejik_h2_: 'static' },
     });
+  });
+
+  it('buildProfileApiPayload omits a blank name', () => {
+    expect(buildProfileApiPayload({ name: '   ' }, {})).toEqual({});
+  });
+
+  it('buildProfileApiPayload keeps an explicit name object', () => {
+    const name = { name: 'Sah', firstName: 'Sah', lastName: 'Khan' };
+    expect(buildProfileApiPayload({ name }, {})).toEqual({ name });
   });
 
   it('buildProfileApiPayload accepts mobile alias for phones', () => {
@@ -163,7 +178,7 @@ describe('profileSnapshot', () => {
     });
   });
 
-  it('profilePayloadsEqual treats legacy snapshot as equal to canonical desired', () => {
+  it('profilePayloadsEqual sends again when a stored string name becomes the name object', () => {
     const legacy: ReturnType<typeof buildProfileApiPayload> = {
       additionalInfo: {
         name: 'Jane',
@@ -179,7 +194,7 @@ describe('profileSnapshot', () => {
       },
       {}
     );
-    expect(profilePayloadsEqual(legacy, desired)).toBe(true);
+    expect(profilePayloadsEqual(legacy, desired)).toBe(false);
   });
 
   it('canonicalizeProfileSnapshot is a no-op for canonical payloads', () => {
